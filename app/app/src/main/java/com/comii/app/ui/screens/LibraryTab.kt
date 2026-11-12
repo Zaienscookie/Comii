@@ -100,8 +100,9 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     val palette = ComiiTheme.palette
     val scope = rememberCoroutineScope()
 
-    var path by rememberSaveable { mutableStateOf("") }
-    var pathKind by remember { mutableStateOf<String?>(null) }
+    // 默认进入「漫画」（comic 文件夹）
+    var path by rememberSaveable { mutableStateOf("comic") }
+    var pathKind by remember { mutableStateOf<String?>("manga") }
     val history = remember { mutableStateListOf<Pair<String, String?>>() }
     var browseData by remember { mutableStateOf<com.comii.app.data.BrowseResponse?>(null) }
     var progressMap by remember { mutableStateOf<Map<String, ReadingProgress>>(emptyMap()) }
@@ -121,14 +122,37 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     suspend fun reload() {
         loading = true
         error = null
-        runCatching { state.repository.browse(path) }
-            .onSuccess { response ->
-                browseData = response
-                if (path.isEmpty()) rootItems = response.items
-                progressMap = runCatching { state.repository.requireApi().progressAll() }
-                    .getOrDefault(emptyMap())
+        if (rootItems.isEmpty()) {
+            rootItems = runCatching { state.repository.browse("").items }.getOrDefault(emptyList())
+        }
+        val target = path
+        val result = runCatching {
+            if (target.isEmpty()) {
+                // 「全部」= 整个库的聚合相册：所有漫画 + 视频系列平铺
+                val series = state.repository.collectSeries("")
+                com.comii.app.data.BrowseResponse(
+                    path = "",
+                    parent = null,
+                    items = series,
+                    total = series.size,
+                )
+            } else {
+                state.repository.browse(target)
             }
-            .onFailure { error = it.message ?: "加载失败" }
+        }
+        result.onSuccess { response ->
+            browseData = response
+            progressMap = runCatching { state.repository.requireApi().progressAll() }
+                .getOrDefault(emptyMap())
+        }.onFailure { failure ->
+            if (target == "comic" || target == "video") {
+                // 分类文件夹不存在时退回「全部」
+                path = ""
+                pathKind = null
+            } else {
+                error = failure.message ?: "加载失败"
+            }
+        }
         loading = false
     }
 
@@ -148,8 +172,8 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         searching = false
     }
 
-    // 返回键：在文件夹里逐级向上返回，而不是一下退出
-    BackHandler(enabled = path.isNotEmpty()) {
+    // 返回键：只有进入子文件夹后才逐级返回；分类根页面按返回直接退出
+    BackHandler(enabled = path.contains('/')) {
         if (history.isNotEmpty()) {
             val (previousPath, previousKind) = history.removeAt(history.lastIndex)
             path = previousPath
@@ -229,7 +253,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (path.isNotEmpty()) {
+            if (path.contains('/')) {
                 IconButton(onClick = { goUp() }) {
                     Icon(
                         Icons.Rounded.ArrowBackIosNew,
@@ -260,7 +284,11 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     }
                 } else {
                     Text(
-                        path.substringAfterLast('/'),
+                        when (path) {
+                            "comic" -> "漫画"
+                            "video" -> "视频"
+                            else -> path.substringAfterLast('/')
+                        },
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
                         color = palette.textPrimary,
@@ -280,8 +308,10 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             IconButton(onClick = { refreshKey++ }) {
                 Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent)
             }
-            IconButton(onClick = { dialog = LibraryDialog.NewFolder }) {
-                Icon(Icons.Rounded.CreateNewFolder, contentDescription = "新建文件夹", tint = palette.accent)
+            if (section != 0) {
+                IconButton(onClick = { dialog = LibraryDialog.NewFolder }) {
+                    Icon(Icons.Rounded.CreateNewFolder, contentDescription = "新建文件夹", tint = palette.accent)
+                }
             }
             IconButton(onClick = { nav.navigate(Routes.upload(path)) }) {
                 Icon(Icons.Rounded.Upload, contentDescription = "上传", tint = palette.accent)
@@ -347,8 +377,16 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 }
                 gridItems.isEmpty() -> EmptyState(
                     icon = Icons.Rounded.Folder,
-                    title = if (showingSearch) "没有匹配的项目" else "这里还没有内容",
-                    subtitle = if (showingSearch) "换个关键词试试，支持文件夹名、系列名和文件名" else "把漫画文件夹放进服务器 library 目录，或点击右上角上传",
+                    title = when {
+                        showingSearch -> "没有匹配的项目"
+                        section == 0 -> "还没有任何漫画或视频"
+                        else -> "这里还没有内容"
+                    },
+                    subtitle = when {
+                        showingSearch -> "换个关键词试试，支持文件夹名、系列名和文件名"
+                        section == 0 -> "进入 comic / video 分类，点右上角上传内容"
+                        else -> "点右上角上传，或在服务器 library 目录里放入文件夹"
+                    },
                 )
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
@@ -364,7 +402,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                             progress = if (showingSearch) null else progressMap[node.path],
                             editing = editing && !showingSearch,
                             selected = selected.contains(node.path),
-                            showLocation = showingSearch,
+                            showLocation = showingSearch || section == 0,
                             onClick = {
                                 if (editing && !showingSearch) {
                                     selected = if (selected.contains(node.path)) selected - node.path else selected + node.path

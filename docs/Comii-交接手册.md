@@ -1,6 +1,6 @@
 # Comii 交接手册
 
-> 版本：2.3.2 · 交接日期：2026-11-13
+> 版本：2.3.3 · 交接日期：2026-11-13
 > 状态：**可运行、可安装、可继续开发**（后端已部署，APK 已构建，WebUI 可用）
 
 ---
@@ -23,7 +23,7 @@ Comii 是一个**个人漫画仓库**：服务器上用一个真实的 `library/
 | Python 运行时 | `/root/dev/runtime/python` | 自带 3.11 + 后端依赖 |
 | 漫画库 | `/root/dev/storage/library` | 演示 + 你的内容 |
 | 运行数据 | `/root/dev/storage/data` | 缩略图缓存、回收站、阅读进度、日志 |
-| 安卓 APK | 工作区 `release/Comii-2.3.2.apk` | 可直接安装（debug 签名） |
+| 安卓 APK | 工作区 `release/Comii-2.3.3.apk` | 可直接安装（debug 签名） |
 | 本机构建环境 | 工作区 `buildtools/`（不入库） | SDK 35 / Gradle 8.9 / JDK 17 |
 
 > 安全说明：GitHub Token、SSH 密码不在仓库与本文档中保存。**建议交接后立即轮换 GitHub Token**，
@@ -165,8 +165,8 @@ cd app
 ### 6.3 安装
 
 - 手机与服务器同一局域网；
-- 把 `release/Comii-2.3.2.apk` 传到手机安装（需允许「安装未知来源应用」）；
-- 或 `adb install -r release/Comii-2.3.2.apk`。
+- 把 `release/Comii-2.3.3.apk` 传到手机安装（需允许「安装未知来源应用」）；
+- 或 `adb install -r release/Comii-2.3.3.apk`。
 
 ### 6.4 首次使用
 
@@ -321,7 +321,7 @@ python tools/dev/integration_check.py     # 在服务器上或指向 COMII_BASE
 - [x] 递归搜索（文件夹 / 系列 / 文件名）已实测通过
 - [x] 空文件夹创建后立即出现在浏览结果中
 - [x] 后端 16 项测试通过
-- [x] APK 构建成功并输出到 `release/Comii-2.3.2.apk`
+- [x] APK 构建成功并输出到 `release/Comii-2.3.3.apk`
 - [ ] 真机安装与四大主流程验证（待接手人完成）
 - [ ] GitHub Token 轮换（建议）
 
@@ -350,7 +350,15 @@ ssh root@192.168.89.200 'journalctl -u comii -f'
 
 ## 13. 版本记录
 
-### v2.3.2（本次）
+### v2.3.3（本次）
+
+- 「全部」改为**聚合相册**：跨 comic / video 递归列出所有系列，封面平铺、显示所属路径，
+  不再只显示两个文件夹。
+- 启动默认进入「漫画」分类（comic 文件夹），标题显示「漫画」；分类根页面按返回直接退出。
+- 「全部」页隐藏「新建文件夹」（它是聚合视图，不承载目录操作）。
+- 版本号 2.3.3（versionCode 8）。
+
+### v2.3.2
 
 - 顶部「漫画 / 视频」Tab 改为**文件夹直达**：漫画 → 根目录 `comic/`，视频 → 根目录 `video/`，
   「全部」回到根目录；App 与 WebUI 行为一致。
