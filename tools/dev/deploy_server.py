@@ -79,7 +79,8 @@ def main() -> int:
             client,
             f"set -e; mkdir -p {REMOTE_CODE} {LIBRARY} {DATA}; "
             f"rm -rf {REMOTE_CODE}/server {REMOTE_CODE}/web; "
-            f"tar xzf {REMOTE_ROOT}/comii.tar.gz -C {REMOTE_CODE}",
+            f"tar xzf {REMOTE_ROOT}/comii.tar.gz -C {REMOTE_CODE}; "
+            f"rm -f {REMOTE_ROOT}/comii.tar.gz",
         )
         if code != 0:
             log(output)
