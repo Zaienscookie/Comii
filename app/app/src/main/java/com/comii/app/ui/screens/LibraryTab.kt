@@ -108,7 +108,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
-    var filter by rememberSaveable { mutableIntStateOf(0) }
+    var rootItems by remember { mutableStateOf<List<LibraryNode>>(emptyList()) }
     var editing by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -124,6 +124,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         runCatching { state.repository.browse(path) }
             .onSuccess { response ->
                 browseData = response
+                if (path.isEmpty()) rootItems = response.items
                 progressMap = runCatching { state.repository.requireApi().progressAll() }
                     .getOrDefault(emptyMap())
             }
@@ -161,21 +162,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 
     val allItems = browseData?.items.orEmpty()
     val showingSearch = query.isNotBlank()
-    val items = allItems.filter { node ->
-        when (filter) {
-            1 -> if (node.isFolder) {
-                node.forced_kind == null || node.forced_kind == "manga" || node.forced_kind == "mixed"
-            } else {
-                node.kind == NodeKind.MANGA || node.kind == NodeKind.MIXED
-            }
-            2 -> if (node.isFolder) {
-                node.forced_kind == null || node.forced_kind == "video" || node.forced_kind == "mixed"
-            } else {
-                node.kind == NodeKind.VIDEO || node.kind == NodeKind.MIXED
-            }
-            else -> true
-        }
+    // 顶部 Tab 直接对应根目录的 comic / video 文件夹
+    val section = when {
+        path == "comic" || path.startsWith("comic/") -> 1
+        path == "video" || path.startsWith("video/") -> 2
+        else -> 0
     }
+    val items = allItems
     val gridItems = if (showingSearch) searchResults else items
 
     fun openNode(node: LibraryNode) {
@@ -310,8 +303,29 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             Spacer(Modifier.height(10.dp))
             SegmentControl(
                 options = listOf("全部", "漫画", "视频"),
-                selectedIndex = filter,
-                onSelect = { filter = it },
+                selectedIndex = section,
+                onSelect = { index ->
+                    when (index) {
+                        0 -> {
+                            history.clear()
+                            path = ""
+                            pathKind = null
+                        }
+                        else -> {
+                            val targetName = if (index == 1) "comic" else "video"
+                            val node = rootItems.firstOrNull {
+                                it.isFolder && it.name.equals(targetName, ignoreCase = true)
+                            }
+                            if (node != null) {
+                                history.clear()
+                                path = node.path
+                                pathKind = node.forced_kind
+                            } else {
+                                state.showToast("没有找到 $targetName 文件夹")
+                            }
+                        }
+                    }
+                },
             )
         }
 

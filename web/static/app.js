@@ -121,6 +121,7 @@ function render() {
   empty.classList.toggle("hidden", items.length > 0);
 
   renderBreadcrumb();
+  syncSegments();
 
   items.forEach((item, i) => {
     if (item.kind === "folder") {
@@ -811,16 +812,44 @@ function bindMoveSheet() {
 function bindSegments() {
   document.querySelectorAll(".seg").forEach(seg => {
     seg.addEventListener("click", () => {
-      document.querySelectorAll(".seg").forEach(s => s.classList.remove("active"));
-      seg.classList.add("active");
-      filter = seg.dataset.filter;
+      const nextFilter = seg.dataset.filter;
+      filter = nextFilter;
       // 文件夹功能仅漫画/视频分类启用；"全部"隐藏文件夹与新建按钮
       folderMode = filter !== "all";
       document.body.classList.toggle("filter-all", filter === "all");
       document.body.classList.toggle("show-folders", folderMode);
       if (!editMode) { selectedItems.clear(); clipItems = []; }
-      render();
+
+      // 「漫画 / 视频」直接对应根目录的 comic / video 文件夹
+      if (filter === "manga" || filter === "video") {
+        const target = filter === "manga" ? "comic" : "video";
+        const rootTree = libraryData.tree || [];
+        const found = rootTree.find(
+          it => it.kind === "folder" && (it.name || "").toLowerCase() === target
+        );
+        if (found) {
+          currentPath = found.path;
+        } else {
+          currentPath = "";
+          toast("没有找到 " + target + " 文件夹，可先新建一个");
+        }
+      } else {
+        currentPath = "";
+      }
+      loadLibrary();
     });
+  });
+}
+
+/** 根据当前路径点亮对应的分类 Tab */
+function syncSegments() {
+  const section = currentPath === "comic" || currentPath.startsWith("comic/")
+    ? "manga"
+    : currentPath === "video" || currentPath.startsWith("video/")
+      ? "video"
+      : "all";
+  document.querySelectorAll(".seg").forEach(s => {
+    s.classList.toggle("active", s.dataset.filter === section);
   });
 }
 
