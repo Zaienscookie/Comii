@@ -82,10 +82,37 @@ class ComiiRepository(private val context: Context) {
 
     suspend fun search(query: String): List<LibraryNode> = requireApi().search(query).items
 
+    suspend fun collectSeries(path: String): List<LibraryNode> = requireApi().collection(path).items
+
+    /**
+     * Downloads every series below [path] and groups them under a local category
+     * named after the folder, so a whole author / category is available offline.
+     */
+    suspend fun downloadFolder(path: String, onProgress: (Int, Int) -> Unit = { _, _ -> }): Int =
+        withContext(Dispatchers.IO) {
+            val series = collectSeries(path)
+            if (series.isEmpty()) throw ApiException(0, "这个文件夹里没有可下载的系列")
+            val folderName = path.substringAfterLast('/').ifBlank { "未分类" }
+            runCatching { offline.createCategory(folderName) }
+            val total = series.size
+            onProgress(0, total)
+            var done = 0
+            for (node in series) {
+                downloadSeries(node.path, includeVideos = true)
+                offline.setCategory(node.path, folderName)
+                done++
+                onProgress(done, total)
+            }
+            done
+        }
+
     suspend fun trash(): TrashListResponse = requireApi().trash()
 
     suspend fun createFolder(parent: String, name: String, kind: String): ActionResult =
         requireApi().createFolder(parent, name, kind)
+
+    suspend fun setFolderKind(path: String, kind: String): ActionResult =
+        requireApi().setFolderKind(path, kind)
 
     suspend fun rename(path: String, newName: String): ActionResult =
         requireApi().rename(path, newName)

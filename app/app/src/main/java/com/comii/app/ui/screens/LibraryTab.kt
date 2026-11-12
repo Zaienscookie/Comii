@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
@@ -83,7 +84,15 @@ private sealed interface LibraryDialog {
     data class Rename(val node: LibraryNode) : LibraryDialog
     data class Move(val nodes: List<LibraryNode>) : LibraryDialog
     data class Delete(val nodes: List<LibraryNode>) : LibraryDialog
+    data class SetKind(val node: LibraryNode) : LibraryDialog
 }
+
+private data class DownloadProgress(
+    val title: String,
+    val done: Int,
+    val total: Int,
+    val unit: String,
+)
 
 @Composable
 fun LibraryTab(state: AppState, nav: NavHostController) {
@@ -102,7 +111,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var refreshKey by remember { mutableIntStateOf(0) }
     var sheetItem by remember { mutableStateOf<LibraryNode?>(null) }
     var dialog by remember { mutableStateOf<LibraryDialog?>(null) }
-    var downloadState by remember { mutableStateOf<Pair<String, Pair<Int, Int>>?>(null) }
+    var downloadState by remember { mutableStateOf<DownloadProgress?>(null) }
     var searchResults by remember { mutableStateOf<List<LibraryNode>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
 
@@ -144,12 +153,19 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     val allItems = browseData?.items.orEmpty()
     val showingSearch = query.isNotBlank()
     val items = allItems.filter { node ->
-        val matchKind = when (filter) {
-            1 -> node.kind == NodeKind.MANGA || node.kind == NodeKind.MIXED || node.isFolder
-            2 -> node.kind == NodeKind.VIDEO || node.kind == NodeKind.MIXED || node.isFolder
+        when (filter) {
+            1 -> if (node.isFolder) {
+                node.forced_kind == null || node.forced_kind == "manga" || node.forced_kind == "mixed"
+            } else {
+                node.kind == NodeKind.MANGA || node.kind == NodeKind.MIXED
+            }
+            2 -> if (node.isFolder) {
+                node.forced_kind == null || node.forced_kind == "video" || node.forced_kind == "mixed"
+            } else {
+                node.kind == NodeKind.VIDEO || node.kind == NodeKind.MIXED
+            }
             else -> true
         }
-        matchKind
     }
     val gridItems = if (showingSearch) searchResults else items
 
@@ -163,16 +179,26 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     }
 
     fun startDownload(node: LibraryNode) {
+        if (downloadState != null) return
         if (node.isFolder) {
-            state.showToast("请打开系列后下载")
+            downloadState = DownloadProgress(node.name, 0, 0, "个系列")
+            scope.launch {
+                runCatching {
+                    state.repository.downloadFolder(node.path) { done, total ->
+                        downloadState = DownloadProgress(node.name, done, total, "个系列")
+                    }
+                }.onSuccess { count ->
+                    state.showToast("已下载「${node.name}」$count 个系列")
+                }.onFailure { state.showToast("下载失败：${it.message}") }
+                downloadState = null
+            }
             return
         }
-        if (downloadState != null) return
-        downloadState = node.name to (0 to 0)
+        downloadState = DownloadProgress(node.name, 0, 0, "页")
         scope.launch {
             runCatching {
                 state.repository.downloadSeries(node.path, includeVideos = true) { done, total ->
-                    downloadState = node.name to (done to total)
+                    downloadState = DownloadProgress(node.name, done, total, "页")
                 }
             }.onSuccess { offline ->
                 state.showToast("已下载「${offline.name}」${formatBytes(offline.totalBytes)}")
@@ -183,28 +209,54 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 
     Column(Modifier.fillMaxSize()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        "Comii",
-                        fontSize = 34.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-0.6).sp,
-                        color = palette.accent,
+            if (path.isNotEmpty()) {
+                IconButton(onClick = {
+                    val index = path.lastIndexOf('/')
+                    path = if (index >= 0) path.substring(0, index) else ""
+                }) {
+                    Icon(
+                        Icons.Rounded.ArrowBackIosNew,
+                        contentDescription = "返回",
+                        tint = palette.accent,
+                        modifier = Modifier.size(20.dp),
                     )
+                }
+            } else {
+                Spacer(Modifier.width(10.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                if (path.isEmpty()) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(
+                            "Comii",
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = (-0.6).sp,
+                            color = palette.accent,
+                        )
+                        Text(
+                            ".",
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.accent,
+                        )
+                    }
+                } else {
                     Text(
-                        ".",
-                        fontSize = 34.sp,
+                        path.substringAfterLast('/'),
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        color = palette.accent,
+                        color = palette.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Text(
                     if (showingSearch) "搜索「${query.trim()}」· ${gridItems.size} 个结果"
-                    else browseData?.let { "${it.total} 个项目 · ${if (path.isEmpty()) "根目录" else path}" }.orEmpty(),
+                    else browseData?.let { "${it.total} 个项目" }.orEmpty(),
                     fontSize = 13.sp,
                     color = palette.textSecondary,
                     maxLines = 1,
@@ -243,10 +295,6 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         }
 
         Spacer(Modifier.height(12.dp))
-        if (path.isNotEmpty()) {
-            Breadcrumb(path = path, onNavigate = { path = it })
-            Spacer(Modifier.height(8.dp))
-        }
 
         Box(Modifier.weight(1f)) {
             when {
@@ -344,6 +392,12 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 SheetAction("移动到…") { sheetItem = null; dialog = LibraryDialog.Move(listOf(node)) }
                 if (!node.isFolder) {
                     SheetAction("下载到本地") { sheetItem = null; startDownload(node) }
+                } else {
+                    SheetAction("设置类型（漫画 / 视频）") {
+                        sheetItem = null
+                        dialog = LibraryDialog.SetKind(node)
+                    }
+                    SheetAction("下载整个文件夹") { sheetItem = null; startDownload(node) }
                 }
                 SheetAction("删除", danger = true) { sheetItem = null; dialog = LibraryDialog.Delete(listOf(node)) }
                 Spacer(Modifier.height(14.dp))
@@ -416,13 +470,33 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             onDismiss = { dialog = null },
         )
 
+        is LibraryDialog.SetKind -> SetKindDialog(
+            node = current.node,
+            onConfirm = { kind ->
+                scope.launch {
+                    runCatching { state.repository.setFolderKind(current.node.path, kind) }
+                        .onSuccess {
+                            state.showToast(if (kind == NodeKind.MANGA) "已设为漫画分类" else "已设为视频分类")
+                            refreshKey++
+                        }
+                        .onFailure { state.showToast("设置失败：${it.message}") }
+                }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
+
         null -> Unit
     }
 
-    downloadState?.let { (name, progress) ->
+    downloadState?.let { progress ->
         ConfirmDialog(
-            title = "正在下载「$name」",
-            message = if (progress.second > 0) "已下载 ${progress.first} / ${progress.second}" else "准备中…",
+            title = "正在下载「${progress.title}」",
+            message = if (progress.total > 0) {
+                "已下载 ${progress.done} / ${progress.total} ${progress.unit}"
+            } else {
+                "准备中…"
+            },
             confirmText = "隐藏",
             dismissText = "关闭",
             onConfirm = { downloadState = null },
@@ -544,40 +618,6 @@ private fun nodeSubtitle(node: LibraryNode): String = when {
 }
 
 @Composable
-private fun Breadcrumb(path: String, onNavigate: (String) -> Unit) {
-    val palette = ComiiTheme.palette
-    val parts = path.split("/").filter { it.isNotBlank() }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            "Comii.",
-            color = if (parts.isEmpty()) palette.textSecondary else palette.accent,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.pointerInput(Unit) { detectTapGestures { onNavigate("") } },
-        )
-        var acc = ""
-        parts.forEach { part ->
-            acc = if (acc.isEmpty()) part else "$acc/$part"
-            val target = acc
-            Text(" › ", color = palette.textTertiary, fontSize = 13.sp)
-            Text(
-                part,
-                color = if (part == parts.last()) palette.textSecondary else palette.accent,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.pointerInput(target) { detectTapGestures { onNavigate(target) } },
-            )
-        }
-    }
-}
-
-@Composable
 private fun SheetAction(text: String, danger: Boolean = false, onClick: () -> Unit) {
     val palette = ComiiTheme.palette
     Box(
@@ -674,6 +714,38 @@ private fun NewFolderDialog(onCreate: (String, String) -> Unit, onDismiss: () ->
                 },
                 enabled = name.isNotBlank(),
             ) { Text("创建", color = palette.accent, fontWeight = FontWeight.SemiBold) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = palette.textSecondary) } },
+    )
+}
+
+@Composable
+private fun SetKindDialog(node: LibraryNode, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+    val palette = ComiiTheme.palette
+    var kind by remember { mutableIntStateOf(if (node.forced_kind == NodeKind.VIDEO) 1 else 0) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = palette.card,
+        title = { Text("「${node.name}」属于哪类？", color = palette.textPrimary) },
+        text = {
+            Column {
+                Text(
+                    "设置后，这个文件夹只出现在对应的分类里。",
+                    fontSize = 13.sp,
+                    color = palette.textSecondary,
+                )
+                Spacer(Modifier.height(12.dp))
+                SegmentControl(
+                    options = listOf("漫画", "视频"),
+                    selectedIndex = kind,
+                    onSelect = { kind = it },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(listOf(NodeKind.MANGA, NodeKind.VIDEO)[kind]) }) {
+                Text("保存", color = palette.accent, fontWeight = FontWeight.SemiBold)
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = palette.textSecondary) } },
     )

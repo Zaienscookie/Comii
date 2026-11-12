@@ -224,6 +224,7 @@ def browse(raw_path: str = "") -> BrowseResponse:
                 kind=NodeKind.folder,
                 cover=cover,
                 child_count=len(children),
+                forced_kind=read_forced_kind(directory),
             )
         )
 
@@ -316,10 +317,33 @@ def search(raw_query: str, limit: int = 200) -> list[LibraryNode]:
                         path=child_path,
                         kind=NodeKind.folder,
                         child_count=len(children),
+                        forced_kind=read_forced_kind(child),
                     )
                 )
             walk(child, child_path)
 
     walk(library_root(), "")
     return results
+
+
+def collect_series(raw_path: str = "") -> list[LibraryNode]:
+    """Every series below a folder (recursive), used for whole-folder downloads."""
+    parts = split_relative_path(raw_path)
+    normalized = "/".join(parts)
+    base = library_root() if not parts else resolve_directory(normalized)
+    items: list[LibraryNode] = []
+
+    def walk(directory: Path, prefix: str) -> None:
+        for child in visible_directories(directory):
+            child_path = f"{prefix}/{child.name}".lstrip("/")
+            images, videos = list_media(child)
+            if images or videos:
+                node = _series_node(child, child_path)
+                if node is not None:
+                    items.append(node)
+                continue
+            walk(child, child_path)
+
+    walk(base, normalized)
+    return items
 

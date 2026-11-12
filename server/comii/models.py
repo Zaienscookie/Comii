@@ -23,6 +23,7 @@ class LibraryNode(BaseModel):
     image_count: int = 0
     video_count: int = 0
     child_count: Optional[int] = None
+    forced_kind: Optional[str] = None
     updated_at: Optional[float] = None
     size: Optional[int] = None
 
@@ -36,6 +37,12 @@ class BrowseResponse(BaseModel):
 
 class SearchResponse(BaseModel):
     query: str = ""
+    items: list[LibraryNode] = Field(default_factory=list)
+    total: int = 0
+
+
+class CollectionResponse(BaseModel):
+    path: str = ""
     items: list[LibraryNode] = Field(default_factory=list)
     total: int = 0
 
@@ -78,6 +85,11 @@ class PingResponse(BaseModel):
 class CreateFolderRequest(BaseModel):
     parent: str = ""
     name: str
+    kind: str = ""
+
+
+class SetFolderKindRequest(BaseModel):
+    path: str
     kind: str = ""
 
 

@@ -104,7 +104,9 @@ function updateHero() {
 
 function matches(item) {
   if (item.kind === "folder") {
-    // 全部分类都显示文件夹(让用户能浏览进去)，除非有搜索词
+    // 文件夹按创建时选择的类型归类；没有类型的文件夹在两个分类中都显示
+    const kind = item.forced_type || "";
+    if (filter !== "all" && kind && kind !== "mixed" && kind !== filter) return false;
     return !query || item.name.toLowerCase().includes(query.toLowerCase());
   }
   const sub = item.subkind || (item.videos ? "video" : "manga");
@@ -151,6 +153,9 @@ function renderFolderCard(item, i) {
       <div class="card-meta">${count} 项</div>
     </div>
     <div class="card-actions">
+      <button class="card-dl" data-series="${escapeHtml(item.name)}" data-path="${escapeHtml(item.path || '')}" aria-label="下载" title="打包下载整个文件夹">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      </button>
       <button class="card-del" data-series="${escapeHtml(item.name)}" aria-label="删除" title="删除文件夹">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6"/></svg>
       </button>
@@ -194,6 +199,11 @@ function renderFolderCard(item, i) {
         else { const d = await res.json().catch(() => ({})); toast("删除失败: " + (d.detail || res.status)); }
       } catch (e) { toast("删除失败: " + e.message); }
     });
+  }
+  const downloadBtn = card.querySelector(".card-dl");
+  if (downloadBtn) {
+    downloadBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    downloadBtn.addEventListener("click", (e) => { e.stopPropagation(); downloadSeries(item); });
   }
   const moveBtn = card.querySelector(".card-move");
   if (moveBtn) {

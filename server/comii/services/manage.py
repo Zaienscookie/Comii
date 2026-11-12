@@ -38,6 +38,22 @@ def create_folder(parent: str, name: str, kind: str = "") -> str:
     return f"{parent_rel}/{clean_name}".lstrip("/")
 
 
+def set_kind(raw_path: str, kind: str) -> None:
+    """Tag an existing folder as manga / video (or clear the tag)."""
+    normalized = library.normalize_path(raw_path)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="不能设置根目录类型")
+    directory = library.resolve_directory(normalized)
+    value = (kind or "").strip().lower()
+    if value in library.VALID_KINDS:
+        library.write_kind_marker(directory, value)
+        return
+    for marker in (library.KIND_MARKER, library.LEGACY_KIND_MARKER):
+        candidate = directory / marker
+        if candidate.is_file():
+            candidate.unlink()
+
+
 def rename(raw_path: str, new_name: str) -> str:
     clean_name = _validate_name(new_name)
     root = library.library_root()

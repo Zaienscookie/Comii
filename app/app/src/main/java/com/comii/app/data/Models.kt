@@ -23,11 +23,19 @@ data class LibraryNode(
     val image_count: Int = 0,
     val video_count: Int = 0,
     val child_count: Int? = null,
+    val forced_kind: String? = null,
     val updated_at: Double? = null,
     val size: Long? = null,
 ) {
     val isFolder: Boolean get() = kind == NodeKind.FOLDER
 }
+
+@Serializable
+data class CollectionResponse(
+    val path: String = "",
+    val items: List<LibraryNode> = emptyList(),
+    val total: Int = 0,
+)
 
 @Serializable
 data class BrowseResponse(
@@ -126,6 +134,9 @@ data class ApiError(val detail: String? = null)
 
 @Serializable
 data class CreateFolderBody(val parent: String, val name: String, val kind: String = "")
+
+@Serializable
+data class SetFolderKindBody(val path: String, val kind: String = "")
 
 @Serializable
 data class RenameBody(val path: String, val name: String)

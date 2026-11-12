@@ -99,12 +99,18 @@ class ComiiApi(val baseUrl: String) {
     suspend fun search(query: String): SearchResponse =
         decode(get("/search?q=${encode(query)}&limit=200"))
 
+    suspend fun collection(path: String): CollectionResponse =
+        decode(get("/collection?path=${encode(path)}"))
+
     suspend fun trash(): TrashListResponse = decode(get("/trash"))
 
     suspend fun progressAll(): Map<String, ReadingProgress> = decode(get("/progress"))
 
     suspend fun createFolder(parent: String, name: String, kind: String): ActionResult =
         decode(post("/folders", ComiiJson.encodeToString(CreateFolderBody(parent, name, kind))))
+
+    suspend fun setFolderKind(path: String, kind: String): ActionResult =
+        decode(post("/folders/kind", ComiiJson.encodeToString(SetFolderKindBody(path, kind))))
 
     suspend fun rename(path: String, newName: String): ActionResult =
         decode(post("/rename", ComiiJson.encodeToString(RenameBody(path, newName))))

@@ -30,7 +30,7 @@ class Settings:
 
     app_name = "Comii"
     api_prefix = "/api/v1"
-    version = "2.2.0"
+    version = "2.3.0"
 
     def __init__(self) -> None:
         self.project_root = PROJECT_ROOT

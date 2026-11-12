@@ -275,3 +275,36 @@ def test_legacy_search_and_empty_folder(client: TestClient) -> None:
 
     series = client.get("/api/search", params={"q": "loose"}).json()["items"]
     assert any(item["name"] == "loose_series" and item["kind"] == "series" for item in series)
+
+
+def test_folder_forced_kind_and_collection(client: TestClient) -> None:
+    client.post("/api/v1/folders", json={"parent": "", "name": "漫画分类", "kind": "manga"})
+    client.post("/api/v1/folders", json={"parent": "", "name": "视频分类", "kind": "video"})
+
+    browse = {item["name"]: item for item in client.get("/api/v1/browse").json()["items"]}
+    assert browse["漫画分类"]["forced_kind"] == "manga"
+    assert browse["视频分类"]["forced_kind"] == "video"
+
+    collection = client.get("/api/v1/collection", params={"path": "author_a"}).json()
+    assert collection["total"] == 2
+    assert {item["name"] for item in collection["items"]} == {
+        "0001_first_series",
+        "0002_second_series",
+    }
+
+
+def test_set_kind_for_existing_folder(client: TestClient) -> None:
+    client.post("/api/v1/folders", json={"parent": "", "name": "待定分类", "kind": ""})
+
+    def kind_of() -> str | None:
+        items = {item["name"]: item for item in client.get("/api/v1/browse").json()["items"]}
+        return items["待定分类"]["forced_kind"]
+
+    assert kind_of() is None
+
+    response = client.post("/api/v1/folders/kind", json={"path": "待定分类", "kind": "video"})
+    assert response.status_code == 200
+    assert kind_of() == "video"
+
+    client.post("/api/v1/folders/kind", json={"path": "待定分类", "kind": ""})
+    assert kind_of() is None

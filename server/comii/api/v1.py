@@ -14,6 +14,7 @@ from ..models import (
     ActionResult,
     BatchResult,
     BrowseResponse,
+    CollectionResponse,
     CreateFolderRequest,
     ImportResult,
     MoveRequest,
@@ -23,6 +24,7 @@ from ..models import (
     RenameRequest,
     SearchResponse,
     SeriesDetail,
+    SetFolderKindRequest,
     StatsResponse,
     TrashEntry,
     TrashListResponse,
@@ -75,6 +77,13 @@ def series(path: str) -> SeriesDetail:
 def search(q: str = "", limit: int = 200) -> SearchResponse:
     items = library.search(q, limit=limit)
     return SearchResponse(query=q, items=items, total=len(items))
+
+
+@router.get("/collection", response_model=CollectionResponse)
+def collection(path: str = "") -> CollectionResponse:
+    normalized = library.normalize_path(path)
+    items = library.collect_series(normalized)
+    return CollectionResponse(path=normalized, items=items, total=len(items))
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -138,6 +147,12 @@ def media_video_thumb(path: str, name: str) -> Response:
 def create_folder(payload: CreateFolderRequest) -> ActionResult:
     created = manage.create_folder(payload.parent, payload.name, payload.kind)
     return ActionResult(status="ok", path=created)
+
+
+@router.post("/folders/kind", response_model=ActionResult)
+def set_folder_kind(payload: SetFolderKindRequest) -> ActionResult:
+    manage.set_kind(payload.path, payload.kind)
+    return ActionResult(status="ok", path=payload.path)
 
 
 @router.post("/rename", response_model=ActionResult)
