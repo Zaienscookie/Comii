@@ -26,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.comii.app.data.ComiiRepository
+import com.comii.app.data.CrashLog
 import com.comii.app.ui.AppState
 import com.comii.app.ui.Routes
 import com.comii.app.ui.screens.HomeScreen
@@ -43,6 +44,7 @@ class ComiiApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         repository = ComiiRepository(this)
     }
 }

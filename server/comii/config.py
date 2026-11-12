@@ -30,7 +30,7 @@ class Settings:
 
     app_name = "Comii"
     api_prefix = "/api/v1"
-    version = "2.0.0"
+    version = "2.2.0"
 
     def __init__(self) -> None:
         self.project_root = PROJECT_ROOT
@@ -43,6 +43,7 @@ class Settings:
         self.log_root = self.data_root / "logs"
         self.host = os.environ.get("COMII_HOST", "0.0.0.0")
         self.port = _env_int("COMII_PORT", 8000)
+        self.api_port = _env_int("COMII_API_PORT", 8001)
         self.log_level = os.environ.get("COMII_LOG_LEVEL", "info")
         self.trash_ttl_seconds = _env_int("COMII_TRASH_TTL_DAYS", 3) * 24 * 3600
         self.max_upload_mb = _env_int("COMII_MAX_UPLOAD_MB", 512)

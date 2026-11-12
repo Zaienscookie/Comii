@@ -75,6 +75,7 @@ import com.comii.app.ui.components.SearchField
 import com.comii.app.ui.components.SegmentControl
 import com.comii.app.ui.components.formatBytes
 import com.comii.app.ui.theme.ComiiTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private sealed interface LibraryDialog {
@@ -102,6 +103,8 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var sheetItem by remember { mutableStateOf<LibraryNode?>(null) }
     var dialog by remember { mutableStateOf<LibraryDialog?>(null) }
     var downloadState by remember { mutableStateOf<Pair<String, Pair<Int, Int>>?>(null) }
+    var searchResults by remember { mutableStateOf<List<LibraryNode>>(emptyList()) }
+    var searching by remember { mutableStateOf(false) }
 
     suspend fun reload() {
         loading = true
@@ -118,6 +121,20 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 
     LaunchedEffect(path, refreshKey) { reload() }
 
+    // 搜索：服务端递归匹配文件夹名、系列名和媒体文件名
+    LaunchedEffect(query) {
+        val keyword = query.trim()
+        if (keyword.isEmpty()) {
+            searchResults = emptyList()
+            searching = false
+            return@LaunchedEffect
+        }
+        delay(260)
+        searching = true
+        searchResults = runCatching { state.repository.search(keyword) }.getOrDefault(emptyList())
+        searching = false
+    }
+
     // 返回键：在文件夹里逐级向上返回，而不是一下退出
     BackHandler(enabled = path.isNotEmpty()) {
         val index = path.lastIndexOf('/')
@@ -125,15 +142,16 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     }
 
     val allItems = browseData?.items.orEmpty()
+    val showingSearch = query.isNotBlank()
     val items = allItems.filter { node ->
-        val matchQuery = query.isBlank() || node.name.contains(query.trim(), ignoreCase = true)
         val matchKind = when (filter) {
             1 -> node.kind == NodeKind.MANGA || node.kind == NodeKind.MIXED || node.isFolder
             2 -> node.kind == NodeKind.VIDEO || node.kind == NodeKind.MIXED || node.isFolder
             else -> true
         }
-        matchQuery && matchKind
+        matchKind
     }
+    val gridItems = if (showingSearch) searchResults else items
 
     fun openNode(node: LibraryNode) {
         when {
@@ -169,7 +187,29 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                LargeTitle("媒体库", browseData?.let { "${it.total} 个项目 · ${if (path.isEmpty()) "根目录" else path}" })
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        "Comii",
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.6).sp,
+                        color = palette.accent,
+                    )
+                    Text(
+                        ".",
+                        fontSize = 34.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = palette.accent,
+                    )
+                }
+                Text(
+                    if (showingSearch) "搜索「${query.trim()}」· ${gridItems.size} 个结果"
+                    else browseData?.let { "${it.total} 个项目 · ${if (path.isEmpty()) "根目录" else path}" }.orEmpty(),
+                    fontSize = 13.sp,
+                    color = palette.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             IconButton(onClick = { refreshKey++ }) {
                 Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent)
@@ -219,10 +259,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     subtitle = error,
                     action = { PrimaryButton("重试", onClick = { refreshKey++ }, modifier = Modifier.width(160.dp)) },
                 )
-                items.isEmpty() -> EmptyState(
+                showingSearch && searching -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = palette.accent)
+                }
+                gridItems.isEmpty() -> EmptyState(
                     icon = Icons.Rounded.Folder,
-                    title = if (query.isBlank()) "这里还没有内容" else "没有匹配的项目",
-                    subtitle = if (query.isBlank()) "把漫画文件夹放进服务器 library 目录，或点击右上角上传" else "换个关键词试试",
+                    title = if (showingSearch) "没有匹配的项目" else "这里还没有内容",
+                    subtitle = if (showingSearch) "换个关键词试试，支持文件夹名、系列名和文件名" else "把漫画文件夹放进服务器 library 目录，或点击右上角上传",
                 )
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
@@ -231,22 +274,24 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(items, key = { it.path }) { node ->
+                    items(gridItems, key = { it.path }) { node ->
                         NodeCard(
                             node = node,
                             coverUrl = state.repository.mediaUrl(node.cover),
-                            progress = progressMap[node.path],
-                            editing = editing,
+                            progress = if (showingSearch) null else progressMap[node.path],
+                            editing = editing && !showingSearch,
                             selected = selected.contains(node.path),
+                            showLocation = showingSearch,
                             onClick = {
-                                if (editing) {
+                                if (editing && !showingSearch) {
                                     selected = if (selected.contains(node.path)) selected - node.path else selected + node.path
                                 } else {
+                                    if (showingSearch) query = ""
                                     openNode(node)
                                 }
                             },
                             onLongClick = {
-                                if (editing) {
+                                if (editing && !showingSearch) {
                                     selected = if (selected.contains(node.path)) selected - node.path else selected + node.path
                                 } else {
                                     sheetItem = node
@@ -393,6 +438,7 @@ private fun NodeCard(
     progress: ReadingProgress?,
     editing: Boolean,
     selected: Boolean,
+    showLocation: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
@@ -473,7 +519,7 @@ private fun NodeCard(
             modifier = Modifier.padding(horizontal = 2.dp),
         )
         Text(
-            nodeSubtitle(node),
+            if (showLocation) node.path else nodeSubtitle(node),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             fontSize = 11.5.sp,
@@ -508,9 +554,10 @@ private fun Breadcrumb(path: String, onNavigate: (String) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "媒体库",
+            "Comii.",
             color = if (parts.isEmpty()) palette.textSecondary else palette.accent,
             fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.pointerInput(Unit) { detectTapGestures { onNavigate("") } },
         )
         var acc = ""
@@ -611,7 +658,7 @@ private fun NewFolderDialog(onCreate: (String, String) -> Unit, onDismiss: () ->
                 )
                 Spacer(Modifier.height(10.dp))
                 SegmentControl(
-                    options = listOf("自动", "漫画", "视频", "混合"),
+                    options = listOf("漫画", "视频"),
                     selectedIndex = kind,
                     onSelect = { kind = it },
                 )
@@ -622,7 +669,7 @@ private fun NewFolderDialog(onCreate: (String, String) -> Unit, onDismiss: () ->
                 onClick = {
                     val clean = name.trim()
                     if (clean.isNotEmpty()) {
-                        onCreate(clean, listOf("", NodeKind.MANGA, NodeKind.VIDEO, NodeKind.MIXED)[kind])
+                        onCreate(clean, listOf(NodeKind.MANGA, NodeKind.VIDEO)[kind])
                     }
                 },
                 enabled = name.isNotBlank(),

@@ -56,7 +56,7 @@ fun SetupScreen(
 ) {
     val palette = ComiiTheme.palette
     val scope = rememberCoroutineScope()
-    var address by remember { mutableStateOf(state.serverUrl.ifBlank { "192.168.89.200:8000" }) }
+    var address by remember { mutableStateOf(state.serverUrl.ifBlank { "192.168.89.200:8001" }) }
     var status by remember { mutableStateOf<String?>(null) }
     var statusOk by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -114,7 +114,7 @@ fun SetupScreen(
                 value = address,
                 onValueChange = { address = it },
                 singleLine = true,
-                placeholder = { Text("192.168.89.200:8000", color = palette.textTertiary) },
+                placeholder = { Text("192.168.89.200:8001", color = palette.textTertiary) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
                 shape = RoundedCornerShape(14.dp),
                 colors = TextFieldDefaults.colors(
@@ -148,7 +148,7 @@ fun SetupScreen(
                         scanning = true
                         found = emptyList()
                         scope.launch {
-                            val port = address.substringAfterLast(':', "8000").toIntOrNull() ?: 8000
+                            val port = address.substringAfterLast(':', "8001").toIntOrNull() ?: 8001
                             val result = runCatching { state.repository.scanLan(port) { url -> found = found + url } }
                             scanning = false
                             found = result.getOrDefault(found).distinct()
@@ -238,7 +238,7 @@ fun SetupScreen(
             }
             Spacer(Modifier.height(20.dp))
             Text(
-                "提示：手机和服务器需在同一局域网。地址格式 ip:端口，例如 192.168.89.200:8000。",
+                "提示：手机和服务器需在同一局域网。数据接口端口是 8001（WebUI 是 8000），例如 192.168.89.200:8001。",
                 fontSize = 12.sp,
                 color = palette.textTertiary,
             )

@@ -12,6 +12,7 @@ server/library/
 
 # Android / Gradle
 app/.gradle/
+app/.kotlin/
 app/build/
 app/app/build/
 app/local.properties

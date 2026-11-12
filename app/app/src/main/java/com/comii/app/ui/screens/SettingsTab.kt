@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -16,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -65,7 +67,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 1.0.0")
+        LargeTitle("设置", "Comii 2.2.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -151,12 +153,63 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
         }
 
         Spacer(Modifier.height(18.dp))
+        SettingsGroup("诊断") {
+            CrashLogRow()
+        }
+
+        Spacer(Modifier.height(18.dp))
         SettingsGroup("关于") {
             SettingsRow(title = "Comii", subtitle = "个人漫画仓库 · 原生客户端")
             Separator()
             SettingsRow(title = "服务端 API", subtitle = "/api/v1 · 与服务器版本兼容")
         }
         Spacer(Modifier.height(110.dp))
+    }
+}
+
+@Composable
+private fun CrashLogRow() {
+    val palette = ComiiTheme.palette
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    var log by remember { mutableStateOf(com.comii.app.data.CrashLog.read(context)) }
+    var show by remember { mutableStateOf(false) }
+
+    SettingsRow(
+        title = "上次闪退日志",
+        subtitle = if (log == null) "没有记录" else "点击查看 / 复制给开发者",
+        showChevron = log != null,
+        onClick = if (log != null) ({ show = true }) else null,
+    )
+
+    if (show && log != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { show = false },
+            containerColor = palette.card,
+            title = { Text("闪退日志", color = palette.textPrimary) },
+            text = {
+                androidx.compose.foundation.layout.Box(
+                    Modifier
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(log.orEmpty(), fontSize = 11.sp, color = palette.textSecondary)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(log.orEmpty()))
+                    show = false
+                }) { Text("复制并关闭", color = palette.accent) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    com.comii.app.data.CrashLog.clear(context)
+                    log = null
+                    show = false
+                }) { Text("清除", color = palette.textSecondary) }
+            },
+        )
     }
 }
 

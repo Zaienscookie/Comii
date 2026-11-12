@@ -59,10 +59,10 @@ import com.comii.app.data.NodeKind
 import com.comii.app.ui.theme.ComiiTheme
 
 @Composable
-fun LargeTitle(text: String, subtitle: String? = null) {
+fun LargeTitle(text: String, subtitle: String? = null, color: Color? = null) {
     val palette = ComiiTheme.palette
     Column {
-        Text(text, style = androidx.compose.material3.MaterialTheme.typography.displaySmall, color = palette.textPrimary)
+        Text(text, style = androidx.compose.material3.MaterialTheme.typography.displaySmall, color = color ?: palette.textPrimary)
         if (subtitle != null) {
             Spacer(Modifier.height(2.dp))
             Text(subtitle, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = palette.textSecondary)

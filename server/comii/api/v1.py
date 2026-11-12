@@ -21,6 +21,7 @@ from ..models import (
     ProgressUpdate,
     ReadingProgress,
     RenameRequest,
+    SearchResponse,
     SeriesDetail,
     StatsResponse,
     TrashEntry,
@@ -68,6 +69,12 @@ def browse(path: str = "") -> BrowseResponse:
 @router.get("/series", response_model=SeriesDetail)
 def series(path: str) -> SeriesDetail:
     return library.series_detail(path, progress_lookup=progress.get)
+
+
+@router.get("/search", response_model=SearchResponse)
+def search(q: str = "", limit: int = 200) -> SearchResponse:
+    items = library.search(q, limit=limit)
+    return SearchResponse(query=q, items=items, total=len(items))
 
 
 @router.get("/stats", response_model=StatsResponse)

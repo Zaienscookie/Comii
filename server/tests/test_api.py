@@ -221,6 +221,32 @@ def test_stats(client: TestClient) -> None:
     assert body["video_count"] == 1
 
 
+def test_new_empty_folder_is_visible(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/folders", json={"parent": "", "name": "新分类", "kind": "manga"}
+    )
+    assert created.status_code == 200
+    names = {item["name"]: item for item in client.get("/api/v1/browse").json()["items"]}
+    assert "新分类" in names
+    assert names["新分类"]["kind"] == "folder"
+    assert names["新分类"]["child_count"] == 0
+
+
+def test_search_matches_folders_series_and_files(client: TestClient) -> None:
+    client.post("/api/v1/folders", json={"parent": "", "name": "收藏夹", "kind": "manga"})
+
+    folders = client.get("/api/v1/search", params={"q": "收藏"}).json()
+    assert any(item["name"] == "收藏夹" and item["kind"] == "folder" for item in folders["items"])
+
+    series = client.get("/api/v1/search", params={"q": "loose"}).json()
+    assert any(item["name"] == "loose_series" for item in series["items"])
+
+    by_file = client.get("/api/v1/search", params={"q": "002"}).json()
+    assert any(item["name"] == "0002_second_series" for item in by_file["items"])
+
+    assert client.get("/api/v1/search", params={"q": ""}).json()["total"] == 0
+
+
 def test_legacy_nested_delete_uses_full_path(client: TestClient) -> None:
     """WebUI 删除必须传完整相对路径，多层文件夹内的系列才能正确进入回收站。"""
     deleted = client.delete("/api/delete/author_a/0001_first_series")

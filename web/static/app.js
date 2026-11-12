@@ -36,6 +36,8 @@ function initTheme() {
 let libraryData = { series: [] };
 let filter = "all";
 let query = "";
+let searchResults = null;   // 服务端递归搜索结果
+let searchSeq = 0;
 let editMode = false;
 let folderMode = true;          // 文件夹功能启用
 let selectedItems = new Set();  // 编辑模式多选集合
@@ -112,7 +114,7 @@ function matches(item) {
 }
 
 function render() {
-  const items = libraryData.series.filter(matches);
+  const items = query ? (searchResults || []) : libraryData.series.filter(matches);
   grid.innerHTML = "";
   empty.classList.toggle("hidden", items.length > 0);
 
@@ -139,7 +141,7 @@ function renderFolderCard(item, i) {
   card.dataset.name = item.name;
   card.dataset.path = item.path || "";
   card.style.animationDelay = `${Math.min(i * 30, 400)}ms`;
-  const count = (item.children || []).length;
+  const count = item.child_count != null ? item.child_count : (item.children || []).length;
   card.innerHTML = `
     <div class="card-cover folder-cover">
       <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 13c-3-2.6-7.5-4-13-4v26c5.5 0 10 1.4 13 4 3-2.6 7.5-4 13-4V9c-5.5 0-10 1.4-13 4z"/><path d="M22 13v26"/></svg>
@@ -460,12 +462,18 @@ let currentPath = "";
 
 function openFolder(path) {
   currentPath = path;
+  if (query) {
+    query = "";
+    searchResults = null;
+    if (search) search.value = "";
+  }
   loadLibrary();
 }
 
 function renderBreadcrumb() {
   const bc = document.getElementById("breadcrumb");
   if (!bc) return;
+  if (query) { bc.innerHTML = ""; return; }
   if (!currentPath) { bc.innerHTML = ""; return; }
   const parts = currentPath.split("/").filter(Boolean);
   let html = `<a class="bc-link" data-depth="-1">根目录</a>`;
@@ -550,14 +558,14 @@ function bindFolderSheet() {
   const kindBox = document.getElementById("folderKind");
   if (!sheet || !btn) return;
 
-  let selKind = ""; // 默认自动
+  let selKind = "manga"; // 只有漫画 / 视频两种
   // 类型选择
   if (kindBox) {
     kindBox.querySelectorAll(".type-opt").forEach(opt => {
       opt.addEventListener("click", () => {
         kindBox.querySelectorAll(".type-opt").forEach(o => o.classList.remove("active"));
         opt.classList.add("active");
-        selKind = opt.dataset.kind || "";
+        selKind = opt.dataset.kind || "manga";
       });
     });
   }
@@ -565,11 +573,11 @@ function bindFolderSheet() {
   btn.addEventListener("click", () => {
     parent.value = currentPath;
     name.value = "";
-    selKind = "";
+    selKind = "manga";
     if (kindBox) {
       kindBox.querySelectorAll(".type-opt").forEach(o => o.classList.remove("active"));
-      const auto = kindBox.querySelector('[data-kind=""]');
-      if (auto) auto.classList.add("active");
+      const first = kindBox.querySelector('[data-kind="manga"]');
+      if (first) first.classList.add("active");
     }
     sheet.classList.add("show");
     overlay.classList.add("show");
@@ -1090,7 +1098,26 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.classList.toggle("filter-all", filter === "all");
   document.body.classList.toggle("show-folders", folderMode);
   if (search) {
-    search.addEventListener("input", debounce(e => { query = e.target.value.trim(); render(); }, 200));
+    // 递归搜索：文件夹名、系列名、媒体文件名（由服务端 /api/search 匹配）
+    search.addEventListener("input", debounce(async e => {
+      query = e.target.value.trim();
+      if (!query) {
+        searchResults = null;
+        render();
+        return;
+      }
+      const seq = ++searchSeq;
+      try {
+        const res = await KomiConfig.fetch("/api/search?q=" + encodeURIComponent(query));
+        const data = await res.json();
+        if (seq !== searchSeq) return;
+        searchResults = data.items || [];
+      } catch (err) {
+        if (seq !== searchSeq) return;
+        searchResults = [];
+      }
+      render();
+    }, 260));
   }
   if (grid) loadLibrary();
 });

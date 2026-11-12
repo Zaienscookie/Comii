@@ -38,6 +38,13 @@ data class BrowseResponse(
 )
 
 @Serializable
+data class SearchResponse(
+    val query: String = "",
+    val items: List<LibraryNode> = emptyList(),
+    val total: Int = 0,
+)
+
+@Serializable
 data class ReadingProgress(
     val page: Int = 0,
     val total: Int = 0,

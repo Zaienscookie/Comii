@@ -208,10 +208,9 @@ def browse(raw_path: str = "") -> BrowseResponse:
             continue
 
         children = visible_directories(directory)
-        if not children:
-            continue
-
-        cover: Optional[str] = None
+        # Empty folders are real folders the user just created: keep them visible
+        # so uploads can target them.
+        cover = None
         for child in children:
             preview = _series_node(child, f"{child_path}/{child.name}")
             if preview is not None and preview.cover:
@@ -282,3 +281,45 @@ def library_stats() -> tuple[int, int, int, int, int]:
 
 def unix_now() -> float:
     return time.time()
+
+
+def search(raw_query: str, limit: int = 200) -> list[LibraryNode]:
+    """Recursively match folder names, series names and media file names."""
+    query = str(raw_query or "").strip().lower()
+    if not query:
+        return []
+    limit = max(1, min(int(limit or 200), 500))
+    results: list[LibraryNode] = []
+
+    def walk(directory: Path, prefix: str) -> None:
+        if len(results) >= limit:
+            return
+        for child in visible_directories(directory):
+            if len(results) >= limit:
+                return
+            child_path = f"{prefix}/{child.name}".lstrip("/")
+            images, videos = list_media(child)
+            if images or videos:
+                matched = query in child.name.lower() or any(
+                    query in item.name.lower() for item in images + videos
+                )
+                if matched:
+                    node = _series_node(child, child_path)
+                    if node is not None:
+                        results.append(node)
+                continue
+            if query in child.name.lower():
+                children = visible_directories(child)
+                results.append(
+                    LibraryNode(
+                        name=child.name,
+                        path=child_path,
+                        kind=NodeKind.folder,
+                        child_count=len(children),
+                    )
+                )
+            walk(child, child_path)
+
+    walk(library_root(), "")
+    return results
+

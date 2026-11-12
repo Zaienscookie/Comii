@@ -109,6 +109,46 @@ def settings_info() -> dict:
     return {"library": str(settings.library_root)}
 
 
+@router.get("/search")
+def search(q: str = "") -> dict:
+    """Recursive search over folder names, series names and media file names."""
+    items: list[dict] = []
+    for node in library.search(q):
+        if node.kind.value == "folder":
+            items.append(
+                {
+                    "name": node.name,
+                    "path": node.path,
+                    "kind": "folder",
+                    "children": [],
+                    "child_count": node.child_count or 0,
+                    "forced_type": None,
+                }
+            )
+            continue
+        directory = library.resolve_directory(node.path)
+        images, videos = library.list_media(directory)
+        cover = (
+            _legacy_thumb_url(node.path, images[0].name)
+            if images
+            else _legacy_video_thumb_url(node.path, videos[0].name)
+            if videos
+            else None
+        )
+        items.append(
+            {
+                "name": node.name,
+                "path": node.path,
+                "kind": "series",
+                "subkind": node.kind.value,
+                "images": len(images),
+                "videos": len(videos),
+                "cover": cover,
+            }
+        )
+    return {"query": q, "items": items, "total": len(items)}
+
+
 @router.get("/ping")
 def ping() -> dict:
     return {

@@ -80,6 +80,8 @@ class ComiiRepository(private val context: Context) {
 
     suspend fun series(path: String): SeriesDetail = requireApi().series(path)
 
+    suspend fun search(query: String): List<LibraryNode> = requireApi().search(query).items
+
     suspend fun trash(): TrashListResponse = requireApi().trash()
 
     suspend fun createFolder(parent: String, name: String, kind: String): ActionResult =

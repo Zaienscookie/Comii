@@ -27,9 +27,9 @@ USER = os.environ.get("COMII_SSH_USER", "root")
 PASSWORD = os.environ.get("COMII_SSH_PASSWORD")
 REMOTE_ROOT = os.environ.get("COMII_REMOTE_ROOT", "/root/dev")
 REMOTE_CODE = f"{REMOTE_ROOT}/comii"
-PYTHON = f"{REMOTE_ROOT}/.python/bin/python3.11"
-LIBRARY = f"{REMOTE_ROOT}/library"
-DATA = f"{REMOTE_ROOT}/data"
+PYTHON = f"{REMOTE_ROOT}/runtime/python/bin/python3.11"
+LIBRARY = f"{REMOTE_ROOT}/storage/library"
+DATA = f"{REMOTE_ROOT}/storage/data"
 
 
 def log(message: str) -> None:
@@ -93,7 +93,7 @@ def main() -> int:
             return code
 
         unit = f"""[Unit]
-Description=Comii server (comic library)
+Description=Comii server (Comic library: WebUI + data API)
 After=network.target
 
 [Service]
@@ -102,8 +102,9 @@ WorkingDirectory={REMOTE_CODE}/server
 Environment=COMII_LIBRARY={LIBRARY}
 Environment=COMII_DATA={DATA}
 Environment=COMII_PORT=8000
+Environment=COMII_API_PORT=8001
 Environment=COMII_LOG_LEVEL=info
-ExecStart={PYTHON} -m uvicorn comii.main:app --host 0.0.0.0 --port 8000
+ExecStart={PYTHON} -m comii.serve
 Restart=always
 RestartSec=3
 User=root
@@ -130,6 +131,7 @@ WantedBy=multi-user.target
         code, output = run(
             client,
             "curl -s -m 5 http://127.0.0.1:8000/api/v1/ping; echo; "
+            "curl -s -m 5 http://127.0.0.1:8001/api/v1/ping; echo; "
             "curl -s -m 5 -o /dev/null -w 'web:%{http_code}\\n' http://127.0.0.1:8000/",
         )
         log(output.strip())

@@ -34,6 +34,12 @@ class BrowseResponse(BaseModel):
     total: int = 0
 
 
+class SearchResponse(BaseModel):
+    query: str = ""
+    items: list[LibraryNode] = Field(default_factory=list)
+    total: int = 0
+
+
 class ReadingProgress(BaseModel):
     page: int = 0
     total: int = 0

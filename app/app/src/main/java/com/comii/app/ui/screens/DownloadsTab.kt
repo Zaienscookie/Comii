@@ -19,8 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
@@ -64,7 +64,7 @@ import com.comii.app.ui.components.formatBytes
 import com.comii.app.ui.theme.ComiiTheme
 import kotlinx.coroutines.launch
 
-private val UNCATEGORIZED = "未分类"
+private const val UNCATEGORIZED = "未分类"
 
 @Composable
 fun DownloadsTab(state: AppState, nav: NavHostController) {
@@ -72,28 +72,28 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
     val scope = rememberCoroutineScope()
 
     var version by remember { mutableIntStateOf(0) }
-    var categories by remember { mutableStateOf(state.repository.offline.categories()) }
+    var categories by remember { mutableStateOf(safeCategories(state)) }
     var activeCategory by rememberSaveable { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<OfflineSeries?>(null) }
-    var assignTarget by remember { mutableStateOf<OfflineSeries?>(null) }
-    var showCreateCategory by remember { mutableStateOf(false) }
+    var showCategorySheet by remember { mutableStateOf(false) }
+    var sheetSeries by remember { mutableStateOf<OfflineSeries?>(null) }
+    var startInCreate by remember { mutableStateOf(false) }
 
     val allSeries = remember(version) { state.repository.offline.all() }
+    val validCategories = remember(categories) {
+        categories.filter { it.isNotBlank() && it != UNCATEGORIZED }.distinct()
+    }
 
-    val sections = remember(allSeries, activeCategory, categories, version) {
+    val sections = remember(allSeries, activeCategory, validCategories, version) {
         val groups = LinkedHashMap<String, MutableList<OfflineSeries>>()
         groups[UNCATEGORIZED] = mutableListOf()
-        categories.forEach { groups[it] = mutableListOf() }
+        validCategories.forEach { groups[it] = mutableListOf() }
         allSeries.forEach { series ->
-            groups.getOrPut(series.category.ifBlank { UNCATEGORIZED }) { mutableListOf() }
-                .add(series)
+            val key = series.category.ifBlank { UNCATEGORIZED }
+            groups.getOrPut(key) { mutableListOf() }.add(series)
         }
         val result = mutableListOf<Pair<String, List<OfflineSeries>>>()
-        val keys = if (activeCategory.isBlank()) {
-            listOf(UNCATEGORIZED) + categories
-        } else {
-            listOf(activeCategory)
-        }
+        val keys = if (activeCategory.isBlank()) listOf(UNCATEGORIZED) + validCategories else listOf(activeCategory)
         keys.forEach { key ->
             val list = groups[key].orEmpty()
             if (list.isNotEmpty()) result.add(key to list)
@@ -120,11 +120,13 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CategoryChip("全部", activeCategory.isBlank()) { activeCategory = "" }
-            categories.forEach { name ->
+            validCategories.forEach { name ->
                 CategoryChip(name, activeCategory == name) { activeCategory = name }
             }
             AddCategoryChip {
-                showCreateCategory = true
+                sheetSeries = null
+                startInCreate = true
+                showCategorySheet = true
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -133,15 +135,15 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             EmptyState(
                 icon = Icons.Rounded.Download,
                 title = "还没有离线内容",
-                subtitle = "在媒体库长按系列，选择「下载到本地」，没有网络也能看",
+                subtitle = "在 Comii 里长按系列，选择「下载到本地」，没有网络也能看",
             )
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                sections.forEach { (label, list) ->
-                    item(key = "header_$label") {
+                sections.forEachIndexed { index, (label, list) ->
+                    item(key = "header_${index}_$label") {
                         Text(
                             label,
                             fontSize = 12.sp,
@@ -160,7 +162,11 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                                 .pointerInput(item.path) {
                                     detectTapGestures(
                                         onTap = { openOffline(item, nav) },
-                                        onLongPress = { assignTarget = item },
+                                        onLongPress = {
+                                            sheetSeries = item
+                                            startInCreate = false
+                                            showCategorySheet = true
+                                        },
                                     )
                                 }
                                 .padding(10.dp),
@@ -212,7 +218,7 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             confirmText = "删除",
             destructive = true,
             onConfirm = {
-                state.repository.offline.delete(item.path)
+                runCatching { state.repository.offline.delete(item.path) }
                 pendingDelete = null
                 version++
                 state.showToast("已删除本地文件")
@@ -221,40 +227,52 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
         )
     }
 
-    assignTarget?.let { item ->
-        AssignCategorySheet(
-            current = item.category,
-            categories = categories,
-            onSelect = { name ->
-                scope.launch {
-                    state.repository.offline.setCategory(item.path, name)
-                    version++
-                    state.showToast("已移动到「${name.ifBlank { UNCATEGORIZED }}」")
+    if (showCategorySheet) {
+        CategorySheet(
+            series = sheetSeries,
+            categories = validCategories,
+            startInCreate = startInCreate,
+            onAssign = { name ->
+                val item = sheetSeries
+                if (item != null) {
+                    scope.launch {
+                        runCatching { state.repository.offline.setCategory(item.path, name) }
+                            .onSuccess {
+                                version++
+                                state.showToast("已移动到「${name.ifBlank { UNCATEGORIZED }}」")
+                            }
+                            .onFailure { state.showToast("移动失败：${it.message}") }
+                    }
                 }
-                assignTarget = null
+                showCategorySheet = false
+                sheetSeries = null
+                startInCreate = false
             },
-            onCreate = {
-                showCreateCategory = true
-                assignTarget = null
-            },
-            onDismiss = { assignTarget = null },
-        )
-    }
-
-    if (showCreateCategory) {
-        NewCategoryDialog(
             onCreate = { name ->
                 scope.launch {
-                    categories = state.repository.offline.createCategory(name)
-                    version++
-                    state.showToast("分类已创建「$name」")
+                    runCatching { state.repository.offline.createCategory(name) }
+                        .onSuccess { updated ->
+                            categories = updated
+                            version++
+                            state.showToast("分类已创建「$name」")
+                        }
+                        .onFailure { state.showToast("创建失败：${it.message}") }
                 }
-                showCreateCategory = false
+                showCategorySheet = false
+                sheetSeries = null
+                startInCreate = false
             },
-            onDismiss = { showCreateCategory = false },
+            onDismiss = {
+                showCategorySheet = false
+                sheetSeries = null
+                startInCreate = false
+            },
         )
     }
 }
+
+private fun safeCategories(state: AppState): List<String> =
+    runCatching { state.repository.offline.categories() }.getOrDefault(emptyList())
 
 private fun openOffline(item: OfflineSeries, nav: NavHostController) {
     if (item.kind == NodeKind.VIDEO && item.videos.isNotEmpty()) {
@@ -301,87 +319,106 @@ private fun AddCategoryChip(onClick: () -> Unit) {
     }
 }
 
+/**
+ * One sheet handles both "assign to category" and "create category" so we never
+ * stack a dialog on top of a bottom sheet (that transition used to crash).
+ */
 @Composable
-private fun NewCategoryDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
-    val palette = ComiiTheme.palette
-    var name by remember { mutableStateOf("") }
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = palette.card,
-        title = { Text("新建分类", color = palette.textPrimary) },
-        text = {
-            TextField(
-                value = name,
-                onValueChange = { name = it },
-                singleLine = true,
-                placeholder = { Text("分类名称", color = palette.textTertiary) },
-                shape = RoundedCornerShape(12.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = palette.background,
-                    unfocusedContainerColor = palette.background,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { name.trim().takeIf { it.isNotEmpty() }?.let(onCreate) },
-                enabled = name.isNotBlank(),
-            ) { Text("创建", color = palette.accent, fontWeight = FontWeight.SemiBold) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = palette.textSecondary) } },
-    )
-}
-
-@Composable
-private fun AssignCategorySheet(
-    current: String,
+private fun CategorySheet(
+    series: OfflineSeries?,
     categories: List<String>,
-    onSelect: (String) -> Unit,
-    onCreate: () -> Unit,
+    startInCreate: Boolean,
+    onAssign: (String) -> Unit,
+    onCreate: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val palette = ComiiTheme.palette
+    var creating by remember(startInCreate) { mutableStateOf(startInCreate) }
+    var name by remember { mutableStateOf("") }
+
     BottomSheet(onDismiss = onDismiss) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.DriveFileMove, contentDescription = null, tint = palette.accent, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("移动到分类", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = palette.textPrimary)
+                Text(
+                    if (creating) "新建分类" else "移动到分类",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.textPrimary,
+                )
             }
             Spacer(Modifier.height(12.dp))
-            val options = listOf(UNCATEGORIZED) + categories
-            options.forEach { name ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(palette.card)
-                        .pointerInput(name) { detectTapGestures { onSelect(if (name == UNCATEGORIZED) "" else name) } }
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+
+            if (creating) {
+                TextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    placeholder = { Text("分类名称", color = palette.textTertiary) },
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions.Default,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = palette.card,
+                        unfocusedContainerColor = palette.card,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(14.dp))
+                androidx.compose.material3.Button(
+                    onClick = {
+                        val clean = name.trim()
+                        if (clean.isNotEmpty() && clean != UNCATEGORIZED) onCreate(clean)
+                    },
+                    enabled = name.isNotBlank() && name.trim() != UNCATEGORIZED,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                 ) {
-                    Text(name, color = palette.textPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                    if (name == current.ifBlank { UNCATEGORIZED }) {
-                        Text("✓", color = palette.accent, fontWeight = FontWeight.Bold)
+                    Text("创建分类", fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.height(10.dp))
+                TextButton(onClick = { creating = false }, modifier = Modifier.fillMaxWidth()) {
+                    Text("返回分类列表", color = palette.textSecondary)
+                }
+            } else {
+                Column(Modifier.fillMaxWidth()) {
+                    (listOf(UNCATEGORIZED) + categories).forEach { option ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(palette.card)
+                                .pointerInput(option) {
+                                    detectTapGestures {
+                                        onAssign(if (option == UNCATEGORIZED) "" else option)
+                                    }
+                                }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(option, color = palette.textPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                            if (series != null && option == series.category.ifBlank { UNCATEGORIZED }) {
+                                Text("✓", color = palette.accent, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(palette.accent.copy(alpha = 0.1f))
+                            .pointerInput(Unit) { detectTapGestures { creating = true } }
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Rounded.Add, contentDescription = null, tint = palette.accent, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("新建分类", color = palette.accent, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                     }
                 }
-                Spacer(Modifier.height(6.dp))
-            }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(palette.accent.copy(alpha = 0.1f))
-                    .pointerInput(Unit) { detectTapGestures { onCreate() } }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = null, tint = palette.accent, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("新建分类", color = palette.accent, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             }
             Spacer(Modifier.height(18.dp))
         }

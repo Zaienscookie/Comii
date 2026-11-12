@@ -1,21 +1,11 @@
-"""Development entrypoint: python run.py"""
+"""Development entrypoint: python run.py
+
+Starts both ports (WebUI 8000 + data API 8001) exactly like the systemd unit.
+"""
 
 from __future__ import annotations
 
-import uvicorn
-
-from comii.config import settings
-
-
-def main() -> None:
-    uvicorn.run(
-        "comii.main:app",
-        host=settings.host,
-        port=settings.port,
-        log_level=settings.log_level,
-        reload=False,
-    )
-
+from comii.serve import main
 
 if __name__ == "__main__":
     main()

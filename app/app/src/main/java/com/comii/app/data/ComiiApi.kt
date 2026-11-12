@@ -96,6 +96,9 @@ class ComiiApi(val baseUrl: String) {
 
     suspend fun series(path: String): SeriesDetail = decode(get("/series?path=${encode(path)}"))
 
+    suspend fun search(query: String): SearchResponse =
+        decode(get("/search?q=${encode(query)}&limit=200"))
+
     suspend fun trash(): TrashListResponse = decode(get("/trash"))
 
     suspend fun progressAll(): Map<String, ReadingProgress> = decode(get("/progress"))

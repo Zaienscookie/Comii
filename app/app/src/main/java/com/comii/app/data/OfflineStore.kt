@@ -111,6 +111,7 @@ class OfflineStore(private val context: Context) {
     }
 
     private fun persistCategories(names: List<String>) {
+        root.mkdirs()
         categoriesFile.writeText(ComiiJson.encodeToString(names))
     }
 }

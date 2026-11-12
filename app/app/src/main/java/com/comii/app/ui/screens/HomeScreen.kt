@@ -109,7 +109,7 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
 private fun ComiiTabBar(selected: Int, onSelect: (Int) -> Unit) {
     val palette = ComiiTheme.palette
     val tabs = listOf(
-        Triple("媒体库", Icons.Rounded.AutoStories, 0),
+        Triple("Comii", Icons.Rounded.AutoStories, 0),
         Triple("下载", Icons.Rounded.Download, 1),
         Triple("设置", Icons.Rounded.Settings, 2),
     )
