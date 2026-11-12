@@ -6,6 +6,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -72,7 +78,26 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController()) {
     val start = if (state.hasServer) "home" else "setup"
-    NavHost(navController = nav, startDestination = start) {
+    NavHost(
+        navController = nav,
+        startDestination = start,
+        enterTransition = {
+            slideInHorizontally(tween(260, easing = FastOutSlowInEasing), initialOffsetX = { it / 6 }) +
+                fadeIn(tween(220))
+        },
+        exitTransition = {
+            slideOutHorizontally(tween(240, easing = FastOutSlowInEasing), targetOffsetX = { -it / 6 }) +
+                fadeOut(tween(200))
+        },
+        popEnterTransition = {
+            slideInHorizontally(tween(260, easing = FastOutSlowInEasing), initialOffsetX = { -it / 6 }) +
+                fadeIn(tween(220))
+        },
+        popExitTransition = {
+            slideOutHorizontally(tween(240, easing = FastOutSlowInEasing), targetOffsetX = { it / 6 }) +
+                fadeOut(tween(200))
+        },
+    ) {
         composable("setup") {
             SetupScreen(
                 state = state,

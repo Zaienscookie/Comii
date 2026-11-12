@@ -1,5 +1,14 @@
 package com.comii.app.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -52,6 +61,11 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
         }
     }
 
+    // 返回键一级一级退回：设置 → 下载 → 媒体库 → 退出（而不是一下退出）
+    BackHandler(enabled = tab != 0) {
+        tab = (tab - 1).coerceAtLeast(0)
+    }
+
     Scaffold(
         containerColor = palette.background,
         snackbarHost = { SnackbarHost(snackbar) },
@@ -60,10 +74,32 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            when (tab) {
-                0 -> LibraryTab(state = state, nav = nav)
-                1 -> DownloadsTab(state = state, nav = nav)
-                else -> SettingsTab(state = state, nav = nav)
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    val forward = targetState > initialState
+                    val enter = if (forward) {
+                        slideInHorizontally(tween(240, easing = FastOutSlowInEasing), initialOffsetX = { it / 5 }) +
+                            fadeIn(tween(200, easing = FastOutSlowInEasing))
+                    } else {
+                        slideInHorizontally(tween(240, easing = FastOutSlowInEasing), initialOffsetX = { -it / 5 }) +
+                            fadeIn(tween(200, easing = FastOutSlowInEasing))
+                    }
+                    val exit = if (forward) {
+                        slideOutHorizontally(tween(240, easing = FastOutSlowInEasing), targetOffsetX = { -it / 5 }) +
+                            fadeOut(tween(180))
+                    } else {
+                        slideOutHorizontally(tween(240, easing = FastOutSlowInEasing), targetOffsetX = { it / 5 }) +
+                            fadeOut(tween(180))
+                    }
+                    enter togetherWith exit
+                },
+            ) { currentTab ->
+                when (currentTab) {
+                    0 -> LibraryTab(state = state, nav = nav)
+                    1 -> DownloadsTab(state = state, nav = nav)
+                    else -> SettingsTab(state = state, nav = nav)
+                }
             }
         }
     }

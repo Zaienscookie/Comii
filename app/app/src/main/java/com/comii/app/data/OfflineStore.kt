@@ -16,6 +16,7 @@ data class OfflineSeries(
     val coverName: String? = null,
     val downloadedAt: Long = 0L,
     val totalBytes: Long = 0L,
+    val category: String = "",
 )
 
 /** Local copies of series so comics and videos stay readable without a server. */
@@ -65,4 +66,51 @@ class OfflineStore(private val context: Context) {
     }
 
     fun totalBytes(): Long = all().sumOf { it.totalBytes }
+
+    // ---------------------------------------------------------------- categories
+    private val categoriesFile = File(root, "categories.json")
+
+    fun categories(): List<String> =
+        runCatching { ComiiJson.decodeFromString<List<String>>(categoriesFile.readText()) }
+            .getOrDefault(emptyList())
+            .filter { it.isNotBlank() }
+
+    fun createCategory(name: String): List<String> {
+        val clean = name.trim()
+        val current = categories().toMutableList()
+        if (clean.isNotEmpty() && clean !in current) current.add(clean)
+        persistCategories(current)
+        return current
+    }
+
+    fun renameCategory(oldName: String, newName: String): List<String> {
+        val clean = newName.trim()
+        if (clean.isEmpty()) return categories()
+        val current = categories().toMutableList()
+        val index = current.indexOf(oldName)
+        if (index >= 0) current[index] = clean
+        persistCategories(current)
+        all().forEach { series ->
+            if (series.category == oldName) save(series.copy(category = clean))
+        }
+        return current
+    }
+
+    fun deleteCategory(name: String): List<String> {
+        val current = categories().filter { it != name }
+        persistCategories(current)
+        all().forEach { series ->
+            if (series.category == name) save(series.copy(category = ""))
+        }
+        return current
+    }
+
+    fun setCategory(path: String, category: String) {
+        val series = find(path) ?: return
+        save(series.copy(category = category))
+    }
+
+    private fun persistCategories(names: List<String>) {
+        categoriesFile.writeText(ComiiJson.encodeToString(names))
+    }
 }

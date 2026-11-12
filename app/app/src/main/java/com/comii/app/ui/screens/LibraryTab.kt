@@ -1,5 +1,6 @@
 package com.comii.app.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DriveFileMove
@@ -116,6 +118,12 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 
     LaunchedEffect(path, refreshKey) { reload() }
 
+    // 返回键：在文件夹里逐级向上返回，而不是一下退出
+    BackHandler(enabled = path.isNotEmpty()) {
+        val index = path.lastIndexOf('/')
+        path = if (index >= 0) path.substring(0, index) else ""
+    }
+
     val allItems = browseData?.items.orEmpty()
     val items = allItems.filter { node ->
         val matchQuery = query.isBlank() || node.name.contains(query.trim(), ignoreCase = true)
@@ -165,6 +173,9 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             }
             IconButton(onClick = { refreshKey++ }) {
                 Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent)
+            }
+            IconButton(onClick = { dialog = LibraryDialog.NewFolder }) {
+                Icon(Icons.Rounded.CreateNewFolder, contentDescription = "新建文件夹", tint = palette.accent)
             }
             IconButton(onClick = { nav.navigate(Routes.upload(path)) }) {
                 Icon(Icons.Rounded.Upload, contentDescription = "上传", tint = palette.accent)
@@ -600,7 +611,7 @@ private fun NewFolderDialog(onCreate: (String, String) -> Unit, onDismiss: () ->
                 )
                 Spacer(Modifier.height(10.dp))
                 SegmentControl(
-                    options = listOf("自动", "漫画", "视频"),
+                    options = listOf("自动", "漫画", "视频", "混合"),
                     selectedIndex = kind,
                     onSelect = { kind = it },
                 )
@@ -611,7 +622,7 @@ private fun NewFolderDialog(onCreate: (String, String) -> Unit, onDismiss: () ->
                 onClick = {
                     val clean = name.trim()
                     if (clean.isNotEmpty()) {
-                        onCreate(clean, listOf("", NodeKind.MANGA, NodeKind.VIDEO)[kind])
+                        onCreate(clean, listOf("", NodeKind.MANGA, NodeKind.VIDEO, NodeKind.MIXED)[kind])
                     }
                 },
                 enabled = name.isNotBlank(),

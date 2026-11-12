@@ -1,6 +1,6 @@
 # Comii 交接手册
 
-> 版本：2.0.0 · 交接日期：2026-11-13
+> 版本：2.1.0 · 交接日期：2026-11-13
 > 状态：**可运行、可安装、可继续开发**（后端已部署，APK 已构建，WebUI 可用）
 
 ---
@@ -22,7 +22,7 @@ Comii 是一个**个人漫画仓库**：服务器上用一个真实的 `library/
 | 服务器代码 | `/root/dev/comii` | 与仓库 `server/`、`web/` 同步 |
 | 漫画库 | `/root/dev/library` | 已放入 4 个演示系列 |
 | 运行数据 | `/root/dev/data` | 缩略图缓存、回收站、阅读进度、日志 |
-| 安卓 APK | 工作区 `release/Comii-2.0.0.apk` | 可直接安装（debug 签名） |
+| 安卓 APK | 工作区 `release/Comii-2.1.0.apk` | 可直接安装（debug 签名） |
 | 本机构建环境 | 工作区 `buildtools/`（不入库） | SDK 35 / Gradle 8.9 / JDK 17 |
 
 > 安全说明：GitHub Token、SSH 密码不在仓库与本文档中保存。**建议交接后立即轮换 GitHub Token**，
@@ -161,7 +161,7 @@ cd app
 ### 6.3 安装
 
 - 手机与服务器同一局域网；
-- 把 `release/Comii-2.0.0.apk` 传到手机安装（需允许「安装未知来源应用」）；
+- 把 `release/Comii-2.1.0.apk` 传到手机安装（需允许「安装未知来源应用」）；
 - 或 `adb install -r release/Comii-1.0.0.apk`。
 
 ### 6.4 首次使用
@@ -310,7 +310,7 @@ python tools/dev/integration_check.py     # 在服务器上或指向 COMII_BASE
 - [x] 演示库 4 个系列、21 张图片可浏览、可出缩略图
 - [x] PDF 导入、上传、删除/恢复/彻底删除 已实测通过
 - [x] 后端 13 项测试通过
-- [x] APK 构建成功并输出到 `release/Comii-2.0.0.apk`
+- [x] APK 构建成功并输出到 `release/Comii-2.1.0.apk`
 - [ ] 真机安装与四大主流程验证（待接手人完成）
 - [ ] GitHub Token 轮换（建议）
 
