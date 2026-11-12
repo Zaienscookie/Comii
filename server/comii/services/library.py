@@ -1,0 +1,284 @@
+"""Library scanning, path safety and node construction."""
+
+from __future__ import annotations
+
+import re
+import time
+from pathlib import Path
+from typing import Iterable, Optional
+from urllib.parse import urlencode
+
+from fastapi import HTTPException
+
+from ..config import settings
+from ..models import BrowseResponse, LibraryNode, NodeKind, SeriesDetail
+
+IMAGE_EXTENSIONS = frozenset(
+    {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif", ".svg"}
+)
+VIDEO_EXTENSIONS = frozenset(
+    {".mp4", ".webm", ".mov", ".mkv", ".m4v", ".avi", ".ogv", ".ts"}
+)
+KIND_MARKER = ".comii_type"
+LEGACY_KIND_MARKER = ".komi_type"
+VALID_KINDS = {"manga", "video", "mixed"}
+
+
+def natural_sort_key(name: str) -> list[object]:
+    return [int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", name)]
+
+
+def is_image(path: Path) -> bool:
+    return path.suffix.lower() in IMAGE_EXTENSIONS
+
+
+def is_video(path: Path) -> bool:
+    return path.suffix.lower() in VIDEO_EXTENSIONS
+
+
+def split_relative_path(raw: str) -> list[str]:
+    """Split a client supplied relative path and reject anything dangerous."""
+    text = str(raw or "").replace("\\", "/").strip()
+    parts = [part for part in text.split("/") if part not in ("", ".")]
+    for part in parts:
+        if part == ".." or part.startswith(".") or ":" in part:
+            raise HTTPException(status_code=400, detail="路径不合法")
+    return parts
+
+
+def normalize_path(raw: str) -> str:
+    return "/".join(split_relative_path(raw))
+
+
+def library_root() -> Path:
+    return settings.library_root.resolve()
+
+
+def _ensure_inside(target: Path, root: Path) -> Path:
+    resolved = target.resolve()
+    if resolved != root and root not in resolved.parents:
+        raise HTTPException(status_code=400, detail="路径不合法")
+    return resolved
+
+
+def resolve_directory(raw: str) -> Path:
+    root = library_root()
+    parts = split_relative_path(raw)
+    target = _ensure_inside(root.joinpath(*parts), root)
+    if not target.is_dir():
+        raise HTTPException(status_code=404, detail="目录不存在")
+    return target
+
+
+def resolve_file(raw_directory: str, filename: str) -> Path:
+    if not filename or filename in (".", "..") or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="文件名不合法")
+    base = resolve_directory(raw_directory)
+    target = _ensure_inside(base / filename, base)
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    return target
+
+
+def media_url(kind: str, path: str, filename: str) -> str:
+    query = urlencode({"path": path, "name": filename})
+    return f"{settings.api_prefix}/media/{kind}?{query}"
+
+
+def list_media(directory: Path) -> tuple[list[Path], list[Path]]:
+    images: list[Path] = []
+    videos: list[Path] = []
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        return images, videos
+    for entry in entries:
+        if not entry.is_file():
+            continue
+        if is_image(entry):
+            images.append(entry)
+        elif is_video(entry):
+            videos.append(entry)
+    images.sort(key=lambda item: natural_sort_key(item.name))
+    videos.sort(key=lambda item: natural_sort_key(item.name))
+    return images, videos
+
+
+def _kind_for(images: list[Path], videos: list[Path]) -> NodeKind:
+    if images and videos:
+        return NodeKind.mixed
+    if videos:
+        return NodeKind.video
+    return NodeKind.manga
+
+
+def read_forced_kind(directory: Path) -> Optional[str]:
+    for marker in (KIND_MARKER, LEGACY_KIND_MARKER):
+        candidate = directory / marker
+        try:
+            if candidate.is_file():
+                value = candidate.read_text(encoding="utf-8").strip().lower()
+                if value in VALID_KINDS:
+                    return value
+        except OSError:
+            continue
+    return None
+
+
+def write_kind_marker(directory: Path, kind: str) -> None:
+    if kind in VALID_KINDS:
+        (directory / KIND_MARKER).write_text(kind, encoding="utf-8")
+
+
+def _cover_for(path: str, images: list[Path], videos: list[Path]) -> Optional[str]:
+    if images:
+        return media_url("thumb", path, images[0].name)
+    if videos:
+        return media_url("video_thumb", path, videos[0].name)
+    return None
+
+
+def _latest_mtime(directory: Path) -> Optional[float]:
+    try:
+        return max((entry.stat().st_mtime for entry in directory.iterdir()), default=None)
+    except OSError:
+        return None
+
+
+def _series_node(directory: Path, path: str) -> Optional[LibraryNode]:
+    images, videos = list_media(directory)
+    if not images and not videos:
+        return None
+    kind = _kind_for(images, videos)
+    forced = read_forced_kind(directory)
+    if forced:
+        kind = NodeKind(forced)
+    size = 0
+    for item in images + videos:
+        try:
+            size += item.stat().st_size
+        except OSError:
+            pass
+    return LibraryNode(
+        name=directory.name,
+        path=path,
+        kind=kind,
+        cover=_cover_for(path, images, videos),
+        image_count=len(images),
+        video_count=len(videos),
+        updated_at=_latest_mtime(directory),
+        size=size,
+    )
+
+
+def visible_directories(directory: Path) -> list[Path]:
+    try:
+        entries = [
+            entry
+            for entry in directory.iterdir()
+            if entry.is_dir() and not entry.name.startswith(".")
+        ]
+    except OSError:
+        return []
+    entries.sort(key=lambda item: natural_sort_key(item.name))
+    return entries
+
+
+def _iter_series(directory: Path, prefix: str = "") -> Iterable[tuple[Path, str]]:
+    for child in visible_directories(directory):
+        child_path = f"{prefix}/{child.name}".lstrip("/")
+        images, videos = list_media(child)
+        if images or videos:
+            yield child, child_path
+        else:
+            yield from _iter_series(child, child_path)
+
+
+def browse(raw_path: str = "") -> BrowseResponse:
+    parts = split_relative_path(raw_path)
+    normalized = "/".join(parts)
+    base = library_root() if not parts else resolve_directory(normalized)
+
+    items: list[LibraryNode] = []
+    for directory in visible_directories(base):
+        child_path = f"{normalized}/{directory.name}".lstrip("/")
+        series = _series_node(directory, child_path)
+        if series is not None:
+            items.append(series)
+            continue
+
+        children = visible_directories(directory)
+        if not children:
+            continue
+
+        cover: Optional[str] = None
+        for child in children:
+            preview = _series_node(child, f"{child_path}/{child.name}")
+            if preview is not None and preview.cover:
+                cover = preview.cover
+                break
+
+        items.append(
+            LibraryNode(
+                name=directory.name,
+                path=child_path,
+                kind=NodeKind.folder,
+                cover=cover,
+                child_count=len(children),
+            )
+        )
+
+    parent = "/".join(parts[:-1]) if parts else None
+    return BrowseResponse(path=normalized, parent=parent, items=items, total=len(items))
+
+
+def series_detail(raw_path: str, progress_lookup=None) -> SeriesDetail:
+    directory = resolve_directory(raw_path)
+    images, videos = list_media(directory)
+    if not images and not videos:
+        raise HTTPException(status_code=404, detail="该目录不是漫画/视频系列")
+    normalized = normalize_path(raw_path)
+    kind = _kind_for(images, videos)
+    forced = read_forced_kind(directory)
+    if forced:
+        kind = NodeKind(forced)
+    progress = progress_lookup(normalized) if progress_lookup else None
+    return SeriesDetail(
+        name=directory.name,
+        path=normalized,
+        kind=kind,
+        cover=_cover_for(normalized, images, videos),
+        images=[item.name for item in images],
+        videos=[item.name for item in videos],
+        image_count=len(images),
+        video_count=len(videos),
+        progress=progress,
+    )
+
+
+def library_stats() -> tuple[int, int, int, int, int]:
+    """Return (series, folders, images, videos, bytes)."""
+    series_count = 0
+    image_count = 0
+    video_count = 0
+    total_bytes = 0
+    folder_count = 0
+    root = library_root()
+    for directory, _ in _iter_series(root):
+        images, videos = list_media(directory)
+        series_count += 1
+        image_count += len(images)
+        video_count += len(videos)
+        for item in images + videos:
+            try:
+                total_bytes += item.stat().st_size
+            except OSError:
+                pass
+    for entry in root.rglob("*"):
+        if entry.is_dir() and not entry.name.startswith("."):
+            folder_count += 1
+    return series_count, folder_count, image_count, video_count, total_bytes
+
+
+def unix_now() -> float:
+    return time.time()

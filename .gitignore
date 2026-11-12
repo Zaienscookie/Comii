@@ -1,0 +1,45 @@
+# 构建与本地环境（不入库）
+buildtools/
+release/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+server/.comii/
+server/library/
+
+# Android / Gradle
+app/.gradle/
+app/build/
+app/app/build/
+app/local.properties
+app/.idea/
+*.apk
+*.aab
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# 编辑器
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 旧结构与临时文件（重构前的遗留目录，不提交）
+/static/
+/backend/
+/komi_apk/
+/app.py
+/batch_dl.py
+/pawchive_dl_threaded.py
+/probe_and_clean.py
+/pawchive_download_handbook.md
+/部署使用手册.md
+/docker-compose.yml
+/Dockerfile
+/requirements.txt
+/web/legacy_app.py

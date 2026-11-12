@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>播放</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="video-page">
+<div class="reader-toolbar" id="toolbar">
+  <button class="back-btn" id="backBtn" aria-label="返回">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+  </button>
+  <span class="tt" id="title">…</span>
+  <button class="icon-btn" id="listToggle" aria-label="播放列表">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+  </button>
+</div>
+
+<div class="video-player-wrap">
+  <video id="video" controls playsinline preload="metadata"></video>
+</div>
+
+<div class="video-list" id="videoList"></div>
+
+<script src="/static/config.js"></script>
+<script src="/static/video.js"></script>
+</body>
+</html>

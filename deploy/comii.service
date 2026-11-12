@@ -1,0 +1,18 @@
+[Unit]
+Description=Comii server (comic library)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/dev/comii/server
+Environment=COMII_LIBRARY=/root/dev/library
+Environment=COMII_DATA=/root/dev/data
+Environment=COMII_PORT=8000
+Environment=COMII_LOG_LEVEL=info
+ExecStart=/root/dev/.python/bin/python3.11 -m uvicorn comii.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target
