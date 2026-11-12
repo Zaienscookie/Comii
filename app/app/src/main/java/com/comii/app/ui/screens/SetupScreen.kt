@@ -239,7 +239,7 @@ fun SetupScreen(
                     onClick = onCancel,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                ) { Text("取消", color = palette.textSecondary) }
+                ) { Text(if (state.hasServer) "取消" else "稍后设置", color = palette.textSecondary) }
             }
             Spacer(Modifier.height(20.dp))
             Text(

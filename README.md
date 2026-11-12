@@ -153,6 +153,8 @@ python -m pytest -q
 ## 文档
 
 - [交接手册](docs/Comii-交接手册.md)：服务器现状、构建/部署步骤、功能说明、已知限制、后续路线。
+- [2.5.0 部署修复与更新](docs/Comii-2.5.0-部署修复与更新.md)：comic/video 目录结构、
+  本次部署路径、2.5.0 的七项改动与 API 变化。
 - [开发辅助脚本](tools/dev/README.md)：SDK / Gradle / 部署 / 演示库 / 端到端检查。
 
 ## License

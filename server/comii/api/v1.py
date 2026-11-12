@@ -92,8 +92,16 @@ def collection(path: str = "") -> CollectionResponse:
 
 
 @router.get("/gallery", response_model=GalleryResponse)
-def gallery(kind: str = "all", limit: int = 120, offset: int = 0) -> GalleryResponse:
-    rows, total = library.list_gallery(kind=kind, limit=limit, offset=offset)
+def gallery(
+    kind: str = "all",
+    limit: int = 120,
+    offset: int = 0,
+    path: str = "",
+    sort: str = "recent",
+) -> GalleryResponse:
+    rows, total = library.list_gallery(
+        kind=kind, limit=limit, offset=offset, scope=path, sort=sort
+    )
     return GalleryResponse(
         items=[GalleryItem(**row) for row in rows],
         total=total,

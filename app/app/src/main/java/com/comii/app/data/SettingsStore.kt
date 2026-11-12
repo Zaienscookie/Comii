@@ -39,6 +39,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("grid_columns", 2)
         set(value) = prefs.edit().putInt("grid_columns", value).apply()
 
+    /** Library layout inside a folder: "folders" = one card per series, "flat" = every page in order. */
+    var libraryLayout: String
+        get() = prefs.getString("library_layout", "folders").orEmpty()
+        set(value) = prefs.edit().putString("library_layout", value).apply()
+
+    /** Downloads layout: "group" = grouped by category, "flat" = every page in order. */
+    var downloadsLayout: String
+        get() = prefs.getString("downloads_layout", "group").orEmpty()
+        set(value) = prefs.edit().putString("downloads_layout", value).apply()
+
     // Local mirror of reading positions, keyed by series path.
     fun localPage(path: String): Int = prefs.getInt("page_$path", 0)
 

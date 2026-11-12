@@ -102,8 +102,14 @@ class ComiiApi(val baseUrl: String) {
     suspend fun collection(path: String): CollectionResponse =
         decode(get("/collection?path=${encode(path)}"))
 
-    suspend fun gallery(limit: Int = 300, offset: Int = 0, kind: String = "all"): GalleryResponse =
-        decode(get("/gallery?kind=$kind&limit=$limit&offset=$offset"))
+    suspend fun gallery(
+        limit: Int = 300,
+        offset: Int = 0,
+        kind: String = "all",
+        path: String = "",
+        sort: String = "recent",
+    ): GalleryResponse =
+        decode(get("/gallery?kind=$kind&limit=$limit&offset=$offset&path=${encode(path)}&sort=$sort"))
 
     suspend fun setCover(path: String, name: String): ActionResult =
         decode(post("/cover", ComiiJson.encodeToString(SetCoverBody(path, name))))

@@ -1,5 +1,8 @@
 package com.comii.app.ui.theme
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
@@ -131,7 +134,23 @@ val ComiiShapes = Shapes(
 
 @Composable
 fun ComiiTheme(dark: Boolean, content: @Composable () -> Unit) {
-    val palette = if (dark) DarkPalette else LightPalette
+    val target = if (dark) DarkPalette else LightPalette
+    // Smoothly cross-fade every palette colour so switching light/dark does not
+    // flash the screen (the old implementation swapped colours in one frame).
+    val spec = tween<Color>(durationMillis = 450, easing = FastOutSlowInEasing)
+    val palette = ComiiPalette(
+        background = animateColorAsState(target.background, spec, label = "bg").value,
+        elevated = animateColorAsState(target.elevated, spec, label = "elevated").value,
+        card = animateColorAsState(target.card, spec, label = "card").value,
+        textPrimary = animateColorAsState(target.textPrimary, spec, label = "text").value,
+        textSecondary = animateColorAsState(target.textSecondary, spec, label = "text2").value,
+        textTertiary = animateColorAsState(target.textTertiary, spec, label = "text3").value,
+        separator = animateColorAsState(target.separator, spec, label = "sep").value,
+        accent = animateColorAsState(target.accent, spec, label = "accent").value,
+        danger = animateColorAsState(target.danger, spec, label = "danger").value,
+        success = animateColorAsState(target.success, spec, label = "success").value,
+        isDark = dark,
+    )
     val scheme = if (dark) {
         darkColorScheme(
             primary = palette.accent,

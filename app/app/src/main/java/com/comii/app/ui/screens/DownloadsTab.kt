@@ -16,9 +16,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -46,11 +49,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
 import com.comii.app.data.NodeKind
 import com.comii.app.data.OfflineSeries
 import com.comii.app.ui.AppState
@@ -60,11 +65,15 @@ import com.comii.app.ui.components.ConfirmDialog
 import com.comii.app.ui.components.CoverImage
 import com.comii.app.ui.components.EmptyState
 import com.comii.app.ui.components.LargeTitle
+import com.comii.app.ui.components.SegmentControl
 import com.comii.app.ui.components.formatBytes
 import com.comii.app.ui.theme.ComiiTheme
 import kotlinx.coroutines.launch
 
 private const val UNCATEGORIZED = "未分类"
+
+/** One local page, used by the "全部排列" view so a whole download can be read in order. */
+private data class OfflineImage(val series: OfflineSeries, val name: String, val index: Int)
 
 @Composable
 fun DownloadsTab(state: AppState, nav: NavHostController) {
@@ -74,7 +83,10 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
     var version by remember { mutableIntStateOf(0) }
     var categories by remember { mutableStateOf(safeCategories(state)) }
     var activeCategory by rememberSaveable { mutableStateOf("") }
-    var pendingDelete by remember { mutableStateOf<OfflineSeries?>(null) }
+    var layout by rememberSaveable { mutableStateOf(state.repository.settings.downloadsLayout) }
+    var editing by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
+    var pendingDelete by remember { mutableStateOf<List<OfflineSeries>>(emptyList()) }
     var showCategorySheet by remember { mutableStateOf(false) }
     var sheetSeries by remember { mutableStateOf<OfflineSeries?>(null) }
     var startInCreate by remember { mutableStateOf(false) }
@@ -83,6 +95,7 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
     val validCategories = remember(categories) {
         categories.filter { it.isNotBlank() && it != UNCATEGORIZED }.distinct()
     }
+    val flatMode = layout == "flat"
 
     val sections = remember(allSeries, activeCategory, validCategories, version) {
         val groups = LinkedHashMap<String, MutableList<OfflineSeries>>()
@@ -101,6 +114,15 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
         result
     }
 
+    // 「全部图片」：按分类 + 系列名 + 页码顺序摊平，可以一口气看到底
+    val flatImages = remember(allSeries, version, flatMode) {
+        if (!flatMode) emptyList() else allSeries
+            .sortedWith(compareBy({ it.category }, { it.name }))
+            .flatMap { series ->
+                series.images.mapIndexed { index, name -> OfflineImage(series, name, index) }
+            }
+    }
+
     Column(Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 14.dp),
@@ -109,121 +131,175 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             Column(Modifier.weight(1f)) {
                 LargeTitle("下载", "${allSeries.size} 个系列 · ${formatBytes(state.repository.offline.totalBytes())}")
             }
+            if (allSeries.isNotEmpty()) {
+                TextButton(onClick = {
+                    editing = !editing
+                    if (!editing) selected = emptySet()
+                }) { Text(if (editing) "完成" else "编辑", color = palette.accent, fontWeight = FontWeight.Medium) }
+            }
         }
 
         Spacer(Modifier.height(6.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            CategoryChip("全部", activeCategory.isBlank()) { activeCategory = "" }
-            validCategories.forEach { name ->
-                CategoryChip(name, activeCategory == name) { activeCategory = name }
-            }
-            AddCategoryChip {
-                sheetSeries = null
-                startInCreate = true
-                showCategorySheet = true
+        Column(Modifier.padding(horizontal = 20.dp)) {
+            SegmentControl(
+                options = listOf("分类", "全部图片"),
+                selectedIndex = if (flatMode) 1 else 0,
+                onSelect = { index ->
+                    layout = if (index == 0) "group" else "flat"
+                    state.repository.settings.downloadsLayout = layout
+                    editing = false
+                    selected = emptySet()
+                },
+            )
+            if (!flatMode) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CategoryChip("全部", activeCategory.isBlank()) { activeCategory = "" }
+                    validCategories.forEach { name ->
+                        CategoryChip(name, activeCategory == name) { activeCategory = name }
+                    }
+                    AddCategoryChip {
+                        sheetSeries = null
+                        startInCreate = true
+                        showCategorySheet = true
+                    }
+                }
             }
         }
         Spacer(Modifier.height(10.dp))
 
-        if (allSeries.isEmpty()) {
-            EmptyState(
-                icon = Icons.Rounded.Download,
-                title = "还没有离线内容",
-                subtitle = "在 Comii 里长按系列，选择「下载到本地」，没有网络也能看",
-            )
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                sections.forEachIndexed { index, (label, list) ->
-                    item(key = "header_${index}_$label") {
-                        Text(
-                            label,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = palette.textSecondary,
-                            modifier = Modifier.padding(start = 2.dp, top = 6.dp, bottom = 2.dp),
-                        )
-                    }
-                    items(list, key = { it.path }) { item ->
-                        val cover = state.repository.offline.coverFile(item)
-                        Row(
-                            modifier = Modifier
+        Box(Modifier.weight(1f)) {
+            when {
+                allSeries.isEmpty() -> EmptyState(
+                    icon = Icons.Rounded.Download,
+                    title = "还没有离线内容",
+                    subtitle = "在 Comii 里长按系列，选择「下载到本地」，没有网络也能看",
+                )
+                flatMode -> LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 108.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(flatImages, key = { "${it.series.path}/${it.name}" }) { image ->
+                        Box(
+                            Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(8.dp))
                                 .background(palette.card)
-                                .pointerInput(item.path) {
-                                    detectTapGestures(
-                                        onTap = { openOffline(item, nav) },
-                                        onLongPress = {
-                                            sheetSeries = item
-                                            startInCreate = false
-                                            showCategorySheet = true
-                                        },
-                                    )
+                                .pointerInput(image.series.path, image.name) {
+                                    detectTapGestures {
+                                        nav.navigate(Routes.reader(image.series.path, image.index))
+                                    }
                                 }
-                                .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            CoverImage(
-                                model = cover,
-                                kind = item.kind,
-                                modifier = Modifier.width(58.dp).aspectRatio(0.7f),
+                            AsyncImage(
+                                model = state.repository.offline.imageFile(image.series.path, image.name),
+                                contentDescription = image.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
                             )
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    item.name,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp,
-                                    color = palette.textPrimary,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    when {
-                                        item.kind == NodeKind.VIDEO -> "${item.videos.size} 个视频 · ${formatBytes(item.totalBytes)}"
-                                        else -> "${item.images.size} 页 · ${formatBytes(item.totalBytes)}"
-                                    },
-                                    fontSize = 12.sp,
-                                    color = palette.textSecondary,
-                                )
-                            }
-                            IconButton(onClick = { openOffline(item, nav) }) {
-                                Icon(Icons.Rounded.PlayArrow, contentDescription = "打开", tint = palette.accent)
-                            }
-                            IconButton(onClick = { pendingDelete = item }) {
-                                Icon(Icons.Rounded.Delete, contentDescription = "删除下载", tint = palette.textTertiary, modifier = Modifier.size(20.dp))
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(5.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Text("${image.index + 1}", color = Color.White, fontSize = 10.sp)
                             }
                         }
                     }
                 }
-                item { Spacer(Modifier.height(96.dp)) }
+                else -> LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 108.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    sections.forEach { (label, list) ->
+                        item(key = "header_$label", span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.textSecondary,
+                                modifier = Modifier.padding(start = 2.dp, top = 6.dp, bottom = 2.dp),
+                            )
+                        }
+                        items(list, key = { it.path }) { item ->
+                            val cover = state.repository.offline.coverFile(item)
+                            OfflineCard(
+                                item = item,
+                                cover = cover,
+                                editing = editing,
+                                selected = selected.contains(item.path),
+                                onClick = {
+                                    if (editing) {
+                                        selected = if (selected.contains(item.path)) selected - item.path else selected + item.path
+                                    } else {
+                                        openOffline(item, nav)
+                                    }
+                                },
+                                onLongClick = {
+                                    if (editing) {
+                                        selected = if (selected.contains(item.path)) selected - item.path else selected + item.path
+                                    } else {
+                                        editing = true
+                                        selected = selected + item.path
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (editing && selected.isNotEmpty()) {
+                DownloadsEditBar(
+                    count = selected.size,
+                    onDelete = {
+                        pendingDelete = allSeries.filter { selected.contains(it.path) }
+                    },
+                    onMove = {
+                        sheetSeries = null
+                        startInCreate = false
+                        showCategorySheet = true
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 16.dp),
+                )
             }
         }
     }
 
-    pendingDelete?.let { item ->
+    if (pendingDelete.isNotEmpty()) {
+        val count = pendingDelete.size
         ConfirmDialog(
-            title = "删除下载",
-            message = "将从本机删除「${item.name}」的离线文件，服务器上的内容不受影响。",
+            title = "删除 $count 个下载？",
+            message = "将从本机删除这些离线文件，服务器上的内容不受影响。",
             confirmText = "删除",
             destructive = true,
             onConfirm = {
-                runCatching { state.repository.offline.delete(item.path) }
-                pendingDelete = null
-                version++
-                state.showToast("已删除本地文件")
+                val targets = pendingDelete
+                scope.launch {
+                    targets.forEach { runCatching { state.repository.offline.delete(it.path) } }
+                    pendingDelete = emptyList()
+                    selected = emptySet()
+                    editing = false
+                    version++
+                    state.showToast("已删除 $count 个下载")
+                }
             },
-            onDismiss = { pendingDelete = null },
+            onDismiss = { pendingDelete = emptyList() },
         )
     }
 
@@ -233,16 +309,16 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             categories = validCategories,
             startInCreate = startInCreate,
             onAssign = { name ->
-                val item = sheetSeries
-                if (item != null) {
-                    scope.launch {
-                        runCatching { state.repository.offline.setCategory(item.path, name) }
-                            .onSuccess {
-                                version++
-                                state.showToast("已移动到「${name.ifBlank { UNCATEGORIZED }}」")
-                            }
-                            .onFailure { state.showToast("移动失败：${it.message}") }
-                    }
+                val targets = if (sheetSeries != null) listOf(sheetSeries!!) else allSeries.filter { selected.contains(it.path) }
+                scope.launch {
+                    runCatching {
+                        targets.forEach { state.repository.offline.setCategory(it.path, name) }
+                    }.onSuccess {
+                        version++
+                        editing = false
+                        selected = emptySet()
+                        state.showToast("已移动到「${name.ifBlank { UNCATEGORIZED }}」")
+                    }.onFailure { state.showToast("移动失败：${it.message}") }
                 }
                 showCategorySheet = false
                 sheetSeries = null
@@ -268,6 +344,115 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                 startInCreate = false
             },
         )
+    }
+}
+
+@Composable
+private fun OfflineCard(
+    item: OfflineSeries,
+    cover: java.io.File?,
+    editing: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val palette = ComiiTheme.palette
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(18.dp))
+            .pointerInput(item.path, editing) {
+                detectTapGestures(onTap = { onClick() }, onLongPress = { onLongClick() })
+            }
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.7f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(palette.card)
+        ) {
+            CoverImage(model = cover, kind = item.kind, modifier = Modifier.fillMaxSize())
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 7.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    if (item.kind == NodeKind.VIDEO) "视频" else "漫画",
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            if (editing) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) palette.accent else Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (selected) Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        Spacer(Modifier.height(7.dp))
+        Text(
+            item.name,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 13.5.sp,
+            fontWeight = FontWeight.Medium,
+            color = palette.textPrimary,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+        Text(
+            when {
+                item.kind == NodeKind.VIDEO -> "${item.videos.size} 个视频 · ${formatBytes(item.totalBytes)}"
+                else -> "${item.images.size} 页 · ${formatBytes(item.totalBytes)}"
+            },
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontSize = 11.5.sp,
+            color = palette.textSecondary,
+            modifier = Modifier.padding(horizontal = 2.dp),
+        )
+    }
+}
+
+@Composable
+private fun DownloadsEditBar(
+    count: Int,
+    onDelete: () -> Unit,
+    onMove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val palette = ComiiTheme.palette
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(palette.elevated)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("已选 $count 项", color = palette.textSecondary, fontSize = 13.sp)
+        Spacer(Modifier.weight(1f))
+        TextButton(onClick = onMove, enabled = count > 0) {
+            Icon(Icons.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.accent)
+            Spacer(Modifier.width(4.dp))
+            Text("移动到分类", color = palette.accent, fontSize = 13.sp)
+        }
+        TextButton(onClick = onDelete, enabled = count > 0) {
+            Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.danger)
+            Spacer(Modifier.width(4.dp))
+            Text("删除", color = palette.danger, fontSize = 13.sp)
+        }
     }
 }
 

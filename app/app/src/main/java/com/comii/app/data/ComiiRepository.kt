@@ -84,7 +84,12 @@ class ComiiRepository(private val context: Context) {
 
     suspend fun collectSeries(path: String): List<LibraryNode> = requireApi().collection(path).items
 
-    suspend fun gallery(limit: Int = 300): GalleryResponse = requireApi().gallery(limit = limit)
+    suspend fun gallery(
+        limit: Int = 300,
+        offset: Int = 0,
+        path: String = "",
+        sort: String = "recent",
+    ): GalleryResponse = requireApi().gallery(limit = limit, offset = offset, path = path, sort = sort)
 
     suspend fun setCover(path: String, name: String): ActionResult =
         requireApi().setCover(path, name)

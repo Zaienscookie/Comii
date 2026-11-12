@@ -395,12 +395,22 @@ def list_gallery(
     kind: str = "all",
     limit: int = 120,
     offset: int = 0,
+    scope: str = "",
+    sort: str = "recent",
 ) -> tuple[list[dict], int]:
-    """Flat camera-roll style listing of every image and video in the library."""
+    """Flat listing of images and videos, optionally scoped to one folder.
+
+    * ``sort="recent"`` – camera-roll order (newest file first), used by 全部.
+    * ``sort="name"``   – folder order then page order, used by the "全部排列"
+      view inside a folder so readers can scroll a whole author start to finish.
+    """
     wanted = kind if kind in {"image", "video"} else "all"
     rows: list[dict] = []
+    parts = split_relative_path(scope)
+    normalized = "/".join(parts)
+    base = library_root() if not parts else resolve_directory(normalized)
 
-    for directory, rel in _iter_series(library_root()):
+    for directory, rel in _iter_series(base, normalized):
         images, videos = list_media(directory)
         series_name = directory.name
         if wanted in ("all", "image"):
@@ -438,7 +448,8 @@ def list_gallery(
                     }
                 )
 
-    rows.sort(key=lambda row: row["mtime"], reverse=True)
+    if sort != "name":
+        rows.sort(key=lambda row: row["mtime"], reverse=True)
     total = len(rows)
     start = max(0, offset)
     end = start + max(1, min(limit, 500))

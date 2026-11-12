@@ -844,7 +844,9 @@ body.editing .card-dl { opacity: 0; pointer-events: none; }
   color: var(--accent);
   background: linear-gradient(135deg, var(--card), var(--bg-elev));
 }
-.card.folder .card-cover { aspect-ratio: 3 / 2; }
+.card.folder .card-cover { aspect-ratio: 2 / 3; }
+/* 文件夹封面按漫画页比例展示，避免竖版封面被横向裁掉 */
+.card.folder .card-cover img { object-fit: cover; }
 .card.folder .card-cover svg { opacity: .85; }
 
 .sheet-btn {

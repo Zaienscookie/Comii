@@ -81,7 +81,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController()) {
-    val start = if (state.hasServer) "home" else "setup"
+    // 未配置服务器也能先进入 App：媒体库页会提示去设置里填地址
+    val start = "home"
     NavHost(
         navController = nav,
         startDestination = start,
@@ -110,7 +111,7 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
                         popUpTo("setup") { inclusive = true }
                     }
                 },
-                onCancel = if (state.hasServer) ({ nav.popBackStack() }) else null,
+                onCancel = { nav.popBackStack() },
             )
         }
         composable("home") {

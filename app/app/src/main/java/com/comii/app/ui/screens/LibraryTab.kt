@@ -17,8 +17,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -52,6 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,7 +86,11 @@ import com.comii.app.ui.components.SegmentControl
 import com.comii.app.ui.components.formatBytes
 import com.comii.app.ui.theme.ComiiTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+
+/** 相册分页大小：一次取一页，滚到底再续下一页。 */
+private const val GALLERY_PAGE = 200
 
 private sealed interface LibraryDialog {
     data object NewFolder : LibraryDialog
@@ -121,50 +129,105 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var sheetItem by remember { mutableStateOf<LibraryNode?>(null) }
     var dialog by remember { mutableStateOf<LibraryDialog?>(null) }
     var downloadState by remember { mutableStateOf<DownloadProgress?>(null) }
+    var downloadHidden by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<LibraryNode>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
-    var galleryItems by remember { mutableStateOf<List<GalleryItem>>(emptyList()) }
+
+    // 「全部」和文件夹里的「全部图片」共用同一套分页相册
+    var flatItems by remember { mutableStateOf<List<GalleryItem>>(emptyList()) }
+    var flatTotal by remember { mutableIntStateOf(0) }
+    var flatLoading by remember { mutableStateOf(false) }
+    var layout by rememberSaveable { mutableStateOf(state.repository.settings.libraryLayout) }
+    val galleryGrid = rememberLazyGridState()
+    val folderGrid = rememberLazyGridState()
+
+    val galleryMode = path.isEmpty() || layout == "flat"
 
     suspend fun reload() {
         loading = true
         error = null
-        if (rootItems.isEmpty()) {
-            rootItems = runCatching { state.repository.browse("").items }.getOrDefault(emptyList())
+        if (!state.hasServer) {
+            browseData = null
+            flatItems = emptyList()
+            flatTotal = 0
+            loading = false
+            return
         }
+        rootItems = runCatching { state.repository.browse("").items }.getOrDefault(rootItems)
         val target = path
-        val result = runCatching {
-            if (target.isEmpty()) {
-                // 「全部」= 相册式聚合：整库所有图片 + 视频平铺
-                val response = state.repository.gallery(limit = 300)
-                galleryItems = response.items
-                com.comii.app.data.BrowseResponse(
-                    path = "",
-                    parent = null,
-                    items = emptyList(),
-                    total = response.total,
-                )
-            } else {
-                galleryItems = emptyList()
-                state.repository.browse(target)
+        if (galleryMode) {
+            browseData = null
+            val sort = if (target.isEmpty()) "recent" else "name"
+            runCatching {
+                state.repository.gallery(limit = GALLERY_PAGE, offset = 0, path = target, sort = sort)
+            }.onSuccess { response ->
+                flatItems = response.items
+                flatTotal = response.total
+            }.onFailure { failure ->
+                flatItems = emptyList()
+                flatTotal = 0
+                if (target.isNotEmpty()) {
+                    // 文件夹被移动/重命名时不要卡死：退回上一级
+                    state.showToast("找不到「${target.substringAfterLast('/')}」，已回到上一级")
+                    history.clear()
+                    path = target.substringBeforeLast('/', "")
+                    pathKind = null
+                } else {
+                    error = failure.message ?: "加载失败"
+                }
             }
-        }
-        result.onSuccess { response ->
-            browseData = response
-            progressMap = runCatching { state.repository.requireApi().progressAll() }
-                .getOrDefault(emptyMap())
-        }.onFailure { failure ->
-            if (target == "comic" || target == "video") {
-                // 分类文件夹不存在时退回「全部」
-                path = ""
-                pathKind = null
-            } else {
-                error = failure.message ?: "加载失败"
+        } else {
+            flatItems = emptyList()
+            flatTotal = 0
+            runCatching { state.repository.browse(target) }.onSuccess { response ->
+                browseData = response
+                progressMap = runCatching { state.repository.requireApi().progressAll() }
+                    .getOrDefault(emptyMap())
+            }.onFailure { failure ->
+                browseData = null
+                if (target.isEmpty()) {
+                    error = failure.message ?: "加载失败"
+                } else {
+                    state.showToast("找不到「${target.substringAfterLast('/')}」，已回到上一级")
+                    history.clear()
+                    path = target.substringBeforeLast('/', "")
+                    pathKind = null
+                }
             }
         }
         loading = false
     }
 
-    LaunchedEffect(path, refreshKey) { reload() }
+    /** 加载下一页；滚到底自动调用。 */
+    suspend fun loadMore() {
+        if (!galleryMode || flatLoading || !state.hasServer) return
+        if (flatItems.isEmpty() || flatItems.size >= flatTotal) return
+        flatLoading = true
+        val sort = if (path.isEmpty()) "recent" else "name"
+        runCatching {
+            state.repository.gallery(limit = GALLERY_PAGE, offset = flatItems.size, path = path, sort = sort)
+        }.onSuccess { response ->
+            flatItems = flatItems + response.items
+            flatTotal = response.total
+        }
+        flatLoading = false
+    }
+
+    LaunchedEffect(path, refreshKey, layout) { reload() }
+
+    LaunchedEffect(path, layout) {
+        runCatching { folderGrid.scrollToItem(0) }
+        runCatching { galleryGrid.scrollToItem(0) }
+    }
+
+    LaunchedEffect(galleryGrid, flatItems.size, flatTotal, galleryMode) {
+        if (!galleryMode) return@LaunchedEffect
+        snapshotFlow { galleryGrid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+            .distinctUntilChanged()
+            .collect { last ->
+                if (last >= flatItems.size - 9) loadMore()
+            }
+    }
 
     // 搜索：服务端递归匹配文件夹名、系列名和媒体文件名
     LaunchedEffect(query) {
@@ -229,6 +292,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 
     fun startDownload(node: LibraryNode) {
         if (downloadState != null) return
+        downloadHidden = false
         if (node.isFolder) {
             downloadState = DownloadProgress(node.name, 0, 0, "个系列")
             scope.launch {
@@ -238,7 +302,11 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     }
                 }.onSuccess { count ->
                     state.showToast("已下载「${node.name}」$count 个系列")
-                }.onFailure { state.showToast("下载失败：${it.message}") }
+                }.onFailure { failure ->
+                    state.showToast("下载失败：${failure.message}")
+                    // 列表可能是旧的（文件夹被改名/移动），刷新一次
+                    refreshKey++
+                }
                 downloadState = null
             }
             return
@@ -251,7 +319,10 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 }
             }.onSuccess { offline ->
                 state.showToast("已下载「${offline.name}」${formatBytes(offline.totalBytes)}")
-            }.onFailure { state.showToast("下载失败：${it.message}") }
+            }.onFailure { failure ->
+                state.showToast("下载失败：${failure.message}")
+                refreshKey++
+            }
             downloadState = null
         }
     }
@@ -305,8 +376,11 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     )
                 }
                 Text(
-                    if (showingSearch) "搜索「${query.trim()}」· ${gridItems.size} 个结果"
-                    else browseData?.let { "${it.total} 个项目" }.orEmpty(),
+                    when {
+                        showingSearch -> "搜索「${query.trim()}」· ${gridItems.size} 个结果"
+                        galleryMode -> if (flatTotal > 0) "已显示 ${flatItems.size} / $flatTotal 张" else "还没有内容"
+                        else -> browseData?.let { "${it.total} 个项目" }.orEmpty()
+                    },
                     fontSize = 13.sp,
                     color = palette.textSecondary,
                     maxLines = 1,
@@ -316,7 +390,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             IconButton(onClick = { refreshKey++ }) {
                 Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent)
             }
-            if (section != 0) {
+            if (section != 0 && !galleryMode) {
                 IconButton(onClick = { dialog = LibraryDialog.NewFolder }) {
                     Icon(Icons.Rounded.CreateNewFolder, contentDescription = "新建文件夹", tint = palette.accent)
                 }
@@ -327,11 +401,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             IconButton(onClick = { nav.navigate("trash") }) {
                 Icon(Icons.Rounded.Delete, contentDescription = "回收站", tint = palette.accent)
             }
-            TextButton(onClick = {
-                editing = !editing
-                if (!editing) selected = emptySet()
-            }) {
-                Text(if (editing) "完成" else "编辑", color = palette.accent, fontWeight = FontWeight.Medium)
+            if (!galleryMode) {
+                TextButton(onClick = {
+                    editing = !editing
+                    if (!editing) selected = emptySet()
+                }) {
+                    Text(if (editing) "完成" else "编辑", color = palette.accent, fontWeight = FontWeight.Medium)
+                }
             }
         }
 
@@ -365,13 +441,38 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     }
                 },
             )
+            if (path.isNotEmpty() && !showingSearch) {
+                Spacer(Modifier.height(8.dp))
+                SegmentControl(
+                    options = listOf("按文件夹", "全部图片"),
+                    selectedIndex = if (layout == "flat") 1 else 0,
+                    onSelect = { index ->
+                        layout = if (index == 0) "folders" else "flat"
+                        state.repository.settings.libraryLayout = layout
+                        selected = emptySet()
+                        editing = false
+                    },
+                )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
 
         Box(Modifier.weight(1f)) {
             when {
-                loading && browseData == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                !state.hasServer -> EmptyState(
+                    icon = Icons.Rounded.Folder,
+                    title = "还没有连接服务器",
+                    subtitle = "可以先看「下载」里的离线内容；随时在「设置 → 服务器地址」填上地址和端口（例如 192.168.2.126:8001）",
+                    action = {
+                        PrimaryButton(
+                            text = "去设置服务器",
+                            onClick = { nav.navigate("settings/server") },
+                            modifier = Modifier.width(200.dp),
+                        )
+                    },
+                )
+                loading && flatItems.isEmpty() && browseData == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = palette.accent)
                 }
                 error != null -> EmptyState(
@@ -383,8 +484,16 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 showingSearch && searching -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = palette.accent)
                 }
-                section == 0 && !showingSearch && galleryItems.isNotEmpty() -> GalleryGrid(
-                    items = galleryItems,
+                galleryMode && flatItems.isEmpty() -> EmptyState(
+                    icon = Icons.Rounded.Folder,
+                    title = if (path.isEmpty()) "还没有任何漫画或视频" else "这里还没有内容",
+                    subtitle = if (path.isEmpty()) "进入 comic / video 分类，点右上角上传内容" else "点右上角上传，或在服务器 library 目录里放入文件夹",
+                )
+                galleryMode -> GalleryGrid(
+                    items = flatItems,
+                    total = flatTotal,
+                    loadingMore = flatLoading,
+                    gridState = galleryGrid,
                     resolveUrl = { state.repository.mediaUrl(it) },
                     onOpen = { item ->
                         if (item.kind == "video") {
@@ -396,19 +505,12 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 )
                 gridItems.isEmpty() -> EmptyState(
                     icon = Icons.Rounded.Folder,
-                    title = when {
-                        showingSearch -> "没有匹配的项目"
-                        section == 0 -> "还没有任何漫画或视频"
-                        else -> "这里还没有内容"
-                    },
-                    subtitle = when {
-                        showingSearch -> "换个关键词试试，支持文件夹名、系列名和文件名"
-                        section == 0 -> "进入 comic / video 分类，点右上角上传内容"
-                        else -> "点右上角上传，或在服务器 library 目录里放入文件夹"
-                    },
+                    title = if (showingSearch) "没有匹配的项目" else "这里还没有内容",
+                    subtitle = if (showingSearch) "换个关键词试试，支持文件夹名、系列名和文件名" else "点右上角上传，或在服务器 library 目录里放入文件夹",
                 )
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
+                    state = folderGrid,
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 120.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -421,7 +523,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                             progress = if (showingSearch) null else progressMap[node.path],
                             editing = editing && !showingSearch,
                             selected = selected.contains(node.path),
-                            showLocation = showingSearch || section == 0,
+                            showLocation = showingSearch,
                             onClick = {
                                 if (editing && !showingSearch) {
                                     selected = if (selected.contains(node.path)) selected - node.path else selected + node.path
@@ -442,7 +544,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 }
             }
 
-            if (editing) {
+            if (editing && !galleryMode) {
                 EditBar(
                     count = selected.size,
                     onMove = {
@@ -590,7 +692,8 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         null -> Unit
     }
 
-    downloadState?.let { progress ->
+    // 隐藏后不再跟随进度反复弹出，下载在后台继续，结束时用 toast 通知
+    downloadState?.takeIf { !downloadHidden }?.let { progress ->
         ConfirmDialog(
             title = "正在下载「${progress.title}」",
             message = if (progress.total > 0) {
@@ -599,9 +702,9 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 "准备中…"
             },
             confirmText = "隐藏",
-            dismissText = "关闭",
-            onConfirm = { downloadState = null },
-            onDismiss = { downloadState = null },
+            dismissText = "后台继续",
+            onConfirm = { downloadHidden = true },
+            onDismiss = { downloadHidden = true },
         )
     }
 }
@@ -721,12 +824,16 @@ private fun nodeSubtitle(node: LibraryNode): String = when {
 @Composable
 private fun GalleryGrid(
     items: List<GalleryItem>,
+    total: Int,
+    loadingMore: Boolean,
+    gridState: LazyGridState,
     resolveUrl: (String) -> String?,
     onOpen: (GalleryItem) -> Unit,
 ) {
     val palette = ComiiTheme.palette
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
+        state = gridState,
         contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 120.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -765,6 +872,23 @@ private fun GalleryGrid(
                             modifier = Modifier.size(14.dp),
                         )
                     }
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(5.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                ) {
+                    Text("${item.index + 1}", color = Color.White, fontSize = 10.sp)
+                }
+            }
+        }
+        if (loadingMore || items.size < total) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Box(Modifier.fillMaxWidth().padding(vertical = 18.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = palette.accent, modifier = Modifier.size(22.dp))
                 }
             }
         }

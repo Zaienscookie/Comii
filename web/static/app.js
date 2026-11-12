@@ -39,6 +39,9 @@ let query = "";
 let searchResults = null;   // 服务端递归搜索结果
 let searchSeq = 0;
 let gallery = null;         // 「全部」相册网格
+let galleryTotal = 0;       // 全部相册总条目（分页用）
+let galleryLoading = false; // 正在加载下一页
+const GALLERY_PAGE = 300;
 let bootstrapped = false;
 let editMode = false;
 let folderMode = true;          // 文件夹功能启用
@@ -93,37 +96,51 @@ async function loadLibrary() {
     }
     libraryData = { series: items, tree: data.tree || [] };
 
-    // 首次进入默认落在「漫画」（comic 文件夹）
+    // 首次进入：默认落在「漫画」；支持 ?tab=all|comic|video 深链
     if (!bootstrapped) {
       bootstrapped = true;
-      const comic = (data.tree || []).find(
-        it => it.kind === "folder" && (it.name || "").toLowerCase() === "comic"
+      const params = new URLSearchParams(location.search);
+      const wanted = (params.get("tab") || "").toLowerCase();
+      if (wanted === "all" && !currentPath) {
+        filter = "all";
+        folderMode = false;
+        document.body.classList.remove("show-folders");
+        document.body.classList.add("filter-all");
+        return loadLibrary();
+      }
+      const targetName = wanted === "video" ? "video" : "comic";
+      const target = (data.tree || []).find(
+        it => it.kind === "folder" && (it.name || "").toLowerCase() === targetName
       );
-      if (comic && !currentPath) {
-        filter = "manga";
+      if (target && !currentPath) {
+        filter = targetName === "video" ? "video" : "manga";
         folderMode = true;
         document.body.classList.remove("filter-all");
         document.body.classList.add("show-folders");
-        currentPath = comic.path;
+        currentPath = target.path;
         return loadLibrary();
       }
     }
 
-    // 「全部」= 整库相册（图片 + 视频缩略图平铺）
+    // 「全部」= 整库相册（图片 + 视频缩略图平铺），按页加载，滚到底自动续载
     if (!currentPath && filter === "all" && !query) {
       try {
-        const gres = await KomiConfig.fetch("/api/gallery?limit=300");
+        const gres = await KomiConfig.fetch(`/api/gallery?limit=${GALLERY_PAGE}&offset=0`);
         const gdata = await gres.json();
         gallery = gdata.items || [];
+        galleryTotal = typeof gdata.total === "number" ? gdata.total : gallery.length;
       } catch (err) {
         gallery = [];
+        galleryTotal = 0;
       }
     } else {
       gallery = null;
+      galleryTotal = 0;
     }
 
     updateHero();
     render();
+    if (gallery) updateGalleryMeta();
   } catch (e) {
     heroSub.textContent = "加载失败";
     toast("无法加载库，请检查后端服务或服务器设置");
@@ -152,6 +169,7 @@ function render() {
     renderGallery();
     return;
   }
+  document.body.classList.remove("gallery-mode");
   grid.classList.remove("gallery-grid");
   const items = query ? (searchResults || []) : libraryData.series.filter(matches);
   grid.innerHTML = "";
@@ -174,33 +192,76 @@ function render() {
   syncEditBar();
 }
 
-// 「全部」相册：整库图片 + 视频缩略图平铺
+// 「全部」相册：整库图片 + 视频缩略图平铺，滚到底自动加载下一页
 function renderGallery() {
   grid.innerHTML = "";
   grid.classList.add("gallery-grid");
+  document.body.classList.add("gallery-mode");
   empty.classList.toggle("hidden", gallery.length > 0);
   const bc = document.getElementById("breadcrumb");
   if (bc) bc.innerHTML = "";
   syncSegments();
   syncEditBar();
-
-  gallery.forEach(item => {
-    const tile = document.createElement("div");
-    tile.className = "gallery-tile";
-    tile.innerHTML = `
-      <img src="${item.thumb}" loading="lazy" alt="">
-      ${item.kind === "video" ? '<span class="gallery-video">▶</span>' : ""}`;
-    tile.addEventListener("click", () => {
-      const base = KomiConfig.serverBase();
-      if (item.kind === "video") {
-        location.href = base + `/video.html?s=${encodeURIComponent(item.series)}`;
-      } else {
-        location.href = base + `/reader.html?s=${encodeURIComponent(item.series)}&p=${item.index}`;
-      }
-    });
-    grid.appendChild(tile);
-  });
+  appendGalleryTiles(gallery);
+  updateGalleryMeta();
 }
+
+function galleryTile(item) {
+  const tile = document.createElement("div");
+  tile.className = "gallery-tile";
+  tile.innerHTML = `
+    <img src="${item.thumb}" loading="lazy" alt="">
+    ${item.kind === "video" ? '<span class="gallery-video">▶</span>' : ""}`;
+  tile.addEventListener("click", () => {
+    const base = KomiConfig.serverBase();
+    if (item.kind === "video") {
+      location.href = base + `/video.html?s=${encodeURIComponent(item.series)}`;
+    } else {
+      location.href = base + `/reader.html?s=${encodeURIComponent(item.series)}&p=${item.index}`;
+    }
+  });
+  return tile;
+}
+
+function appendGalleryTiles(items) {
+  const fragment = document.createDocumentFragment();
+  items.forEach(item => fragment.appendChild(galleryTile(item)));
+  grid.appendChild(fragment);
+}
+
+function updateGalleryMeta() {
+  if (!gallery) return;
+  heroSub.textContent = galleryTotal > gallery.length
+    ? `已加载 ${gallery.length} / ${galleryTotal} 张 · 继续下拉自动加载`
+    : `${galleryTotal} 张`;
+}
+
+async function loadMoreGallery() {
+  if (!gallery || galleryLoading || !document.body.classList.contains("gallery-mode")) return;
+  if (gallery.length >= galleryTotal) return;
+  const nearBottom = window.innerHeight + window.scrollY >=
+    document.documentElement.scrollHeight - 800;
+  if (!nearBottom) return;
+  galleryLoading = true;
+  try {
+    const res = await KomiConfig.fetch(`/api/gallery?limit=${GALLERY_PAGE}&offset=${gallery.length}`);
+    const data = await res.json();
+    const items = data.items || [];
+    if (typeof data.total === "number") galleryTotal = data.total;
+    if (items.length === 0) {
+      galleryTotal = gallery.length;
+    } else {
+      gallery = gallery.concat(items);
+      appendGalleryTiles(items);
+    }
+    updateGalleryMeta();
+  } catch (e) {
+    // 静默失败：下次滚动再试
+  }
+  galleryLoading = false;
+}
+window.addEventListener("scroll", loadMoreGallery, { passive: true });
+window.addEventListener("resize", loadMoreGallery);
 
 function renderFolderCard(item, i) {
   const card = document.createElement("div");
