@@ -10,7 +10,9 @@ import time
 import urllib.parse
 import urllib.request
 
-BASE = os.environ.get("COMII_BASE", "http://127.0.0.1:8000")
+API_BASE = os.environ.get("COMII_API_BASE", "http://127.0.0.1:8001")
+WEB_BASE = os.environ.get("COMII_WEB_BASE", "http://127.0.0.1:8000")
+BASE = API_BASE
 
 
 def call(path: str, method: str = "GET", data: dict | None = None) -> tuple[int, dict]:
@@ -74,7 +76,9 @@ def main() -> int:
     pdf_result = json.loads(out) if out.startswith("{") else {}
 
     # upload an image series into the new folder
-    image = os.environ.get("COMII_TEST_IMAGE") or os.path.join("/root/dev/library", series_path, detail["images"][0])
+    image = os.environ.get("COMII_TEST_IMAGE") or os.path.join(
+        "/root/dev/storage/library", series_path, detail["images"][0]
+    )
     out = curl([
         "-F", f"files=@{image};type=image/jpeg",
         "-F", "name=上传测试", "-F", "folder=PDF测试导入",
@@ -102,15 +106,15 @@ def main() -> int:
     status, stats = call("/api/v1/stats")
     print("stats:", status, stats)
 
-    # legacy web endpoints
-    for path in ("/api/tree", "/api/ping", "/api/settings"):
+    # legacy web endpoints (8000)
+    for path in ("/api/tree", "/api/ping", "/api/settings", "/api/search?q=%E6%98%9F"):
         try:
-            with urllib.request.urlopen(BASE + path, timeout=30) as response:
+            with urllib.request.urlopen(WEB_BASE + path, timeout=30) as response:
                 print("legacy", path, response.status, len(response.read()))
         except Exception as error:  # noqa: BLE001
             print("legacy", path, "ERR", error)
 
-    with urllib.request.urlopen(BASE + "/", timeout=30) as response:
+    with urllib.request.urlopen(WEB_BASE + "/", timeout=30) as response:
         body = response.read()
         print("web index:", response.status, len(body), b"Comii" in body)
     return 0

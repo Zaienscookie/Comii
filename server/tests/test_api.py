@@ -259,3 +259,19 @@ def test_legacy_nested_delete_uses_full_path(client: TestClient) -> None:
     restored = client.post("/api/trash/restore/author_a/0001_first_series")
     assert restored.status_code == 200
     assert (library_root_path() / "author_a" / "0001_first_series").is_dir()
+
+
+def test_legacy_search_and_empty_folder(client: TestClient) -> None:
+    created = client.post("/api/folder", json={"name": "空目录", "parent": "", "kind": "video"})
+    assert created.status_code == 200
+
+    tree = client.get("/api/tree").json()["tree"]
+    node = next(item for item in tree if item["name"] == "空目录")
+    assert node["kind"] == "folder"
+    assert node["children"] == []
+
+    found = client.get("/api/search", params={"q": "空目"}).json()["items"]
+    assert any(item["name"] == "空目录" and item["kind"] == "folder" for item in found)
+
+    series = client.get("/api/search", params={"q": "loose"}).json()["items"]
+    assert any(item["name"] == "loose_series" and item["kind"] == "series" for item in series)

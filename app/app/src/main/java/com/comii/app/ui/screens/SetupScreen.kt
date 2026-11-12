@@ -88,7 +88,12 @@ fun SetupScreen(
                 then?.invoke(statusOk)
             }.onFailure { error ->
                 statusOk = false
-                status = "连接失败：${error.message ?: "无法访问"}"
+                val message = error.message ?: "无法访问"
+                status = if (message.contains("404")) {
+                    "这个端口不是数据接口，请改用 8001"
+                } else {
+                    "连接失败：$message"
+                }
                 then?.invoke(false)
             }
         }

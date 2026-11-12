@@ -537,7 +537,7 @@ private fun kindLabel(node: LibraryNode): String = when {
 }
 
 private fun nodeSubtitle(node: LibraryNode): String = when {
-    node.isFolder -> "${node.child_count ?: 0} 项"
+    node.isFolder -> if ((node.child_count ?: 0) == 0) "空文件夹 · 可上传内容" else "${node.child_count ?: 0} 项"
     node.kind == NodeKind.VIDEO -> "${node.video_count} 个视频"
     node.kind == NodeKind.MIXED -> "${node.image_count} 页 · ${node.video_count} 视频"
     else -> "${node.image_count} 页"
