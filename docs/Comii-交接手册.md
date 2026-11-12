@@ -1,6 +1,6 @@
 # Comii 交接手册
 
-> 版本：2.3.3 · 交接日期：2026-11-13
+> 版本：2.4.0 · 交接日期：2026-11-13
 > 状态：**可运行、可安装、可继续开发**（后端已部署，APK 已构建，WebUI 可用）
 
 ---
@@ -23,7 +23,7 @@ Comii 是一个**个人漫画仓库**：服务器上用一个真实的 `library/
 | Python 运行时 | `/root/dev/runtime/python` | 自带 3.11 + 后端依赖 |
 | 漫画库 | `/root/dev/storage/library` | 演示 + 你的内容 |
 | 运行数据 | `/root/dev/storage/data` | 缩略图缓存、回收站、阅读进度、日志 |
-| 安卓 APK | 工作区 `release/Comii-2.3.3.apk` | 可直接安装（debug 签名） |
+| 安卓 APK | 工作区 `release/Comii-2.4.0.apk` | 可直接安装（debug 签名） |
 | 本机构建环境 | 工作区 `buildtools/`（不入库） | SDK 35 / Gradle 8.9 / JDK 17 |
 
 > 安全说明：GitHub Token、SSH 密码不在仓库与本文档中保存。**建议交接后立即轮换 GitHub Token**，
@@ -165,8 +165,8 @@ cd app
 ### 6.3 安装
 
 - 手机与服务器同一局域网；
-- 把 `release/Comii-2.3.3.apk` 传到手机安装（需允许「安装未知来源应用」）；
-- 或 `adb install -r release/Comii-2.3.3.apk`。
+- 把 `release/Comii-2.4.0.apk` 传到手机安装（需允许「安装未知来源应用」）；
+- 或 `adb install -r release/Comii-2.4.0.apk`。
 
 ### 6.4 首次使用
 
@@ -178,7 +178,7 @@ cd app
 
 | 页面 | 功能 |
 |---|---|
-| Comii | 封面网格；顶部「全部 / 漫画 / 视频」直接对应根目录的 `comic` / `video` 文件夹；搜索（文件夹 / 系列 / 文件名）、刷新、新建文件夹、上传、回收站、编辑模式；进入文件夹后左上角是返回按钮 + 当前文件夹名 |
+| Comii | 顶部「全部 / 漫画 / 视频」：**全部是整库相册网格**（所有图片 + 视频缩略图，像相机胶卷），漫画 / 视频直达 `comic` / `video` 文件夹；搜索、刷新、新建文件夹、上传、回收站、编辑模式；长按系列可**设置封面**；进入文件夹后左上角是返回按钮 + 当前文件夹名 |
 | 长按卡片 | 打开 / 重命名 / 移动到… / 设置类型（文件夹）/ 下载（系列或整个文件夹）/ 删除 |
 | 编辑模式 | 多选 → 移动、重命名（单选）、批量删除 |
 | 阅读器 | 上下滚动 / 左右翻页、点击左右翻页、页码滑杆、页码宫格跳转、横图自动旋转、进度记忆与服务器同步 |
@@ -227,6 +227,8 @@ app/app/src/main/java/com/comii/app/
 | GET | `/series?path=` | 系列详情：`images[]`、`videos[]`、`progress` |
 | GET | `/search?q=` | 递归搜索文件夹名 / 系列名 / 媒体文件名 |
 | GET | `/collection?path=` | 文件夹下的全部系列（整夹下载用） |
+| GET | `/gallery?kind=&limit=&offset=` | 整库相册：逐条图片 / 视频（相册页） |
+| POST | `/cover` | 自定义封面 `{path,name}`（`name` 为空恢复默认） |
 | GET | `/media/image|thumb|video|video_thumb?path=&name=` | 图片 / 缩略图 / 视频（Range） / 视频封面 |
 | POST | `/folders` | `{parent,name,kind}` 新建真实文件夹 |
 | POST | `/folders/kind` | `{path,kind}` 给已有文件夹设置类型 |
@@ -245,7 +247,7 @@ app/app/src/main/java/com/comii/app/
 
 ### 7.2 WebUI 兼容层：`/api/*`
 
-`/api/tree`、`/api/series/{path}`、`/api/img|thumb|video|video_thumb/{path}/{name}`、
+`/api/tree`、`/api/gallery`、`/api/cover`、`/api/series/{path}`、`/api/img|thumb|video|video_thumb/{path}/{name}`、
 `/api/folder`、`/api/rename`、`/api/move`、`/api/delete/{path}`、`/api/trash*`、
 `/api/import/pdf`、`/api/export`、`/api/scan`、`/api/ping`、`/api/settings`、`/api/logs`。
 
@@ -261,9 +263,10 @@ $env:PYTHONPATH='..\buildtools\pylibs'   # 含 pytest；或使用自己的虚拟
 python -m pytest -q
 ```
 
-当前结果：**19 passed**（浏览、详情、缩略图、Range、路径穿越、建夹/重命名/移动、
+当前结果：**20 passed**（浏览、详情、缩略图、Range、路径穿越、建夹/重命名/移动、
 删除→回收站→恢复→彻底删除、进度、图片上传、CBZ 上传、ZIP 导出、统计、
-空文件夹可见性、递归搜索、文件夹类型、整夹系列收集、已有文件夹设置类型）。
+空文件夹可见性、递归搜索、文件夹类型、整夹系列收集、已有文件夹设置类型、
+相册列表与自定义封面）。
 
 ### 8.2 线上端到端检查
 
@@ -321,7 +324,7 @@ python tools/dev/integration_check.py     # 在服务器上或指向 COMII_BASE
 - [x] 递归搜索（文件夹 / 系列 / 文件名）已实测通过
 - [x] 空文件夹创建后立即出现在浏览结果中
 - [x] 后端 16 项测试通过
-- [x] APK 构建成功并输出到 `release/Comii-2.3.3.apk`
+- [x] APK 构建成功并输出到 `release/Comii-2.4.0.apk`
 - [ ] 真机安装与四大主流程验证（待接手人完成）
 - [ ] GitHub Token 轮换（建议）
 
@@ -350,7 +353,17 @@ ssh root@192.168.89.200 'journalctl -u comii -f'
 
 ## 13. 版本记录
 
-### v2.3.3（本次）
+### v2.4.0（本次）
+
+- 「全部」改为**相机胶卷式相册**：跨整个库逐条列出所有图片和视频缩略图（3 列方格），
+  点击图片直达该系列对应页，点击视频直接播放。
+- 新增**自定义封面**：服务端 `/api/v1/cover` 写入 `<系列>/.comii_cover`；
+  App 长按系列 →「设置封面」可从该系列任意一页选择，也可恢复默认（第一页）。
+- 新增相册接口：`/api/v1/gallery`（分页、可按 image/video 过滤）与旧版 `/api/gallery`。
+- WebUI：全部页也改为相册网格；文件夹卡片显示封面；进入默认落在漫画；封面跟随自定义设置。
+- 版本号 2.4.0（versionCode 9）。
+
+### v2.3.3
 
 - 「全部」改为**聚合相册**：跨 comic / video 递归列出所有系列，封面平铺、显示所属路径，
   不再只显示两个文件夹。

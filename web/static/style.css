@@ -1063,3 +1063,37 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
 
 /* ---------- PDF 导入文件选择 ---------- */
 #pdfFile { padding: 8px 10px; font-size: 13px; color: var(--text-2); }
+
+/* ---------- 「全部」相册网格 ---------- */
+.grid.gallery-grid {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.gallery-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--card);
+  cursor: pointer;
+}
+.gallery-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.gallery-video {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .55);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (min-width: 720px) {
+  .grid.gallery-grid { grid-template-columns: repeat(6, 1fr); }
+}

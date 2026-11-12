@@ -143,6 +143,28 @@ class ProgressUpdate(BaseModel):
     total: int = 0
 
 
+class SetCoverRequest(BaseModel):
+    path: str
+    name: str = ""
+
+
+class GalleryItem(BaseModel):
+    series_path: str
+    series_name: str
+    name: str
+    kind: str = "image"
+    thumb: str
+    index: int = 0
+    mtime: float = 0
+
+
+class GalleryResponse(BaseModel):
+    items: list[GalleryItem] = Field(default_factory=list)
+    total: int = 0
+    offset: int = 0
+    limit: int = 0
+
+
 class ImportResult(BaseModel):
     status: str = "ok"
     name: str

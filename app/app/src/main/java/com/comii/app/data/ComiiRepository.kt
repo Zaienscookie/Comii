@@ -84,6 +84,11 @@ class ComiiRepository(private val context: Context) {
 
     suspend fun collectSeries(path: String): List<LibraryNode> = requireApi().collection(path).items
 
+    suspend fun gallery(limit: Int = 300): GalleryResponse = requireApi().gallery(limit = limit)
+
+    suspend fun setCover(path: String, name: String): ActionResult =
+        requireApi().setCover(path, name)
+
     /**
      * Downloads every series below [path] and groups them under a local category
      * named after the folder, so a whole author / category is available offline.

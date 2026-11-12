@@ -16,6 +16,8 @@ from ..models import (
     BrowseResponse,
     CollectionResponse,
     CreateFolderRequest,
+    GalleryItem,
+    GalleryResponse,
     ImportResult,
     MoveRequest,
     PingResponse,
@@ -24,6 +26,7 @@ from ..models import (
     RenameRequest,
     SearchResponse,
     SeriesDetail,
+    SetCoverRequest,
     SetFolderKindRequest,
     StatsResponse,
     TrashEntry,
@@ -38,6 +41,8 @@ FEATURES = [
     "reader",
     "video",
     "thumbnails",
+    "gallery",
+    "cover",
     "folders",
     "rename",
     "move",
@@ -84,6 +89,23 @@ def collection(path: str = "") -> CollectionResponse:
     normalized = library.normalize_path(path)
     items = library.collect_series(normalized)
     return CollectionResponse(path=normalized, items=items, total=len(items))
+
+
+@router.get("/gallery", response_model=GalleryResponse)
+def gallery(kind: str = "all", limit: int = 120, offset: int = 0) -> GalleryResponse:
+    rows, total = library.list_gallery(kind=kind, limit=limit, offset=offset)
+    return GalleryResponse(
+        items=[GalleryItem(**row) for row in rows],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.post("/cover", response_model=ActionResult)
+def set_cover(payload: SetCoverRequest) -> ActionResult:
+    library.set_cover(payload.path, payload.name)
+    return ActionResult(status="ok", path=payload.path)
 
 
 @router.get("/stats", response_model=StatsResponse)

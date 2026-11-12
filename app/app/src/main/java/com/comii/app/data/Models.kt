@@ -38,6 +38,28 @@ data class CollectionResponse(
 )
 
 @Serializable
+data class GalleryItem(
+    val series_path: String = "",
+    val series_name: String = "",
+    val name: String = "",
+    val kind: String = "image",
+    val thumb: String = "",
+    val index: Int = 0,
+    val mtime: Double = 0.0,
+)
+
+@Serializable
+data class GalleryResponse(
+    val items: List<GalleryItem> = emptyList(),
+    val total: Int = 0,
+    val offset: Int = 0,
+    val limit: Int = 0,
+)
+
+@Serializable
+data class SetCoverBody(val path: String, val name: String = "")
+
+@Serializable
 data class BrowseResponse(
     val path: String = "",
     val parent: String? = null,

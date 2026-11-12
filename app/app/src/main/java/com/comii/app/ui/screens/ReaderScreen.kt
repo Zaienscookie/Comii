@@ -75,7 +75,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
-fun ReaderScreen(state: AppState, path: String, nav: NavHostController) {
+fun ReaderScreen(
+    state: AppState,
+    path: String,
+    startPage: Int = -1,
+    nav: NavHostController,
+) {
     val palette = ComiiTheme.palette
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -123,12 +128,14 @@ fun ReaderScreen(state: AppState, path: String, nav: NavHostController) {
         current = target
     }
 
-    LaunchedEffect(path) {
+    LaunchedEffect(path, startPage) {
         val offline = repository.offline.find(path)
         if (offline != null && offline.images.isNotEmpty()) {
             names = offline.images
             localDir = repository.offline.imagesDir(path)
             title = offline.name
+            val page = if (startPage >= 0) startPage else settings.localPage(path)
+            current = page.coerceIn(0, (offline.images.size - 1).coerceAtLeast(0))
             loading = false
         } else {
             val api = repository.apiOrNull()
@@ -142,7 +149,11 @@ fun ReaderScreen(state: AppState, path: String, nav: NavHostController) {
                     names = detail.images
                     title = detail.name
                     val serverPage = detail.progress?.page ?: 0
-                    val saved = maxOf(settings.localPage(path), serverPage)
+                    val saved = if (startPage >= 0) {
+                        startPage
+                    } else {
+                        maxOf(settings.localPage(path), serverPage)
+                    }
                     if (saved > 0) {
                         current = saved.coerceIn(0, (detail.images.size - 1).coerceAtLeast(0))
                     }

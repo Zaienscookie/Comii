@@ -22,9 +22,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.comii.app.data.ComiiRepository
 import com.comii.app.data.CrashLog
 import com.comii.app.ui.AppState
@@ -118,9 +120,13 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
             val path = Routes.decode(entry.arguments?.getString("path").orEmpty())
             SeriesScreen(state = state, path = path, nav = nav)
         }
-        composable("reader/{path}") { entry ->
+        composable(
+            "reader/{path}?page={page}",
+            arguments = listOf(navArgument("page") { type = NavType.IntType; defaultValue = -1 }),
+        ) { entry ->
             val path = Routes.decode(entry.arguments?.getString("path").orEmpty())
-            ReaderScreen(state = state, path = path, nav = nav)
+            val page = entry.arguments?.getInt("page") ?: -1
+            ReaderScreen(state = state, path = path, startPage = page, nav = nav)
         }
         composable("player/{path}/{name}") { entry ->
             val path = Routes.decode(entry.arguments?.getString("path").orEmpty())

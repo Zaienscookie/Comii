@@ -48,11 +48,13 @@ def _build_tree(directory: Path, prefix: str = "") -> list[dict]:
         rel = f"{prefix}/{entry.name}".lstrip("/")
         images, videos = library.list_media(entry)
         if images or videos:
-            cover = (
-                _legacy_thumb_url(rel, images[0].name)
-                if images
-                else _legacy_video_thumb_url(rel, videos[0].name)
-            )
+            custom = library.custom_cover_name(entry)
+            if custom:
+                cover = _legacy_thumb_url(rel, custom)
+            elif images:
+                cover = _legacy_thumb_url(rel, images[0].name)
+            else:
+                cover = _legacy_video_thumb_url(rel, videos[0].name)
             items.append(
                 {
                     "name": entry.name,
@@ -67,6 +69,7 @@ def _build_tree(directory: Path, prefix: str = "") -> list[dict]:
         else:
             children = _build_tree(entry, rel)
             forced = library.read_forced_kind(entry)
+            cover = next((child.get("cover") for child in children if child.get("cover")), None)
             items.append(
                 {
                     "name": entry.name,
@@ -74,6 +77,7 @@ def _build_tree(directory: Path, prefix: str = "") -> list[dict]:
                     "kind": "folder",
                     "children": children,
                     "forced_type": forced,
+                    "cover": cover,
                 }
             )
     return items
@@ -96,6 +100,35 @@ def legacy_index() -> HTMLResponse:
 @router.get("/tree")
 def tree() -> dict:
     return {"tree": _build_tree(library.library_root())}
+
+
+@router.get("/gallery")
+def gallery(kind: str = "all", limit: int = 300, offset: int = 0) -> dict:
+    rows, total = library.list_gallery(kind=kind, limit=limit, offset=offset)
+    items = []
+    for row in rows:
+        if row["kind"] == "image":
+            thumb = _legacy_thumb_url(row["series_path"], row["name"])
+        else:
+            thumb = _legacy_video_thumb_url(row["series_path"], row["name"])
+        items.append(
+            {
+                "series": row["series_path"],
+                "series_name": row["series_name"],
+                "name": row["name"],
+                "kind": row["kind"],
+                "thumb": thumb,
+                "index": row["index"],
+                "mtime": row["mtime"],
+            }
+        )
+    return {"items": items, "total": total}
+
+
+@router.post("/cover")
+def cover(payload: dict) -> dict:
+    library.set_cover(str(payload.get("path", "")), str(payload.get("name", "")))
+    return {"status": "ok"}
 
 
 @router.get("/series/{series:path}")

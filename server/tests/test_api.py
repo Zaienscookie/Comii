@@ -308,3 +308,33 @@ def test_set_kind_for_existing_folder(client: TestClient) -> None:
 
     client.post("/api/v1/folders/kind", json={"path": "待定分类", "kind": ""})
     assert kind_of() is None
+
+
+def test_gallery_and_custom_cover(client: TestClient) -> None:
+    gallery = client.get("/api/v1/gallery").json()
+    assert gallery["total"] == 6
+    images = client.get("/api/v1/gallery", params={"kind": "image"}).json()
+    assert images["total"] == 5
+    videos = client.get("/api/v1/gallery", params={"kind": "video"}).json()
+    assert videos["total"] == 1
+
+    series = "author_a/0001_first_series"
+    before = client.get("/api/v1/series", params={"path": series}).json()["cover"]
+    updated = client.post("/api/v1/cover", json={"path": series, "name": "002.jpg"})
+    assert updated.status_code == 200
+    after = client.get("/api/v1/series", params={"path": series}).json()["cover"]
+    assert after != before
+    assert "002.jpg" in after
+
+    tree = client.get("/api/tree").json()["tree"]
+    author = next(item for item in tree if item["name"] == "author_a")
+    first = next(item for item in author["children"] if item["name"] == "0001_first_series")
+    assert "002.jpg" in first["cover"]
+    assert author["cover"]  # 文件夹继承第一个子系列的封面
+
+    legacy = client.get("/api/gallery").json()
+    assert legacy["total"] == 6
+
+    client.post("/api/v1/cover", json={"path": series, "name": ""})
+    cleared = client.get("/api/v1/series", params={"path": series}).json()["cover"]
+    assert "001.jpg" in cleared

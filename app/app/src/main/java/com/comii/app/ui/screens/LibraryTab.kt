@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DriveFileMove
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,11 +57,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
+import com.comii.app.data.GalleryItem
 import com.comii.app.data.LibraryNode
 import com.comii.app.data.NodeKind
 import com.comii.app.data.ReadingProgress
@@ -86,6 +90,7 @@ private sealed interface LibraryDialog {
     data class Move(val nodes: List<LibraryNode>) : LibraryDialog
     data class Delete(val nodes: List<LibraryNode>) : LibraryDialog
     data class SetKind(val node: LibraryNode) : LibraryDialog
+    data class SetCover(val node: LibraryNode) : LibraryDialog
 }
 
 private data class DownloadProgress(
@@ -118,6 +123,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var downloadState by remember { mutableStateOf<DownloadProgress?>(null) }
     var searchResults by remember { mutableStateOf<List<LibraryNode>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
+    var galleryItems by remember { mutableStateOf<List<GalleryItem>>(emptyList()) }
 
     suspend fun reload() {
         loading = true
@@ -128,15 +134,17 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         val target = path
         val result = runCatching {
             if (target.isEmpty()) {
-                // 「全部」= 整个库的聚合相册：所有漫画 + 视频系列平铺
-                val series = state.repository.collectSeries("")
+                // 「全部」= 相册式聚合：整库所有图片 + 视频平铺
+                val response = state.repository.gallery(limit = 300)
+                galleryItems = response.items
                 com.comii.app.data.BrowseResponse(
                     path = "",
                     parent = null,
-                    items = series,
-                    total = series.size,
+                    items = emptyList(),
+                    total = response.total,
                 )
             } else {
+                galleryItems = emptyList()
                 state.repository.browse(target)
             }
         }
@@ -375,6 +383,17 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 showingSearch && searching -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = palette.accent)
                 }
+                section == 0 && !showingSearch && galleryItems.isNotEmpty() -> GalleryGrid(
+                    items = galleryItems,
+                    resolveUrl = { state.repository.mediaUrl(it) },
+                    onOpen = { item ->
+                        if (item.kind == "video") {
+                            nav.navigate(Routes.player(item.series_path, item.name))
+                        } else {
+                            nav.navigate(Routes.reader(item.series_path, item.index))
+                        }
+                    },
+                )
                 gridItems.isEmpty() -> EmptyState(
                     icon = Icons.Rounded.Folder,
                     title = when {
@@ -464,6 +483,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 SheetAction("重命名") { sheetItem = null; dialog = LibraryDialog.Rename(node) }
                 SheetAction("移动到…") { sheetItem = null; dialog = LibraryDialog.Move(listOf(node)) }
                 if (!node.isFolder) {
+                    SheetAction("设置封面") { sheetItem = null; dialog = LibraryDialog.SetCover(node) }
                     SheetAction("下载到本地") { sheetItem = null; startDownload(node) }
                 } else {
                     SheetAction("设置类型（漫画 / 视频）") {
@@ -557,6 +577,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 }
                 dialog = null
             },
+            onDismiss = { dialog = null },
+        )
+
+        is LibraryDialog.SetCover -> CoverPickerDialog(
+            state = state,
+            node = current.node,
+            onDone = { refreshKey++; dialog = null },
             onDismiss = { dialog = null },
         )
 
@@ -689,6 +716,59 @@ private fun nodeSubtitle(node: LibraryNode): String = when {
     node.kind == NodeKind.VIDEO -> "${node.video_count} 个视频"
     node.kind == NodeKind.MIXED -> "${node.image_count} 页 · ${node.video_count} 视频"
     else -> "${node.image_count} 页"
+}
+
+@Composable
+private fun GalleryGrid(
+    items: List<GalleryItem>,
+    resolveUrl: (String) -> String?,
+    onOpen: (GalleryItem) -> Unit,
+) {
+    val palette = ComiiTheme.palette
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 120.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        items(items, key = { "${it.series_path}/${it.name}" }) { item ->
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(palette.card)
+                    .pointerInput(item.series_path, item.name) {
+                        detectTapGestures { onOpen(item) }
+                    }
+            ) {
+                AsyncImage(
+                    model = resolveUrl(item.thumb),
+                    contentDescription = item.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                if (item.kind == "video") {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(5.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            Icons.Rounded.PlayArrow,
+                            contentDescription = "视频",
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -827,6 +907,98 @@ private fun SetKindDialog(node: LibraryNode, onConfirm: (String) -> Unit, onDism
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = palette.textSecondary) } },
     )
+}
+
+@Composable
+private fun CoverPickerDialog(
+    state: AppState,
+    node: LibraryNode,
+    onDone: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val palette = ComiiTheme.palette
+    val scope = rememberCoroutineScope()
+    var images by remember { mutableStateOf<List<String>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var saving by remember { mutableStateOf(false) }
+
+    LaunchedEffect(node.path) {
+        images = runCatching { state.repository.series(node.path).images }.getOrDefault(emptyList())
+        loading = false
+    }
+
+    fun apply(name: String) {
+        if (saving) return
+        saving = true
+        scope.launch {
+            runCatching { state.repository.setCover(node.path, name) }
+                .onSuccess {
+                    state.showToast(if (name.isBlank()) "已恢复默认封面" else "封面已更新")
+                    onDone()
+                }
+                .onFailure { state.showToast("设置失败：${it.message}") }
+            saving = false
+        }
+    }
+
+    BottomSheet(onDismiss = onDismiss) {
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            Text(
+                "选择封面 · ${node.name}",
+                color = palette.textPrimary,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(10.dp))
+            if (loading) {
+                Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = palette.accent)
+                }
+            } else if (images.isEmpty()) {
+                Text("这个系列没有图片可作为封面", color = palette.textSecondary, fontSize = 13.sp)
+                Spacer(Modifier.height(20.dp))
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxWidth().height(400.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(images.size) { index ->
+                        val name = images[index]
+                        Box(
+                            Modifier
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(palette.card)
+                                .pointerInput(name) { detectTapGestures { apply(name) } }
+                        ) {
+                            AsyncImage(
+                                model = state.repository.apiOrNull()?.thumbUrl(node.path, name),
+                                contentDescription = name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(3.dp)
+                                    .clip(RoundedCornerShape(5.dp))
+                                    .background(Color.Black.copy(alpha = 0.55f))
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            ) {
+                                Text("${index + 1}", color = Color.White, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                }
+            }
+            TextButton(onClick = { apply("") }, modifier = Modifier.fillMaxWidth()) {
+                Text("恢复默认封面（第一页）", color = palette.textSecondary, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
 }
 
 @Composable

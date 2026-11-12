@@ -38,6 +38,8 @@ let filter = "all";
 let query = "";
 let searchResults = null;   // 服务端递归搜索结果
 let searchSeq = 0;
+let gallery = null;         // 「全部」相册网格
+let bootstrapped = false;
 let editMode = false;
 let folderMode = true;          // 文件夹功能启用
 let selectedItems = new Set();  // 编辑模式多选集合
@@ -90,6 +92,36 @@ async function loadLibrary() {
       items = node;
     }
     libraryData = { series: items, tree: data.tree || [] };
+
+    // 首次进入默认落在「漫画」（comic 文件夹）
+    if (!bootstrapped) {
+      bootstrapped = true;
+      const comic = (data.tree || []).find(
+        it => it.kind === "folder" && (it.name || "").toLowerCase() === "comic"
+      );
+      if (comic && !currentPath) {
+        filter = "manga";
+        folderMode = true;
+        document.body.classList.remove("filter-all");
+        document.body.classList.add("show-folders");
+        currentPath = comic.path;
+        return loadLibrary();
+      }
+    }
+
+    // 「全部」= 整库相册（图片 + 视频缩略图平铺）
+    if (!currentPath && filter === "all" && !query) {
+      try {
+        const gres = await KomiConfig.fetch("/api/gallery?limit=300");
+        const gdata = await gres.json();
+        gallery = gdata.items || [];
+      } catch (err) {
+        gallery = [];
+      }
+    } else {
+      gallery = null;
+    }
+
     updateHero();
     render();
   } catch (e) {
@@ -116,6 +148,11 @@ function matches(item) {
 }
 
 function render() {
+  if (gallery && !query) {
+    renderGallery();
+    return;
+  }
+  grid.classList.remove("gallery-grid");
   const items = query ? (searchResults || []) : libraryData.series.filter(matches);
   grid.innerHTML = "";
   empty.classList.toggle("hidden", items.length > 0);
@@ -137,6 +174,34 @@ function render() {
   syncEditBar();
 }
 
+// 「全部」相册：整库图片 + 视频缩略图平铺
+function renderGallery() {
+  grid.innerHTML = "";
+  grid.classList.add("gallery-grid");
+  empty.classList.toggle("hidden", gallery.length > 0);
+  const bc = document.getElementById("breadcrumb");
+  if (bc) bc.innerHTML = "";
+  syncSegments();
+  syncEditBar();
+
+  gallery.forEach(item => {
+    const tile = document.createElement("div");
+    tile.className = "gallery-tile";
+    tile.innerHTML = `
+      <img src="${item.thumb}" loading="lazy" alt="">
+      ${item.kind === "video" ? '<span class="gallery-video">▶</span>' : ""}`;
+    tile.addEventListener("click", () => {
+      const base = KomiConfig.serverBase();
+      if (item.kind === "video") {
+        location.href = base + `/video.html?s=${encodeURIComponent(item.series)}`;
+      } else {
+        location.href = base + `/reader.html?s=${encodeURIComponent(item.series)}&p=${item.index}`;
+      }
+    });
+    grid.appendChild(tile);
+  });
+}
+
 function renderFolderCard(item, i) {
   const card = document.createElement("div");
   card.className = "card folder";
@@ -147,7 +212,9 @@ function renderFolderCard(item, i) {
   const count = item.child_count != null ? item.child_count : (item.children || []).length;
   card.innerHTML = `
     <div class="card-cover folder-cover">
-      <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 13c-3-2.6-7.5-4-13-4v26c5.5 0 10 1.4 13 4 3-2.6 7.5-4 13-4V9c-5.5 0-10 1.4-13 4z"/><path d="M22 13v26"/></svg>
+      ${item.cover
+        ? `<img src="${item.cover}" alt="">`
+        : `<svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 13c-3-2.6-7.5-4-13-4v26c5.5 0 10 1.4 13 4 3-2.6 7.5-4 13-4V9c-5.5 0-10 1.4-13 4z"/><path d="M22 13v26"/></svg>`}
     </div>
     <div class="card-body">
       <div class="card-title">${escapeHtml(item.name)}</div>

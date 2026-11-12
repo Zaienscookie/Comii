@@ -55,7 +55,8 @@ object Routes {
         return runCatching { String(Base64.decode(value, FLAGS), Charsets.UTF_8) }.getOrDefault("")
     }
 
-    fun reader(path: String) = "reader/${encode(path)}"
+    fun reader(path: String, page: Int = -1) =
+        if (page >= 0) "reader/${encode(path)}?page=$page" else "reader/${encode(path)}"
     fun series(path: String) = "series/${encode(path)}"
     fun player(path: String, name: String) = "player/${encode(path)}/${encode(name)}"
     fun upload(folder: String) = "upload/${encode(folder)}"

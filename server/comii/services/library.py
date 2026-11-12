@@ -21,6 +21,7 @@ VIDEO_EXTENSIONS = frozenset(
 )
 KIND_MARKER = ".comii_type"
 LEGACY_KIND_MARKER = ".komi_type"
+COVER_MARKER = ".comii_cover"
 VALID_KINDS = {"manga", "video", "mixed"}
 
 
@@ -130,7 +131,49 @@ def write_kind_marker(directory: Path, kind: str) -> None:
         (directory / KIND_MARKER).write_text(kind, encoding="utf-8")
 
 
-def _cover_for(path: str, images: list[Path], videos: list[Path]) -> Optional[str]:
+def custom_cover_name(directory: Path) -> Optional[str]:
+    """A user-picked cover stored in <series>/.comii_cover (file name)."""
+    marker = directory / COVER_MARKER
+    try:
+        if not marker.is_file():
+            return None
+        name = marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not name or "/" in name or "\\" in name:
+        return None
+    candidate = directory / name
+    if candidate.is_file() and is_image(candidate):
+        return name
+    return None
+
+
+def set_cover(raw_path: str, name: str) -> None:
+    directory = resolve_directory(raw_path)
+    marker = directory / COVER_MARKER
+    clean = str(name or "").strip()
+    if not clean:
+        if marker.is_file():
+            marker.unlink()
+        return
+    if "/" in clean or "\\" in clean or clean in (".", ".."):
+        raise HTTPException(status_code=400, detail="封面文件名不合法")
+    candidate = directory / clean
+    if not candidate.is_file() or not is_image(candidate):
+        raise HTTPException(status_code=404, detail="封面图片不存在")
+    marker.write_text(clean, encoding="utf-8")
+
+
+def _cover_for(
+    path: str,
+    images: list[Path],
+    videos: list[Path],
+    directory: Optional[Path] = None,
+) -> Optional[str]:
+    if directory is not None:
+        custom = custom_cover_name(directory)
+        if custom:
+            return media_url("thumb", path, custom)
     if images:
         return media_url("thumb", path, images[0].name)
     if videos:
@@ -163,7 +206,7 @@ def _series_node(directory: Path, path: str) -> Optional[LibraryNode]:
         name=directory.name,
         path=path,
         kind=kind,
-        cover=_cover_for(path, images, videos),
+        cover=_cover_for(path, images, videos, directory),
         image_count=len(images),
         video_count=len(videos),
         updated_at=_latest_mtime(directory),
@@ -247,7 +290,7 @@ def series_detail(raw_path: str, progress_lookup=None) -> SeriesDetail:
         name=directory.name,
         path=normalized,
         kind=kind,
-        cover=_cover_for(normalized, images, videos),
+        cover=_cover_for(normalized, images, videos, directory),
         images=[item.name for item in images],
         videos=[item.name for item in videos],
         image_count=len(images),
@@ -346,4 +389,59 @@ def collect_series(raw_path: str = "") -> list[LibraryNode]:
 
     walk(base, normalized)
     return items
+
+
+def list_gallery(
+    kind: str = "all",
+    limit: int = 120,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    """Flat camera-roll style listing of every image and video in the library."""
+    wanted = kind if kind in {"image", "video"} else "all"
+    rows: list[dict] = []
+
+    for directory, rel in _iter_series(library_root()):
+        images, videos = list_media(directory)
+        series_name = directory.name
+        if wanted in ("all", "image"):
+            for index, item in enumerate(images):
+                try:
+                    mtime = item.stat().st_mtime
+                except OSError:
+                    mtime = 0
+                rows.append(
+                    {
+                        "series_path": rel,
+                        "series_name": series_name,
+                        "name": item.name,
+                        "kind": "image",
+                        "thumb": media_url("thumb", rel, item.name),
+                        "index": index,
+                        "mtime": mtime,
+                    }
+                )
+        if wanted in ("all", "video"):
+            for index, item in enumerate(videos):
+                try:
+                    mtime = item.stat().st_mtime
+                except OSError:
+                    mtime = 0
+                rows.append(
+                    {
+                        "series_path": rel,
+                        "series_name": series_name,
+                        "name": item.name,
+                        "kind": "video",
+                        "thumb": media_url("video_thumb", rel, item.name),
+                        "index": index,
+                        "mtime": mtime,
+                    }
+                )
+
+    rows.sort(key=lambda row: row["mtime"], reverse=True)
+    total = len(rows)
+    start = max(0, offset)
+    end = start + max(1, min(limit, 500))
+    return rows[start:end], total
+
 
