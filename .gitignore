@@ -1,6 +1,7 @@
 # 构建与本地环境（不入库）
 buildtools/
 release/
+_shots/
 
 # Python
 __pycache__/

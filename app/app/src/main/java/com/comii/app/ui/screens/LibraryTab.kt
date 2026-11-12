@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -100,6 +101,8 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     val scope = rememberCoroutineScope()
 
     var path by rememberSaveable { mutableStateOf("") }
+    var pathKind by remember { mutableStateOf<String?>(null) }
+    val history = remember { mutableStateListOf<Pair<String, String?>>() }
     var browseData by remember { mutableStateOf<com.comii.app.data.BrowseResponse?>(null) }
     var progressMap by remember { mutableStateOf<Map<String, ReadingProgress>>(emptyMap()) }
     var loading by remember { mutableStateOf(true) }
@@ -146,8 +149,14 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 
     // 返回键：在文件夹里逐级向上返回，而不是一下退出
     BackHandler(enabled = path.isNotEmpty()) {
-        val index = path.lastIndexOf('/')
-        path = if (index >= 0) path.substring(0, index) else ""
+        if (history.isNotEmpty()) {
+            val (previousPath, previousKind) = history.removeAt(history.lastIndex)
+            path = previousPath
+            pathKind = previousKind
+        } else {
+            path = ""
+            pathKind = null
+        }
     }
 
     val allItems = browseData?.items.orEmpty()
@@ -171,10 +180,25 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 
     fun openNode(node: LibraryNode) {
         when {
-            node.isFolder -> path = node.path
+            node.isFolder -> {
+                history.add(path to pathKind)
+                path = node.path
+                pathKind = node.forced_kind
+            }
             node.kind == NodeKind.VIDEO -> nav.navigate(Routes.series(node.path))
             node.kind == NodeKind.MIXED -> nav.navigate(Routes.series(node.path))
             else -> nav.navigate(Routes.reader(node.path))
+        }
+    }
+
+    fun goUp() {
+        if (history.isNotEmpty()) {
+            val (previousPath, previousKind) = history.removeAt(history.lastIndex)
+            path = previousPath
+            pathKind = previousKind
+        } else {
+            path = ""
+            pathKind = null
         }
     }
 
@@ -213,10 +237,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (path.isNotEmpty()) {
-                IconButton(onClick = {
-                    val index = path.lastIndexOf('/')
-                    path = if (index >= 0) path.substring(0, index) else ""
-                }) {
+                IconButton(onClick = { goUp() }) {
                     Icon(
                         Icons.Rounded.ArrowBackIosNew,
                         contentDescription = "返回",
@@ -407,6 +428,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 
     when (val current = dialog) {
         LibraryDialog.NewFolder -> NewFolderDialog(
+            defaultKind = pathKind,
             onCreate = { name, kind ->
                 scope.launch {
                     runCatching { state.repository.createFolder(path, name, kind) }
@@ -671,10 +693,14 @@ private fun EditBar(
 }
 
 @Composable
-private fun NewFolderDialog(onCreate: (String, String) -> Unit, onDismiss: () -> Unit) {
+private fun NewFolderDialog(
+    defaultKind: String?,
+    onCreate: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val palette = ComiiTheme.palette
     var name by remember { mutableStateOf("") }
-    var kind by remember { mutableIntStateOf(0) }
+    var kind by remember { mutableIntStateOf(if (defaultKind == NodeKind.VIDEO) 1 else 0) }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = palette.card,

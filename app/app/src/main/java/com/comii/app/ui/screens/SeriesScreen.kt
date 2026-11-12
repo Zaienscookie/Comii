@@ -77,7 +77,7 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
         loading = false
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()) {
         ComiiTopBar(
             title = detail?.name ?: "系列",
             onBack = { nav.popBackStack() },

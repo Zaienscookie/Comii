@@ -94,7 +94,7 @@ fun UploadScreen(state: AppState, initialFolder: String, nav: NavHostController)
         }
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()) {
         ComiiTopBar(title = "导入内容", onBack = { nav.popBackStack() })
 
         Column(

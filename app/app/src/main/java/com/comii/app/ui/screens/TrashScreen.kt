@@ -66,7 +66,7 @@ fun TrashScreen(state: AppState, nav: NavHostController) {
 
     LaunchedEffect(Unit) { reload() }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()) {
         ComiiTopBar(title = "回收站", onBack = { nav.popBackStack() })
         Text(
             "删除的内容会保留 3 天，之后自动清理。",
