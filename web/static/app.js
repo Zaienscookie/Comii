@@ -187,7 +187,7 @@ function renderFolderCard(item, i) {
 其内容将一并进入回收站，3天后自动清除。`);
       if (!ok) return;
       try {
-        const res = await KomiConfig.fetch(`/api/delete/${encodeURIComponent(item.name)}`, { method: "DELETE" });
+        const res = await KomiConfig.fetch(`/api/delete/${pathUrl(item)}`, { method: "DELETE" });
         if (res.ok) { toast("已删除，3天后自动清除"); loadLibrary(); }
         else { const d = await res.json().catch(() => ({})); toast("删除失败: " + (d.detail || res.status)); }
       } catch (e) { toast("删除失败: " + e.message); }
@@ -397,7 +397,7 @@ function renderSeriesCard(item, i) {
 删除后进入回收站，3天后自动清除。`);
         if (!ok) return;
         try {
-          const res = await KomiConfig.fetch(`/api/delete/${encodeURIComponent(item.name)}`, { method: "DELETE" });
+          const res = await KomiConfig.fetch(`/api/delete/${pathUrl(item)}`, { method: "DELETE" });
           if (res.ok) {
             toast("已删除，3天后自动清除");
             loadLibrary();
@@ -425,6 +425,13 @@ function renderSeriesCard(item, i) {
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// 用完整相对路径调用 /api/delete/{path}（多层文件夹内也能正确删除），
+// 逐段编码，保留 "/" 分隔符，避免把整个路径当成单个 %2F 段。
+function pathUrl(item) {
+  const raw = item.path || item.name || "";
+  return raw.split("/").map(encodeURIComponent).join("/");
 }
 
 function timeAgo(ts) {
@@ -830,7 +837,7 @@ function bindEditBar() {
     let okCount = 0, errs = [];
     for (const it of sel) {
       try {
-        const res = await KomiConfig.fetch(`/api/delete/${encodeURIComponent(it.name)}`, { method: "DELETE" });
+        const res = await KomiConfig.fetch(`/api/delete/${pathUrl(it)}`, { method: "DELETE" });
         if (res.ok) okCount++;
         else { const d = await res.json().catch(() => ({})); errs.push(it.name + ": " + (d.detail || res.status)); }
       } catch (e) { errs.push(it.name + ": " + e.message); }

@@ -219,3 +219,17 @@ def test_stats(client: TestClient) -> None:
     assert body["series_count"] == 3
     assert body["image_count"] == 5
     assert body["video_count"] == 1
+
+
+def test_legacy_nested_delete_uses_full_path(client: TestClient) -> None:
+    """WebUI 删除必须传完整相对路径，多层文件夹内的系列才能正确进入回收站。"""
+    deleted = client.delete("/api/delete/author_a/0001_first_series")
+    assert deleted.status_code == 200
+    assert not (library_root_path() / "author_a" / "0001_first_series").exists()
+
+    trash_body = client.get("/api/trash").json()
+    assert trash_body["items"][0]["name"] == "author_a/0001_first_series"
+
+    restored = client.post("/api/trash/restore/author_a/0001_first_series")
+    assert restored.status_code == 200
+    assert (library_root_path() / "author_a" / "0001_first_series").is_dir()
