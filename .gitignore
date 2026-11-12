@@ -33,3 +33,6 @@ Thumbs.db
 
 # 旧结构与临时文件（已整理到 legacy/，不提交）
 /legacy/
+
+# ������
+/dist/
