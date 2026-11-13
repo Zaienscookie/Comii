@@ -55,6 +55,9 @@ import com.comii.app.data.CrashLog
 import com.comii.app.ui.AppState
 import com.comii.app.ui.Routes
 import com.comii.app.ui.components.PrimaryButton
+import com.comii.app.ui.screens.AiChatScreen
+import com.comii.app.ui.screens.AiPersonaScreen
+import com.comii.app.ui.screens.AiSettingsScreen
 import com.comii.app.ui.screens.HomeScreen
 import com.comii.app.ui.screens.PlayerScreen
 import com.comii.app.ui.screens.ReaderScreen
@@ -67,11 +70,14 @@ import com.comii.app.ui.theme.ComiiTheme
 class ComiiApplication : Application() {
     lateinit var repository: ComiiRepository
         private set
+    lateinit var aiRepository: com.comii.app.data.ai.AiRepository
+        private set
 
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
         repository = ComiiRepository(this)
+        aiRepository = com.comii.app.data.ai.AiRepository(this)
     }
 }
 
@@ -81,7 +87,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val app = application as ComiiApplication
-            val state = remember { AppState(app.repository) }
+            val state = remember { AppState(app.repository, app.aiRepository) }
             val settings = app.repository.settings
             val dark = when (state.themeMode) {
                 "light" -> false
@@ -231,6 +237,29 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
                 onDone = { nav.popBackStack() },
                 onCancel = { nav.popBackStack() },
             )
+        }
+        composable("ai/chat/{personaId}") { entry ->
+            val personaId = entry.arguments?.getString("personaId").orEmpty()
+            AiChatScreen(state = state, personaId = personaId, nav = nav)
+        }
+        composable(
+            "ai/persona?personaId={personaId}",
+            arguments = listOf(
+                navArgument("personaId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            ),
+        ) { entry ->
+            AiPersonaScreen(
+                state = state,
+                personaId = entry.arguments?.getString("personaId"),
+                nav = nav,
+            )
+        }
+        composable("ai/settings") {
+            AiSettingsScreen(state = state, nav = nav)
         }
     }
 }

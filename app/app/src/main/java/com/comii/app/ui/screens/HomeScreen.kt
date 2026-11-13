@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Settings
@@ -98,6 +99,7 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
                 when (currentTab) {
                     0 -> LibraryTab(state = state, nav = nav)
                     1 -> DownloadsTab(state = state, nav = nav)
+                    2 -> AiScreen(state = state, nav = nav)
                     else -> SettingsTab(state = state, nav = nav)
                 }
             }
@@ -111,7 +113,8 @@ private fun ComiiTabBar(selected: Int, onSelect: (Int) -> Unit) {
     val tabs = listOf(
         Triple("Comii", Icons.Rounded.AutoStories, 0),
         Triple("下载", Icons.Rounded.Download, 1),
-        Triple("设置", Icons.Rounded.Settings, 2),
+        Triple("AI", Icons.Rounded.AutoAwesome, 2),
+        Triple("设置", Icons.Rounded.Settings, 3),
     )
     Column(
         Modifier
@@ -140,7 +143,7 @@ private fun TabItem(label: String, icon: ImageVector, selected: Boolean, onClick
     Column(
         modifier = Modifier
             .clickable(onClick = onClick)
-            .padding(horizontal = 26.dp, vertical = 2.dp),
+            .padding(horizontal = 18.dp, vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
