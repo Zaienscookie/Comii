@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -160,64 +161,73 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         messages = current.messages
     }
 
+    LaunchedEffect(personaId, conversation?.id) {
+        // 后台生成完成后，即使页面曾经退出，也能在这里补上新回复
+        while (true) {
+            delay(1200)
+            val id = conversation?.id ?: continue
+            val fresh = ai.conversation(id) ?: continue
+            if (fresh.messages.size > messages.size) {
+                messages = fresh.messages
+            }
+        }
+    }
+
     LaunchedEffect(messages.size, streaming) {
         val total = messages.size + if (streaming) 1 else 0
         if (total <= 0) return@LaunchedEffect
         runCatching { listState.scrollToItem(total - 1) }
     }
 
-    var doSendBatchRef: ((String, List<ChatMessage>) -> Unit)? = null
-
     fun scheduleBatch(delayMs: Long = 550) {
         if (pendingBatch.isEmpty()) return
         val targetId = pendingConversationId ?: return
         batchJob?.cancel()
-        batchJob = scope.launch {
-            delay(delayMs)
-            if (streaming && activeConversationId == targetId) return@launch
-            val batch = pendingBatch
-            pendingBatch = emptyList()
-            doSendBatchRef?.invoke(targetId, batch)
-        }
-    }
-
-    fun doSendBatch(conversationId: String, batch: List<ChatMessage>) {
-        if (batch.isEmpty()) return
-        error = null
         streaming = true
         streamText = ""
-        scope.launch {
-            try {
-                ai.sendBatch(
-                    personaId = personaId,
-                    conversationId = conversationId,
-                    outgoing = batch,
-                    onMessage = { message ->
-                        if (activeConversationId == conversationId) {
-                            messages = messages + message
-                            streamText = ""
-                        }
-                    },
-                ) { delta -> if (activeConversationId == conversationId) streamText += delta }
-                if (activeConversationId == conversationId) {
-                    messages = ai.conversation(conversationId)?.messages ?: messages
+        batchJob = ai.scheduleBatchBackground(
+            personaId = personaId,
+            conversationId = targetId,
+            delayMs = delayMs,
+            batchProvider = {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    val batch = pendingBatch
+                    pendingBatch = emptyList()
+                    batch
                 }
-                personaVersion++
-            } catch (failure: Exception) {
-                if (activeConversationId == conversationId) {
-                    error = failure.message ?: "请求失败"
-                    messages = ai.conversation(conversationId)?.messages ?: messages
+            },
+            onMessage = { message ->
+                scope.launch {
+                    if (activeConversationId == targetId) {
+                        messages = messages + message
+                        streamText = ""
+                    }
                 }
-            } finally {
-                streaming = false
-                streamText = ""
-                if (activeConversationId == conversationId && pendingBatch.isNotEmpty()) {
-                    scheduleBatch(200)
+            },
+            onDelta = { delta ->
+                scope.launch {
+                    if (activeConversationId == targetId) streamText += delta
                 }
-            }
-        }
+            },
+            onError = { failure ->
+                scope.launch {
+                    if (activeConversationId == targetId) {
+                        error = failure.message ?: "请求失败"
+                    }
+                }
+            },
+            onFinished = {
+                scope.launch {
+                    if (activeConversationId == targetId) {
+                        streaming = false
+                        streamText = ""
+                        messages = ai.conversation(targetId)?.messages ?: messages
+                        if (pendingBatch.isNotEmpty()) scheduleBatch(200)
+                    }
+                }
+            },
+        )
     }
-    doSendBatchRef = { id, batch -> doSendBatch(id, batch) }
 
     fun submit() {
         val text = draft.trim()
@@ -560,12 +570,14 @@ private fun MessageBubble(message: ChatMessage, streaming: Boolean = false) {
                     )
                     Spacer(Modifier.height(6.dp))
                 }
-                Text(
-                    message.content + if (streaming) "▍" else "",
-                    color = if (isUser) Color.White else palette.textPrimary,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                )
+                SelectionContainer {
+                    Text(
+                        message.content + if (streaming) "▍" else "",
+                        color = if (isUser) Color.White else palette.textPrimary,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                    )
+                }
             }
         }
     }

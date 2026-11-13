@@ -2,9 +2,13 @@ package com.comii.app.data.ai
 
 import android.content.Context
 import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -18,6 +22,8 @@ class AiRepository(context: Context) {
 
     private val store = AiStore(context)
     private val client = AiClient()
+    /** 独立于页面的后台作用域：退出聊天页也继续生成并写回。 */
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Any()
     private var state: AiState = store.load().let { loaded ->
         if (loaded.seeded) {
@@ -377,6 +383,30 @@ class AiRepository(context: Context) {
             )
         )
         true
+    }
+
+    /** 在后台作用域里延迟发送；即使聊天页退出，请求和写回也会完成。 */
+    fun scheduleBatchBackground(
+        personaId: String,
+        conversationId: String,
+        delayMs: Long,
+        batchProvider: suspend () -> List<ChatMessage>,
+        onMessage: (ChatMessage) -> Unit = {},
+        onDelta: (String) -> Unit = {},
+        onError: (Throwable) -> Unit = {},
+        onFinished: () -> Unit = {},
+    ): Job = backgroundScope.launch {
+        try {
+            if (delayMs > 0) delay(delayMs)
+            val outgoing = batchProvider()
+            if (outgoing.isNotEmpty()) {
+                sendBatch(personaId, conversationId, outgoing, onMessage, onDelta)
+            }
+        } catch (error: Throwable) {
+            onError(error)
+        } finally {
+            onFinished()
+        }
     }
 
     /** 九维情绪/状态/念头：简化版「鱼的心」。 */
