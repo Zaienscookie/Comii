@@ -12,6 +12,7 @@ from starlette.background import BackgroundTask
 from ..config import settings
 from ..models import (
     ActionResult,
+    AlbumCoverRequest,
     AppUpdateInfo,
     BatchResult,
     BrowseResponse,
@@ -27,13 +28,30 @@ from ..models import (
     RenameRequest,
     SearchResponse,
     SeriesDetail,
+    SeriesTagsResponse,
     SetCoverRequest,
     SetFolderKindRequest,
     StatsResponse,
+    TagCount,
+    TaggedResponse,
+    TagsResponse,
+    TagsUpdateRequest,
     TrashEntry,
     TrashListResponse,
 )
-from ..services import archive, importers, library, manage, media, progress, thumbs, trash, updates
+from ..services import (
+    archive,
+    images,
+    importers,
+    library,
+    manage,
+    media,
+    progress,
+    tags,
+    thumbs,
+    trash,
+    updates,
+)
 
 router = APIRouter(prefix=settings.api_prefix, tags=["comii"])
 
@@ -54,6 +72,8 @@ FEATURES = [
     "progress",
     "stats",
     "logs",
+    "quality",
+    "tags",
 ]
 
 
@@ -76,7 +96,9 @@ def browse(path: str = "") -> BrowseResponse:
 
 @router.get("/series", response_model=SeriesDetail)
 def series(path: str) -> SeriesDetail:
-    return library.series_detail(path, progress_lookup=progress.get)
+    detail = library.series_detail(path, progress_lookup=progress.get)
+    detail.tags = tags.tags_for(detail.path)
+    return detail
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -150,6 +172,22 @@ def media_thumb(request: Request, path: str, name: str) -> Response:
             thumbnail,
             media_type="image/jpeg",
             headers={"Cache-Control": "public, max-age=86400"},
+        )
+    return media.file_response(source, request)
+
+
+@router.get("/media/view")
+def media_view(request: Request, path: str, name: str, w: int = 1080) -> Response:
+    """Page image, optionally downscaled for slow links (Tailscale / mobile data)."""
+    source = library.resolve_file(path, name)
+    if source.suffix.lower() == ".svg":
+        return FileResponse(source, media_type="image/svg+xml")
+    resized = images.resized_image(source, path, name, w)
+    if resized is not None:
+        return FileResponse(
+            resized,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=604800"},
         )
     return media.file_response(source, request)
 
@@ -316,6 +354,46 @@ def progress_one(path: str) -> ReadingProgress:
 @router.put("/progress", response_model=ReadingProgress)
 def progress_update(payload: ProgressUpdate) -> ReadingProgress:
     return progress.update(payload.path, payload.page, payload.total)
+
+
+@router.post("/album_cover", response_model=ActionResult)
+def set_album_cover(payload: AlbumCoverRequest) -> ActionResult:
+    """Use one series inside a folder as the folder card cover (empty = default)."""
+    library.set_album_cover(payload.path, payload.series)
+    return ActionResult(status="ok", path=payload.path)
+
+
+# ------------------------------------------------------------------- tags
+@router.get("/tags", response_model=TagsResponse)
+def tags_all() -> TagsResponse:
+    """Every tag in use with its series count, for the "history" suggestions."""
+    return TagsResponse(tags=[TagCount(**item) for item in tags.all_tags()])
+
+
+@router.get("/tags/series", response_model=SeriesTagsResponse)
+def tags_series(path: str) -> SeriesTagsResponse:
+    normalized = library.normalize_path(path)
+    return SeriesTagsResponse(path=normalized, tags=tags.tags_for(normalized))
+
+
+@router.put("/tags", response_model=SeriesTagsResponse)
+def tags_update(payload: TagsUpdateRequest) -> SeriesTagsResponse:
+    normalized = library.normalize_path(payload.path)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="路径不合法")
+    library.resolve_directory(normalized)
+    saved = tags.set_tags(normalized, payload.tags)
+    return SeriesTagsResponse(path=normalized, tags=saved)
+
+
+@router.get("/tagged", response_model=TaggedResponse)
+def tagged(tag: str = "") -> TaggedResponse:
+    items: list = []
+    for raw in tags.series_paths(tag):
+        node = library.node_for_path(raw)
+        if node is not None:
+            items.append(node)
+    return TaggedResponse(tag=tag, items=items, total=len(items))
 
 
 # ------------------------------------------------------------------ update

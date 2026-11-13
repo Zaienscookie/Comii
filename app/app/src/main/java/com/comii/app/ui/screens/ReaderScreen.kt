@@ -128,6 +128,9 @@ fun ReaderScreen(
     var tapTurn by remember { mutableStateOf(settings.tapToTurn) }
     var rotateLandscape by remember { mutableStateOf(false) }
     var showProgress by remember { mutableStateOf(settings.showProgressBar) }
+    var quality by remember { mutableStateOf(settings.imageQuality) }
+    var imageWidth by remember { mutableIntStateOf(repository.imageWidth()) }
+    var prefetchAhead by remember { mutableIntStateOf(repository.prefetchPages()) }
 
     var showBar by remember { mutableStateOf(true) }
     var manualLandscape by remember { mutableStateOf(false) }
@@ -141,7 +144,7 @@ fun ReaderScreen(
 
     fun model(name: String): Any? {
         val dir = localDir
-        return if (dir != null) File(dir, name) else serverBase?.imageUrl(path, name)
+        return if (dir != null) File(dir, name) else serverBase?.viewUrl(path, name, imageWidth)
     }
 
     fun thumbModel(name: String): Any? {
@@ -153,7 +156,7 @@ fun ReaderScreen(
     fun pageModel(index: Int): Any? {
         if (!allMode) return model(names.getOrNull(index) ?: return null)
         val item = allItems.getOrNull(index) ?: return null
-        return serverBase?.imageUrl(item.series_path, item.name)
+        return serverBase?.viewUrl(item.series_path, item.name, imageWidth)
     }
 
     fun goTo(index: Int) {
@@ -268,11 +271,12 @@ fun ReaderScreen(
         }
     }
 
-    LaunchedEffect(current, names.size, allItems) {
+    LaunchedEffect(current, names.size, allItems, prefetchAhead, imageWidth) {
         if (names.isEmpty()) return@LaunchedEffect
-        // 预取前后图片，翻页时不再黑一下
+        // 向后预加载 N 页（可配置），向前 1 页，翻页时不再黑一下
         val loader = coil.Coil.imageLoader(context)
-        listOf(current - 1, current + 1, current + 2).forEach { index ->
+        val indices = (current - 1)..(current + prefetchAhead.coerceIn(0, 12))
+        indices.forEach { index ->
             if (index in names.indices) {
                 runCatching {
                     loader.enqueue(
@@ -482,15 +486,59 @@ fun ReaderScreen(
                 Spacer(Modifier.height(12.dp))
                 SettingsSwitchRow("点击翻页", tapTurn) { tapTurn = it; settings.tapToTurn = it }
                 SettingsSwitchRow("显示进度条", showProgress) { showProgress = it; settings.showProgressBar = it }
+
+                Spacer(Modifier.height(16.dp))
+                Text("图片清晰度", color = palette.textSecondary, fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
+                SegmentControl(
+                    options = listOf("原图", "高清", "标准", "流畅"),
+                    selectedIndex = qualityIndex(quality),
+                    onSelect = { index ->
+                        quality = listOf("original", "high", "standard", "smooth")[index]
+                        settings.imageQuality = quality
+                        imageWidth = repository.imageWidth()
+                    },
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (quality == "original") "原图最清晰，但 Tailscale 下最慢" else "服务端按宽度缩放后传输，弱网更流畅",
+                    color = palette.textTertiary,
+                    fontSize = 11.sp,
+                )
+
+                Spacer(Modifier.height(14.dp))
+                Text("预加载页数", color = palette.textSecondary, fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
+                SegmentControl(
+                    options = listOf("关闭", "3 页", "5 页", "8 页"),
+                    selectedIndex = prefetchIndex(prefetchAhead),
+                    onSelect = { index ->
+                        prefetchAhead = listOf(0, 3, 5, 8)[index]
+                        settings.prefetchPages = prefetchAhead
+                    },
+                )
                 Spacer(Modifier.height(24.dp))
             }
         }
     }
 }
 
+private fun qualityIndex(value: String): Int = when (value) {
+    "original" -> 0
+    "high" -> 1
+    "smooth" -> 3
+    else -> 2
+}
+
+private fun prefetchIndex(value: Int): Int = when {
+    value <= 0 -> 0
+    value <= 3 -> 1
+    value <= 5 -> 2
+    else -> 3
+}
+
 @Composable
-private fun SettingsSwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    val palette = ComiiTheme.palette
+private fun SettingsSwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {    val palette = ComiiTheme.palette
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,

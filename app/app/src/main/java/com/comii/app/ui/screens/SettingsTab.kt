@@ -1,4 +1,4 @@
-﻿package com.comii.app.ui.screens
+package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +64,27 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
     var readerModeIndex by remember {
         mutableIntStateOf(if (repository.settings.readerMode == "horizontal") 1 else 0)
     }
+    var qualityIndex by remember {
+        mutableIntStateOf(
+            when (repository.settings.imageQuality) {
+                "original" -> 0
+                "high" -> 1
+                "smooth" -> 3
+                "low" -> 4
+                else -> 2
+            }
+        )
+    }
+    var prefetchIndex by remember {
+        mutableIntStateOf(
+            when {
+                repository.settings.prefetchPages <= 0 -> 0
+                repository.settings.prefetchPages <= 3 -> 1
+                repository.settings.prefetchPages <= 5 -> 2
+                else -> 3
+            }
+        )
+    }
     var videoMuted by remember { mutableStateOf(repository.settings.videoMuted) }
     var pitchFollow by remember { mutableStateOf(repository.settings.videoPitchFollowsSpeed) }
     var entryPrompt by remember { mutableStateOf(repository.settings.entryPrompt) }
@@ -76,7 +97,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.24.0")
+        LargeTitle("设置", "Comii 2.25.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -116,6 +137,45 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
                         readerModeIndex = it
                         repository.settings.readerMode = if (it == 0) "vertical" else "horizontal"
                     },
+                )
+            }
+            Separator()
+            Column(Modifier.padding(14.dp)) {
+                Text("图片清晰度", fontSize = 14.sp, color = palette.textPrimary)
+                Spacer(Modifier.height(10.dp))
+                SegmentControl(
+                    options = listOf("原图", "高清", "标准", "流畅", "省流"),
+                    selectedIndex = qualityIndex,
+                    onSelect = {
+                        qualityIndex = it
+                        repository.settings.imageQuality =
+                            listOf("original", "high", "standard", "smooth", "low")[it]
+                    },
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "服务端按宽度缩放后再传输（1440 / 1080 / 720 / 480），Tailscale 或流量下更流畅；原图不缩放。",
+                    fontSize = 11.5.sp,
+                    color = palette.textSecondary,
+                )
+            }
+            Separator()
+            Column(Modifier.padding(14.dp)) {
+                Text("预加载页数", fontSize = 14.sp, color = palette.textPrimary)
+                Spacer(Modifier.height(10.dp))
+                SegmentControl(
+                    options = listOf("关闭", "3 页", "5 页", "8 页"),
+                    selectedIndex = prefetchIndex,
+                    onSelect = {
+                        prefetchIndex = it
+                        repository.settings.prefetchPages = listOf(0, 3, 5, 8)[it]
+                    },
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "阅读时提前把后面几页下载到手机缓存，快速翻页不容易卡；弱网可调大。",
+                    fontSize = 11.5.sp,
+                    color = palette.textSecondary,
                 )
             }
             Separator()

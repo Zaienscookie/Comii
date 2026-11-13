@@ -38,6 +38,27 @@ class ComiiRepository(private val context: Context) {
     fun apiOrNull(): ComiiApi? =
         settings.serverUrl.trim().takeIf { it.isNotBlank() }?.let { ComiiApi(it) }
 
+    /** Width the reader should request from the server (0 = original file). */
+    fun imageWidth(): Int = when (settings.imageQuality) {
+        "original" -> 0
+        "high" -> 1440
+        "smooth" -> 720
+        "low" -> 480
+        else -> 1080
+    }
+
+    /** How many pages ahead the reader pre-downloads into the Coil cache. */
+    fun prefetchPages(): Int = settings.prefetchPages.coerceIn(0, 12)
+
+    suspend fun tags(): List<TagCount> = requireApi().tags().tags
+
+    suspend fun seriesTags(path: String): List<String> = requireApi().seriesTags(path).tags
+
+    suspend fun saveTags(path: String, tags: List<String>): List<String> =
+        requireApi().saveTags(path, tags).tags
+
+    suspend fun tagged(tag: String): List<LibraryNode> = requireApi().tagged(tag).items
+
     fun mediaUrl(relative: String?): String? {
         if (relative.isNullOrBlank()) return null
         if (relative.startsWith("http")) return relative
@@ -93,6 +114,9 @@ class ComiiRepository(private val context: Context) {
 
     suspend fun setCover(path: String, name: String): ActionResult =
         requireApi().setCover(path, name)
+
+    suspend fun setAlbumCover(path: String, series: String): ActionResult =
+        requireApi().setAlbumCover(path, series)
 
     /**
      * Downloads every series below [path] and groups them under a local category

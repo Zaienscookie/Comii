@@ -69,7 +69,13 @@ def _build_tree(directory: Path, prefix: str = "") -> list[dict]:
         else:
             children = _build_tree(entry, rel)
             forced = library.read_forced_kind(entry)
-            cover = next((child.get("cover") for child in children if child.get("cover")), None)
+            cover = None
+            configured = library.album_cover_relative(entry)
+            if configured:
+                wanted = f"{rel}/{configured}"
+                cover = next((child.get("cover") for child in children if child.get("path") == wanted), None)
+            if not cover:
+                cover = next((child.get("cover") for child in children if child.get("cover")), None)
             items.append(
                 {
                     "name": entry.name,

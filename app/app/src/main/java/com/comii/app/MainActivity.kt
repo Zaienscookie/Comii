@@ -65,6 +65,7 @@ import com.comii.app.ui.screens.PlayerScreen
 import com.comii.app.ui.screens.ReaderScreen
 import com.comii.app.ui.screens.SeriesScreen
 import com.comii.app.ui.screens.SetupScreen
+import com.comii.app.ui.screens.TagsScreen
 import com.comii.app.ui.screens.TrashScreen
 import com.comii.app.ui.screens.UploadScreen
 import com.comii.app.ui.theme.ComiiTheme
@@ -267,6 +268,7 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
             PlayerScreen(state = state, path = path, startName = name, nav = nav)
         }
         composable("trash") { TrashScreen(state = state, nav = nav) }
+        composable("tags") { TagsScreen(state = state, nav = nav) }
         composable("upload/{folder}") { entry ->
             val folder = Routes.decode(entry.arguments?.getString("folder").orEmpty())
             UploadScreen(state = state, initialFolder = folder, nav = nav)

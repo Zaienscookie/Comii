@@ -114,6 +114,9 @@ class ComiiApi(val baseUrl: String) {
     suspend fun setCover(path: String, name: String): ActionResult =
         decode(post("/cover", ComiiJson.encodeToString(SetCoverBody(path, name))))
 
+    suspend fun setAlbumCover(path: String, series: String): ActionResult =
+        decode(post("/album_cover", ComiiJson.encodeToString(AlbumCoverBody(path, series))))
+
     suspend fun trash(): TrashListResponse = decode(get("/trash"))
 
     suspend fun progressAll(): Map<String, ReadingProgress> = decode(get("/progress"))
@@ -152,6 +155,22 @@ class ComiiApi(val baseUrl: String) {
 
     fun imageUrl(path: String, name: String): String =
         api("/media/image?path=${encode(path)}&name=${encode(name)}")
+
+    /** Page image downscaled to [width] pixels on the server (0 = original). */
+    fun viewUrl(path: String, name: String, width: Int): String =
+        if (width <= 0) imageUrl(path, name)
+        else api("/media/view?path=${encode(path)}&name=${encode(name)}&w=$width")
+
+    suspend fun tags(): TagsResponse = decode(get("/tags"))
+
+    suspend fun seriesTags(path: String): SeriesTags =
+        decode(get("/tags/series?path=${encode(path)}"))
+
+    suspend fun saveTags(path: String, tags: List<String>): SeriesTags =
+        decode(put("/tags", ComiiJson.encodeToString(TagsBody(path, tags))))
+
+    suspend fun tagged(tag: String): TaggedResponse =
+        decode(get("/tagged?tag=${encode(tag)}"))
 
     fun thumbUrl(path: String, name: String): String =
         api("/media/thumb?path=${encode(path)}&name=${encode(name)}")

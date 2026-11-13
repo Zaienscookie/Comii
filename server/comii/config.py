@@ -1,4 +1,4 @@
-﻿"""Runtime configuration for the Comii server.
+"""Runtime configuration for the Comii server.
 
 Every path can be overridden through the environment so the same code runs
 from the repository checkout, from ``/root/dev`` on the LAN server, or from a
@@ -30,13 +30,15 @@ class Settings:
 
     app_name = "Comii"
     api_prefix = "/api/v1"
-    version = "2.24.0"
+    version = "2.25.0"
 
     def __init__(self) -> None:
         self.project_root = PROJECT_ROOT
         self.library_root = _env_path("COMII_LIBRARY", PROJECT_ROOT / "library")
         self.data_root = _env_path("COMII_DATA", PROJECT_ROOT / ".comii")
         self.thumb_root = self.data_root / "thumbs"
+        self.cache_root = self.data_root / "cache"
+        self.tags_file = self.data_root / "tags.json"
         self.trash_root = self.data_root / "trash"
         self.trash_index = self.trash_root / "index.json"
         self.progress_file = self.data_root / "progress.json"
@@ -55,6 +57,7 @@ class Settings:
             self.library_root,
             self.data_root,
             self.thumb_root,
+            self.cache_root,
             self.trash_root,
             self.log_root,
             self.update_root,

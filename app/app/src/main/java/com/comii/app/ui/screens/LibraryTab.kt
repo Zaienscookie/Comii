@@ -39,6 +39,7 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Sell
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -494,9 +495,11 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         Column(Modifier.padding(horizontal = 20.dp)) {
             SearchField(query, { query = it }, placeholder = "搜索漫画、视频或文件夹")
             Spacer(Modifier.height(10.dp))
-            SegmentControl(
-                options = listOf("全部", "漫画", "视频"),
-                selectedIndex = section,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SegmentControl(
+                    options = listOf("全部", "漫画", "视频"),
+                    selectedIndex = section,
+                    modifier = Modifier.weight(1f),
                 onSelect = { index ->
                     when (index) {
                         0 -> {
@@ -519,7 +522,17 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                         }
                     }
                 },
-            )
+                )
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = { nav.navigate("tags") }) {
+                    Icon(
+                        Icons.Rounded.Sell,
+                        contentDescription = "标签",
+                        tint = palette.accent,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
             if (path.isNotEmpty() && !showingSearch) {
                 Spacer(Modifier.height(8.dp))
                 SegmentControl(
@@ -682,6 +695,16 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 SheetAction("移动到…") { sheetItem = null; dialog = LibraryDialog.Move(listOf(node)) }
                 if (!node.isFolder) {
                     SheetAction("设置封面") { sheetItem = null; dialog = LibraryDialog.SetCover(node) }
+                    if (path.isNotEmpty()) {
+                        SheetAction("设为相册封面") {
+                            sheetItem = null
+                            scope.launch {
+                                runCatching { state.repository.setAlbumCover(path, node.path) }
+                                    .onSuccess { state.showToast("已设为相册封面"); refreshKey++ }
+                                    .onFailure { state.showToast("设置失败：${it.message}") }
+                            }
+                        }
+                    }
                     SheetAction("下载到本地") { sheetItem = null; startDownload(node) }
                 } else {
                     SheetAction("设置类型（漫画 / 视频）") {
@@ -689,6 +712,24 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                         dialog = LibraryDialog.SetKind(node)
                     }
                     SheetAction("下载整个文件夹") { sheetItem = null; startDownload(node) }
+                    if (path.isNotEmpty()) {
+                        SheetAction("设为相册封面") {
+                            sheetItem = null
+                            scope.launch {
+                                runCatching { state.repository.setAlbumCover(path, node.path) }
+                                    .onSuccess { state.showToast("已设为相册封面"); refreshKey++ }
+                                    .onFailure { state.showToast("设置失败：${it.message}") }
+                            }
+                        }
+                    }
+                    SheetAction("恢复默认封面") {
+                        sheetItem = null
+                        scope.launch {
+                            runCatching { state.repository.setAlbumCover(node.path, "") }
+                                .onSuccess { state.showToast("已恢复默认封面"); refreshKey++ }
+                                .onFailure { state.showToast("操作失败：${it.message}") }
+                        }
+                    }
                 }
                 SheetAction("删除", danger = true) { sheetItem = null; dialog = LibraryDialog.Delete(listOf(node)) }
                 Spacer(Modifier.height(14.dp))

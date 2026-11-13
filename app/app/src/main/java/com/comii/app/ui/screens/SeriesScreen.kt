@@ -68,11 +68,13 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
     var error by remember { mutableStateOf<String?>(null) }
     var downloadProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var askDownload by remember { mutableStateOf(false) }
+    var tags by remember { mutableStateOf<List<String>>(emptyList()) }
+    var editingTags by remember { mutableStateOf(false) }
 
     LaunchedEffect(path) {
         loading = true
         runCatching { state.repository.series(path) }
-            .onSuccess { detail = it; error = null }
+            .onSuccess { detail = it; tags = it.tags; error = null }
             .onFailure { error = it.message }
         loading = false
     }
@@ -146,6 +148,11 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
                             }
                         }
                         Spacer(Modifier.height(20.dp))
+                    }
+
+                    item {
+                        SeriesTagRow(tags = tags, onEdit = { editingTags = true })
+                        Spacer(Modifier.height(12.dp))
                     }
 
                     if (series.videos.isNotEmpty()) {
@@ -237,6 +244,17 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
                 }
             }
         }
+    }
+
+    if (editingTags) {
+        TagEditorDialog(
+            state = state,
+            path = path,
+            seriesName = detail?.name ?: path.substringAfterLast('/'),
+            initial = tags,
+            onDismiss = { editingTags = false },
+            onSaved = { tags = it },
+        )
     }
 
     if (askDownload) {

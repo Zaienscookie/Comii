@@ -131,6 +131,70 @@ def write_kind_marker(directory: Path, kind: str) -> None:
         (directory / KIND_MARKER).write_text(kind, encoding="utf-8")
 
 
+ALBUM_COVER_MARKER = ".comii_album_cover"
+
+
+def album_cover_relative(directory: Path) -> Optional[str]:
+    """Custom album cover: a relative child path stored in .comii_album_cover."""
+    marker = directory / ALBUM_COVER_MARKER
+    try:
+        if not marker.is_file():
+            return None
+        raw = marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not raw:
+        return None
+    parts = [part for part in raw.replace("\\", "/").split("/") if part not in ("", ".")]
+    if not parts or any(part == ".." for part in parts):
+        return None
+    candidate = directory.joinpath(*parts)
+    if not candidate.is_dir():
+        return None
+    return "/".join(parts)
+
+
+def album_cover_child(directory: Path) -> Optional[Path]:
+    relative = album_cover_relative(directory)
+    if relative is None:
+        return None
+    return directory.joinpath(*relative.split("/"))
+
+
+def set_album_cover(raw_folder: str, raw_series: str) -> None:
+    """Pick one series inside a folder as the folder (album) cover."""
+    folder = resolve_directory(raw_folder)
+    marker = folder / ALBUM_COVER_MARKER
+    clean = str(raw_series or "").strip().strip("/")
+    if not clean:
+        if marker.is_file():
+            marker.unlink()
+        return
+    series = resolve_directory(clean)
+    if folder not in series.parents:
+        raise HTTPException(status_code=400, detail="只能选择这个文件夹里的系列作为封面")
+    relative = series.relative_to(folder).as_posix()
+    try:
+        marker.write_text(relative, encoding="utf-8")
+    except OSError:
+        raise HTTPException(status_code=400, detail="这个文件夹是只读的，无法设置封面")
+
+
+def first_series_cover(directory: Path, path: str, depth: int = 0) -> Optional[str]:
+    """Depth-first lookup of the first available series cover below a folder."""
+    if depth > 4:
+        return None
+    for child in visible_directories(directory):
+        child_path = f"{path}/{child.name}".lstrip("/")
+        node = _series_node(child, child_path)
+        if node is not None and node.cover:
+            return node.cover
+        nested = first_series_cover(child, child_path, depth + 1)
+        if nested:
+            return nested
+    return None
+
+
 def custom_cover_name(directory: Path) -> Optional[str]:
     """A user-picked cover stored in <series>/.comii_cover (file name)."""
     marker = directory / COVER_MARKER
@@ -254,11 +318,14 @@ def browse(raw_path: str = "") -> BrowseResponse:
         # Empty folders are real folders the user just created: keep them visible
         # so uploads can target them.
         cover = None
-        for child in children:
-            preview = _series_node(child, f"{child_path}/{child.name}")
-            if preview is not None and preview.cover:
-                cover = preview.cover
-                break
+        album = album_cover_child(directory)
+        if album is not None:
+            album_relative = album.relative_to(directory).as_posix()
+            album_path = f"{child_path}/{album_relative}".lstrip("/")
+            preview = _series_node(album, album_path)
+            cover = preview.cover if preview is not None else first_series_cover(album, album_path)
+        if cover is None:
+            cover = first_series_cover(directory, child_path)
 
         items.append(
             LibraryNode(
@@ -367,6 +434,39 @@ def search(raw_query: str, limit: int = 200) -> list[LibraryNode]:
 
     walk(library_root(), "")
     return results
+
+
+def node_for_path(raw_path: str) -> Optional[LibraryNode]:
+    """Rebuild a LibraryNode for one relative path (tag results, deep links)."""
+    parts = split_relative_path(raw_path)
+    if not parts:
+        return None
+    normalized = "/".join(parts)
+    try:
+        directory = resolve_directory(normalized)
+    except HTTPException:
+        return None
+    node = _series_node(directory, normalized)
+    if node is not None:
+        return node
+    children = visible_directories(directory)
+    cover = None
+    album = album_cover_child(directory)
+    if album is not None:
+        album_relative = album.relative_to(directory).as_posix()
+        album_path = f"{normalized}/{album_relative}"
+        preview = _series_node(album, album_path)
+        cover = preview.cover if preview is not None else first_series_cover(album, album_path)
+    if cover is None:
+        cover = first_series_cover(directory, normalized)
+    return LibraryNode(
+        name=directory.name,
+        path=normalized,
+        kind=NodeKind.folder,
+        cover=cover,
+        child_count=len(children),
+        forced_kind=read_forced_kind(directory),
+    )
 
 
 def collect_series(raw_path: str = "") -> list[LibraryNode]:

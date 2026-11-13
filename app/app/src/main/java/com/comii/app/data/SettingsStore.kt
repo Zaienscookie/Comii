@@ -44,6 +44,19 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt("grid_columns", 2)
         set(value) = prefs.edit().putInt("grid_columns", value).apply()
 
+    /**
+     * 阅读图片清晰度，服务端按宽度缩放后返回：
+     * original（原图）/ high（1440）/ standard（1080）/ smooth（720）/ low（480）。
+     */
+    var imageQuality: String
+        get() = prefs.getString("image_quality", "standard").orEmpty()
+        set(value) = prefs.edit().putString("image_quality", value).apply()
+
+    /** 阅读器向后预加载的页数（0 = 关闭）。 */
+    var prefetchPages: Int
+        get() = prefs.getInt("prefetch_pages", 5)
+        set(value) = prefs.edit().putInt("prefetch_pages", value).apply()
+
     /** Library layout inside a folder: "folders" = one card per series, "flat" = every page in order. */
     var libraryLayout: String
         get() = prefs.getString("library_layout", "folders").orEmpty()

@@ -60,6 +60,9 @@ data class GalleryResponse(
 data class SetCoverBody(val path: String, val name: String = "")
 
 @Serializable
+data class AlbumCoverBody(val path: String, val series: String = "")
+
+@Serializable
 data class BrowseResponse(
     val path: String = "",
     val parent: String? = null,
@@ -92,7 +95,35 @@ data class SeriesDetail(
     val image_count: Int = 0,
     val video_count: Int = 0,
     val progress: ReadingProgress? = null,
+    val tags: List<String> = emptyList(),
 )
+
+@Serializable
+data class TagCount(
+    val name: String = "",
+    val count: Int = 0,
+)
+
+@Serializable
+data class TagsResponse(
+    val tags: List<TagCount> = emptyList(),
+)
+
+@Serializable
+data class SeriesTags(
+    val path: String = "",
+    val tags: List<String> = emptyList(),
+)
+
+@Serializable
+data class TaggedResponse(
+    val tag: String = "",
+    val items: List<LibraryNode> = emptyList(),
+    val total: Int = 0,
+)
+
+@Serializable
+data class TagsBody(val path: String, val tags: List<String> = emptyList())
 
 @Serializable
 data class TrashEntry(

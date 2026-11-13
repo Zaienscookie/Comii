@@ -63,6 +63,7 @@ class SeriesDetail(BaseModel):
     image_count: int = 0
     video_count: int = 0
     progress: Optional[ReadingProgress] = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class ServiceInfo(BaseModel):
@@ -148,6 +149,12 @@ class SetCoverRequest(BaseModel):
     name: str = ""
 
 
+class AlbumCoverRequest(BaseModel):
+    """Pick a child series as the cover of a folder (album)."""
+    path: str
+    series: str = ""
+
+
 class GalleryItem(BaseModel):
     series_path: str
     series_name: str
@@ -181,6 +188,31 @@ class StatsResponse(BaseModel):
     video_count: int = 0
     total_bytes: int = 0
     library: str = ""
+
+
+class TagCount(BaseModel):
+    name: str
+    count: int = 0
+
+
+class TagsResponse(BaseModel):
+    tags: list[TagCount] = Field(default_factory=list)
+
+
+class SeriesTagsResponse(BaseModel):
+    path: str = ""
+    tags: list[str] = Field(default_factory=list)
+
+
+class TagsUpdateRequest(BaseModel):
+    path: str
+    tags: list[str] = Field(default_factory=list)
+
+
+class TaggedResponse(BaseModel):
+    tag: str = ""
+    items: list[LibraryNode] = Field(default_factory=list)
+    total: int = 0
 
 
 class AppUpdateInfo(BaseModel):
