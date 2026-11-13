@@ -54,6 +54,8 @@ data class Persona(
     val proactive: Boolean = false,
     val proactiveIntervalHours: Int = 6,
     val lastProactiveAt: Long = 0L,
+    /** 下一次主动消息的时间点（随机生成，避免像定时任务）。 */
+    val nextProactiveAt: Long = 0L,
     /** 头像文件路径（App 私有目录）。 */
     val avatarPath: String = "",
     /** 好感度，随聊天自动增长。 */

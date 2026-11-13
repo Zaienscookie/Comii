@@ -3,6 +3,8 @@ package com.comii.app.data.ai
 import android.content.Context
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -137,6 +139,10 @@ class AiRepository(context: Context) {
                 messages += ChatMessage("system", it)
             }
         }
+        val hasImage = conversation.messages.lastOrNull { it.role == "user" }?.imagePath != null
+        if (hasImage) {
+            messages += ChatMessage("system", "对方刚发来一张图片，请先理解图片内容再回答，不要忽略这张图。")
+        }
         val limit = config.maxContextMessages.coerceIn(2, 200)
         val history = conversation.messages.takeLast(limit)
         messages += history
@@ -210,8 +216,9 @@ class AiRepository(context: Context) {
         conversationId: String,
         text: String,
         imagePath: String? = null,
+        onMessage: (ChatMessage) -> Unit = {},
         onDelta: (String) -> Unit = {},
-    ): ChatMessage = withContext(Dispatchers.IO) {
+    ): ChatMessage = withContext(Dispatchers.IO + NonCancellable) {
         val persona = persona(personaId)?.let {
             it.copy(affection = (it.affection + 1).coerceAtMost(100))
         } ?: throw AiException("角色不存在")
@@ -244,13 +251,17 @@ class AiRepository(context: Context) {
             emptyList()
         }
         val answers = parts.ifEmpty { listOf(answer.trim()) }
-        val assistantMessages = answers.mapIndexed { index, text ->
-            ChatMessage("assistant", text, now() + index)
+        var last = ChatMessage("assistant", answers.last(), now())
+        answers.forEachIndexed { index, part ->
+            val message = ChatMessage("assistant", part, now() + index)
+            current = current.copy(messages = current.messages + message, updatedAt = now())
+            replaceConversation(current)
+            onMessage(message)
+            last = message
+            if (answers.size > 1 && index != answers.lastIndex) delay(650)
         }
-        current = current.copy(messages = current.messages + assistantMessages, updatedAt = now())
-        replaceConversation(current)
         runCatching { maybeSummarize(persona, current) }
-        assistantMessages.last()
+        last
     }
 
     private fun replaceConversation(conversation: Conversation) {
@@ -341,9 +352,13 @@ class AiRepository(context: Context) {
         if (!persona.proactive) return@withContext null
         val interval = persona.proactiveIntervalHours.coerceIn(1, 72) * 60L * 60L * 1000L
         val now = now()
-        // 不要像定时任务：实际触发时间在 0.7~1.6 倍间隔之间随机
-        val jitter = 0.7 + kotlin.random.Random.nextDouble() * 0.9
-        if (now - persona.lastProactiveAt < (interval * jitter).toLong()) return@withContext null
+        // 下一次时间在发送时就随机定好，避免每次打开 App 都在同一个点触发
+        val due = if (persona.nextProactiveAt > 0) {
+            persona.nextProactiveAt
+        } else {
+            persona.lastProactiveAt + (interval * (0.6 + kotlin.random.Random.nextDouble() * 1.4)).toLong()
+        }
+        if (now < due) return@withContext null
         val conversation = conversations(personaId).firstOrNull() ?: createConversation(personaId)
         val config = config()
         val instructions = ChatMessage(
@@ -364,7 +379,13 @@ class AiRepository(context: Context) {
         replaceConversation(
             conversation.copy(messages = conversation.messages + message, updatedAt = now())
         )
-        savePersona(persona.copy(lastProactiveAt = now))
+        val nextGap = (interval * (0.6 + kotlin.random.Random.nextDouble() * 1.4)).toLong()
+        savePersona(
+            persona.copy(
+                lastProactiveAt = now,
+                nextProactiveAt = now + nextGap,
+            )
+        )
         message
     }
 

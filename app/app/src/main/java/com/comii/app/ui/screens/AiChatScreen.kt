@@ -169,7 +169,10 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         messages = messages + ChatMessage("user", text, System.currentTimeMillis(), imagePath)
         scope.launch {
             try {
-                ai.send(personaId, current.id, text, imagePath) { delta -> streamText += delta }
+                ai.send(personaId, current.id, text, imagePath, onMessage = { message ->
+                    messages = messages + message
+                    streamText = ""
+                }) { delta -> streamText += delta }
                 messages = ai.conversation(current.id)?.messages ?: messages
                 personaVersion++
             } catch (failure: Exception) {
@@ -193,21 +196,9 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             return
         }
         attachPath = null
-        if (image != null || !config.aggregate) {
-            pendingText = ""
-            debounceJob?.cancel()
-            doSend(text, image)
-        } else {
-            // 连续发多条时先等 1.4s，合并成一轮再回复
-            pendingText = if (pendingText.isBlank()) text else pendingText + "\n" + text
-            debounceJob?.cancel()
-            debounceJob = scope.launch {
-                delay(1400)
-                val combined = pendingText
-                pendingText = ""
-                doSend(combined, null)
-            }
-        }
+        pendingText = ""
+        debounceJob?.cancel()
+        doSend(text, image)
     }
 
     LaunchedEffect(streaming, queuedTexts) {
@@ -387,19 +378,19 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 CircularProgressIndicator(
                     color = palette.accent,
                     strokeWidth = 2.dp,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(16.dp),
                 )
-            } else {
-                IconButton(
-                    onClick = { submit() },
-                    enabled = draft.isNotBlank() || attachPath != null,
-                ) {
-                    Icon(
-                        Icons.Rounded.Send,
-                        contentDescription = "发送",
-                        tint = if (draft.isNotBlank() || attachPath != null) palette.accent else palette.textTertiary,
-                    )
-                }
+                Spacer(Modifier.width(6.dp))
+            }
+            IconButton(
+                onClick = { submit() },
+                enabled = draft.isNotBlank() || attachPath != null,
+            ) {
+                Icon(
+                    Icons.Rounded.Send,
+                    contentDescription = "发送",
+                    tint = if (draft.isNotBlank() || attachPath != null) palette.accent else palette.textTertiary,
+                )
             }
         }
         }

@@ -112,6 +112,7 @@ fun ReaderScreen(
     var showGrid by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var current by remember { mutableIntStateOf(0) }
+    var initializing by remember { mutableStateOf(all) }
 
     val listState = rememberLazyListState()
     val pagerState = rememberPagerState(pageCount = { names.size })
@@ -143,6 +144,7 @@ fun ReaderScreen(
 
     LaunchedEffect(all, path, startName) {
         if (!all) return@LaunchedEffect
+        initializing = true
         val api = repository.apiOrNull()
         if (api == null) {
             error = "未配置服务器"
@@ -174,12 +176,8 @@ fun ReaderScreen(
         loading = false
         delay(60)
         if (mode == "horizontal") pagerState.scrollToPage(current) else listState.scrollToItem(current)
-    }
-
-    LaunchedEffect(all, names.size) {
-        if (!all || names.isEmpty()) return@LaunchedEffect
-        delay(150)
-        if (mode == "horizontal") pagerState.scrollToPage(current) else listState.scrollToItem(current)
+        delay(80)
+        initializing = false
     }
 
     LaunchedEffect(path, startPage) {
@@ -235,12 +233,14 @@ fun ReaderScreen(
 
     LaunchedEffect(listState, names.size) {
         snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
+            if (initializing) return@collect
             if (index != current) current = index
             if (all) title = allItems.getOrNull(index)?.series_name ?: title
         }
     }
     LaunchedEffect(pagerState, names.size) {
         snapshotFlow { pagerState.currentPage }.collect { page ->
+            if (initializing) return@collect
             if (page != current) current = page
             if (all) title = allItems.getOrNull(page)?.series_name ?: title
         }
@@ -537,7 +537,7 @@ private fun ReaderPageImage(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
+                    .padding(horizontal = 16.dp)
                     .then(gestureModifier)
                     .then(zoomModifier),
                 onSuccess = { state ->

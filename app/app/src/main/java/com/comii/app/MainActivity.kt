@@ -34,6 +34,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -101,6 +103,7 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
             ComiiTheme(dark) {
+                val palette = ComiiTheme.palette
                 val view = LocalView.current
                 val lifecycleOwner = LocalLifecycleOwner.current
                 var paused by remember { mutableStateOf(false) }
@@ -135,6 +138,11 @@ class MainActivity : ComponentActivity() {
                 if (!view.isInEditMode) {
                     SideEffect {
                         val window = (view.context as Activity).window
+                        // 页面切换/输入法弹出时，窗口底色会短暂露出来；
+                        // 用当前主题色填充，避免暗色模式闪白。
+                        window.setBackgroundDrawable(
+                            android.graphics.drawable.ColorDrawable(palette.background.toArgb())
+                        )
                         val controller = WindowCompat.getInsetsController(window, view)
                         controller.isAppearanceLightStatusBars = !dark
                         controller.isAppearanceLightNavigationBars = !dark

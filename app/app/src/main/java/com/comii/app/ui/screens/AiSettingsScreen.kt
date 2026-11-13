@@ -215,14 +215,6 @@ fun AiSettingsScreen(state: AppState, nav: NavHostController) {
                 Switch(checked = segmentReplies, onCheckedChange = { segmentReplies = it })
             }
 
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("合并连续消息", color = palette.textPrimary, fontSize = 14.sp)
-                    Text("短时间发多条时先等 1.4 秒，合成一轮再回复", color = palette.textSecondary, fontSize = 11.sp)
-                }
-                Switch(checked = aggregate, onCheckedChange = { aggregate = it })
-            }
-
             Spacer(Modifier.height(16.dp))
             OutlinedButton(
                 onClick = {
