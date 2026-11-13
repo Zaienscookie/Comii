@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -99,7 +100,7 @@ fun UploadScreen(state: AppState, initialFolder: String, nav: NavHostController)
 
         Column(
             Modifier
-                .fillMaxSize()
+                .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
         ) {
@@ -178,20 +179,6 @@ fun UploadScreen(state: AppState, initialFolder: String, nav: NavHostController)
             )
 
             Spacer(Modifier.height(24.dp))
-            if (uploading) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = palette.accent)
-                        Spacer(Modifier.width(8.dp))
-                        Text("正在上传 ${formatSize(uploadedBytes)}", fontSize = 13.sp, color = palette.textSecondary)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = palette.accent)
-                }
-            } else {
-                PrimaryButton(text = "开始上传", enabled = uris.isNotEmpty(), onClick = { startUpload() })
-            }
-
             result?.let {
                 Spacer(Modifier.height(14.dp))
                 Text(
@@ -200,7 +187,28 @@ fun UploadScreen(state: AppState, initialFolder: String, nav: NavHostController)
                     color = if (it.startsWith("上传失败")) palette.danger else palette.success,
                 )
             }
-            Spacer(Modifier.height(40.dp))
+            Spacer(Modifier.height(24.dp))
+        }
+
+        // 固定底部，选择再多文件也不用来回滑动才能上传
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(palette.background)
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        ) {
+            if (uploading) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = palette.accent)
+                    Spacer(Modifier.width(8.dp))
+                    Text("正在上传 ${formatSize(uploadedBytes)}", fontSize = 13.sp, color = palette.textSecondary)
+                }
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = palette.accent)
+            } else {
+                PrimaryButton(text = "开始上传", enabled = uris.isNotEmpty(), onClick = { startUpload() })
+            }
         }
     }
 }

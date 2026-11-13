@@ -20,10 +20,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -56,7 +58,13 @@ fun SetupScreen(
 ) {
     val palette = ComiiTheme.palette
     val scope = rememberCoroutineScope()
-    var address by remember { mutableStateOf(state.serverUrl.ifBlank { "192.168.89.200:8001" }) }
+    val settings = state.repository.settings
+    var history by remember { mutableStateOf(settings.serverHistory()) }
+    var address by remember {
+        mutableStateOf(
+            state.serverUrl.ifBlank { history.firstOrNull() ?: "192.168.2.126:8001" }
+        )
+    }
     var status by remember { mutableStateOf<String?>(null) }
     var statusOk by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -85,6 +93,10 @@ fun SetupScreen(
             result.onSuccess { ping ->
                 statusOk = ping.status == "ok"
                 status = if (statusOk) "连接成功 · ${ping.app} v${ping.version}" else "设备有响应，但不是 Comii 服务"
+                if (statusOk) {
+                    settings.addServerHistory(url)
+                    history = settings.serverHistory()
+                }
                 then?.invoke(statusOk)
             }.onFailure { error ->
                 statusOk = false
@@ -184,6 +196,48 @@ fun SetupScreen(
                         color = if (statusOk) palette.success else palette.danger,
                         fontSize = 13.sp,
                     )
+                }
+            }
+
+            if (history.isNotEmpty()) {
+                Spacer(Modifier.height(18.dp))
+                Text("历史记录", fontSize = 13.sp, color = palette.textSecondary)
+                Spacer(Modifier.height(8.dp))
+                history.forEach { url ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .background(palette.card, RoundedCornerShape(14.dp))
+                            .clickable {
+                                address = url.removePrefix("http://")
+                                test(url)
+                            }
+                            .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            url,
+                            color = palette.textPrimary,
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (url == state.serverUrl) {
+                            Text("当前", color = palette.accent, fontSize = 12.sp)
+                        }
+                        IconButton(onClick = {
+                            settings.removeServerHistory(url)
+                            history = settings.serverHistory()
+                        }) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "删除记录",
+                                tint = palette.textTertiary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
                 }
             }
 

@@ -206,12 +206,13 @@ function renderGallery() {
   updateGalleryMeta();
 }
 
-function galleryTile(item) {
+function galleryTile(item, position) {
   const tile = document.createElement("div");
   tile.className = "gallery-tile";
   tile.innerHTML = `
     <img src="${item.thumb}" loading="lazy" alt="">
-    ${item.kind === "video" ? '<span class="gallery-video">▶</span>' : ""}`;
+    ${item.kind === "video" ? '<span class="gallery-video">▶</span>' : ""}
+    <span class="gallery-index">${position}</span>`;
   tile.addEventListener("click", () => {
     const base = KomiConfig.serverBase();
     if (item.kind === "video") {
@@ -224,8 +225,9 @@ function galleryTile(item) {
 }
 
 function appendGalleryTiles(items) {
+  const start = grid.querySelectorAll(".gallery-tile").length;
   const fragment = document.createDocumentFragment();
-  items.forEach(item => fragment.appendChild(galleryTile(item)));
+  items.forEach((item, i) => fragment.appendChild(galleryTile(item, start + i + 1)));
   grid.appendChild(fragment);
 }
 
@@ -988,6 +990,16 @@ function bindEditBar() {
   const moveBtn = document.getElementById("editMoveBtn");
   const delBtn = document.getElementById("editDelBtn");
   const renameBtn = document.getElementById("editRenameBtn");
+  const selectAllBtn = document.getElementById("editSelectAllBtn");
+
+  if (selectAllBtn) selectAllBtn.addEventListener("click", () => {
+    const items = libraryData.series || [];
+    const keys = items.map(it => it.path || it.name);
+    const allSelected = keys.length > 0 && keys.every(k => selectedItems.has(k));
+    if (allSelected) selectedItems.clear();
+    else keys.forEach(k => selectedItems.add(k));
+    render();
+  });
 
   // 移动: 收集选中项 → 打开移动弹窗(目录树)
   if (moveBtn) moveBtn.addEventListener("click", () => {

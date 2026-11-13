@@ -1099,3 +1099,5 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
 @media (min-width: 720px) {
   .grid.gallery-grid { grid-template-columns: repeat(6, 1fr); }
 }
+
+.gallery-index{position:absolute;left:6px;bottom:6px;padding:1px 5px;border-radius:6px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;line-height:1.5;}

@@ -73,7 +73,12 @@ import kotlinx.coroutines.launch
 private const val UNCATEGORIZED = "未分类"
 
 /** One local page, used by the "全部排列" view so a whole download can be read in order. */
-private data class OfflineImage(val series: OfflineSeries, val name: String, val index: Int)
+private data class OfflineImage(
+    val series: OfflineSeries,
+    val name: String,
+    val index: Int,
+    val isVideo: Boolean = false,
+)
 
 @Composable
 fun DownloadsTab(state: AppState, nav: NavHostController) {
@@ -92,16 +97,21 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
     var startInCreate by remember { mutableStateOf(false) }
 
     val allSeries = remember(version) { state.repository.offline.all() }
+    var query by remember { mutableStateOf("") }
+    val visibleSeries = remember(allSeries, query) {
+        if (query.isBlank()) allSeries
+        else allSeries.filter { it.name.contains(query.trim(), ignoreCase = true) }
+    }
     val validCategories = remember(categories) {
         categories.filter { it.isNotBlank() && it != UNCATEGORIZED }.distinct()
     }
     val flatMode = layout == "flat"
 
-    val sections = remember(allSeries, activeCategory, validCategories, version) {
+    val sections = remember(visibleSeries, activeCategory, validCategories, version) {
         val groups = LinkedHashMap<String, MutableList<OfflineSeries>>()
         groups[UNCATEGORIZED] = mutableListOf()
         validCategories.forEach { groups[it] = mutableListOf() }
-        allSeries.forEach { series ->
+        visibleSeries.forEach { series ->
             val key = series.category.ifBlank { UNCATEGORIZED }
             groups.getOrPut(key) { mutableListOf() }.add(series)
         }
@@ -114,12 +124,15 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
         result
     }
 
-    // 「全部图片」：按分类 + 系列名 + 页码顺序摊平，可以一口气看到底
-    val flatImages = remember(allSeries, version, flatMode) {
-        if (!flatMode) emptyList() else allSeries
+    // 「全部」：按分类 + 系列名排序，图片和视频按顺序摊平
+    val flatMedia = remember(visibleSeries, version, flatMode) {
+        if (!flatMode) emptyList() else visibleSeries
             .sortedWith(compareBy({ it.category }, { it.name }))
             .flatMap { series ->
-                series.images.mapIndexed { index, name -> OfflineImage(series, name, index) }
+                series.images.mapIndexed { index, name -> OfflineImage(series, name, index) } +
+                    series.videos.mapIndexed { index, name ->
+                        OfflineImage(series, name, series.images.size + index, true)
+                    }
             }
     }
 
@@ -141,8 +154,16 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
 
         Spacer(Modifier.height(6.dp))
         Column(Modifier.padding(horizontal = 20.dp)) {
+            com.comii.app.ui.components.SearchField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "搜索离线内容",
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Column(Modifier.padding(horizontal = 20.dp)) {
             SegmentControl(
-                options = listOf("分类", "全部图片"),
+                options = listOf("分类", "全部"),
                 selectedIndex = if (flatMode) 1 else 0,
                 onSelect = { index ->
                     layout = if (index == 0) "group" else "flat"
@@ -175,10 +196,10 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
 
         Box(Modifier.weight(1f)) {
             when {
-                allSeries.isEmpty() -> EmptyState(
+                visibleSeries.isEmpty() -> EmptyState(
                     icon = Icons.Rounded.Download,
-                    title = "还没有离线内容",
-                    subtitle = "在 Comii 里长按系列，选择「下载到本地」，没有网络也能看",
+                    title = if (query.isBlank()) "还没有离线内容" else "没有匹配的下载",
+                    subtitle = if (query.isBlank()) "在 Comii 里长按系列，选择「下载到本地」，没有网络也能看" else "换个关键词试试",
                 )
                 flatMode -> LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
@@ -187,25 +208,52 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(flatImages, key = { "${it.series.path}/${it.name}" }) { image ->
+                    items(flatMedia, key = { "${it.series.path}/${it.name}" }) { media ->
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(palette.card)
-                                .pointerInput(image.series.path, image.name) {
+                                .pointerInput(media.series.path, media.name) {
                                     detectTapGestures {
-                                        nav.navigate(Routes.reader(image.series.path, image.index))
+                                        if (media.isVideo) {
+                                            nav.navigate(Routes.player(media.series.path, media.name))
+                                        } else {
+                                            nav.navigate(Routes.reader(media.series.path, media.index))
+                                        }
                                     }
                                 }
                         ) {
-                            AsyncImage(
-                                model = state.repository.offline.imageFile(image.series.path, image.name),
-                                contentDescription = image.name,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
+                            if (media.isVideo) {
+                                Column(
+                                    Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.Center,
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.PlayArrow,
+                                        contentDescription = "视频",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                    Text(
+                                        media.name,
+                                        color = Color.White.copy(alpha = 0.75f),
+                                        fontSize = 9.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(horizontal = 6.dp),
+                                    )
+                                }
+                            } else {
+                                AsyncImage(
+                                    model = state.repository.offline.imageFile(media.series.path, media.name),
+                                    contentDescription = media.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
                             Box(
                                 Modifier
                                     .align(Alignment.BottomStart)
@@ -214,7 +262,7 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                                     .background(Color.Black.copy(alpha = 0.5f))
                                     .padding(horizontal = 5.dp, vertical = 2.dp)
                             ) {
-                                Text("${image.index + 1}", color = Color.White, fontSize = 10.sp)
+                                Text("${media.index + 1}", color = Color.White, fontSize = 10.sp)
                             }
                         }
                     }
@@ -267,6 +315,11 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             if (editing && selected.isNotEmpty()) {
                 DownloadsEditBar(
                     count = selected.size,
+                    allSelected = allSeries.isNotEmpty() && selected.containsAll(allSeries.map { it.path }),
+                    onToggleAll = {
+                        val everything = allSeries.map { it.path }
+                        selected = if (selected.containsAll(everything)) emptySet() else everything.toSet()
+                    },
                     onDelete = {
                         pendingDelete = allSeries.filter { selected.contains(it.path) }
                     },
@@ -428,6 +481,8 @@ private fun OfflineCard(
 @Composable
 private fun DownloadsEditBar(
     count: Int,
+    allSelected: Boolean,
+    onToggleAll: () -> Unit,
     onDelete: () -> Unit,
     onMove: () -> Unit,
     modifier: Modifier = Modifier,
@@ -438,10 +493,18 @@ private fun DownloadsEditBar(
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(palette.elevated)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("已选 $count 项", color = palette.textSecondary, fontSize = 13.sp)
+        TextButton(onClick = onToggleAll) {
+            Text(
+                if (allSelected) "取消全选" else "全选",
+                color = palette.accent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Text("已选 $count 项", color = palette.textSecondary, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
         TextButton(onClick = onMove, enabled = count > 0) {
             Icon(Icons.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.accent)

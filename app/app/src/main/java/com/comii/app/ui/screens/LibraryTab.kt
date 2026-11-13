@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -130,6 +131,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var dialog by remember { mutableStateOf<LibraryDialog?>(null) }
     var downloadState by remember { mutableStateOf<DownloadProgress?>(null) }
     var downloadHidden by remember { mutableStateOf(false) }
+    var downloadJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     var searchResults by remember { mutableStateOf<List<LibraryNode>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
 
@@ -295,7 +297,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         downloadHidden = false
         if (node.isFolder) {
             downloadState = DownloadProgress(node.name, 0, 0, "个系列")
-            scope.launch {
+            downloadJob = scope.launch {
                 runCatching {
                     state.repository.downloadFolder(node.path) { done, total ->
                         downloadState = DownloadProgress(node.name, done, total, "个系列")
@@ -303,16 +305,18 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 }.onSuccess { count ->
                     state.showToast("已下载「${node.name}」$count 个系列")
                 }.onFailure { failure ->
-                    state.showToast("下载失败：${failure.message}")
-                    // 列表可能是旧的（文件夹被改名/移动），刷新一次
-                    refreshKey++
+                    if (failure !is kotlinx.coroutines.CancellationException) {
+                        state.showToast("下载失败：${failure.message}")
+                        refreshKey++
+                    }
                 }
                 downloadState = null
+                downloadJob = null
             }
             return
         }
         downloadState = DownloadProgress(node.name, 0, 0, "页")
-        scope.launch {
+        downloadJob = scope.launch {
             runCatching {
                 state.repository.downloadSeries(node.path, includeVideos = true) { done, total ->
                     downloadState = DownloadProgress(node.name, done, total, "页")
@@ -320,11 +324,22 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             }.onSuccess { offline ->
                 state.showToast("已下载「${offline.name}」${formatBytes(offline.totalBytes)}")
             }.onFailure { failure ->
-                state.showToast("下载失败：${failure.message}")
-                refreshKey++
+                if (failure !is kotlinx.coroutines.CancellationException) {
+                    state.showToast("下载失败：${failure.message}")
+                    refreshKey++
+                }
             }
             downloadState = null
+            downloadJob = null
         }
+    }
+
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        downloadJob = null
+        downloadState = null
+        downloadHidden = false
+        state.showToast("已取消下载")
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -412,6 +427,39 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         }
 
         Spacer(Modifier.height(10.dp))
+        if (downloadHidden && downloadState != null) {
+            val progress = downloadState!!
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(palette.card)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "后台下载「${progress.title}」 ${progress.done}/${progress.total.coerceAtLeast(1)}",
+                        fontSize = 12.sp,
+                        color = palette.textPrimary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    LinearProgressIndicator(
+                        progress = {
+                            if (progress.total > 0) progress.done.toFloat() / progress.total else 0f
+                        },
+                        color = palette.accent,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = { cancelDownload() }) {
+                    Text("取消", color = palette.danger, fontSize = 12.sp)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
         Column(Modifier.padding(horizontal = 20.dp)) {
             SearchField(query, { query = it }, placeholder = "搜索漫画、视频或文件夹")
             Spacer(Modifier.height(10.dp))
@@ -444,7 +492,10 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             if (path.isNotEmpty() && !showingSearch) {
                 Spacer(Modifier.height(8.dp))
                 SegmentControl(
-                    options = listOf("按文件夹", "全部图片"),
+                    options = listOf(
+                        "按文件夹",
+                        if (path == "video" || path.startsWith("video/")) "全部视频" else "全部图片",
+                    ),
                     selectedIndex = if (layout == "flat") 1 else 0,
                     onSelect = { index ->
                         layout = if (index == 0) "folders" else "flat"
@@ -545,8 +596,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             }
 
             if (editing && !galleryMode) {
+                val selectable = allItems.map { it.path }
                 EditBar(
                     count = selected.size,
+                    allSelected = selectable.isNotEmpty() && selected.containsAll(selectable),
+                    onToggleAll = {
+                        selected = if (selected.containsAll(selectable)) emptySet() else selectable.toSet()
+                    },
                     onMove = {
                         val nodes = allItems.filter { selected.contains(it.path) }
                         if (nodes.isNotEmpty()) dialog = LibraryDialog.Move(nodes)
@@ -603,10 +659,21 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     when (val current = dialog) {
         LibraryDialog.NewFolder -> NewFolderDialog(
             defaultKind = pathKind,
+            lockKind = pathKind != null,
             onCreate = { name, kind ->
                 scope.launch {
                     runCatching { state.repository.createFolder(path, name, kind) }
-                        .onSuccess { state.showToast("文件夹已创建"); refreshKey++ }
+                        .onSuccess { result ->
+                            state.showToast("文件夹已创建")
+                            val created = result.path
+                            if (created != null) {
+                                history.add(path to pathKind)
+                                path = created
+                                pathKind = kind
+                            } else {
+                                refreshKey++
+                            }
+                        }
                         .onFailure { state.showToast("创建失败：${it.message}") }
                 }
                 dialog = null
@@ -701,10 +768,10 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             } else {
                 "准备中…"
             },
-            confirmText = "隐藏",
-            dismissText = "后台继续",
+            confirmText = "后台下载",
+            dismissText = "取消下载",
             onConfirm = { downloadHidden = true },
-            onDismiss = { downloadHidden = true },
+            onDismiss = { cancelDownload() },
         )
     }
 }
@@ -839,7 +906,7 @@ private fun GalleryGrid(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        items(items, key = { "${it.series_path}/${it.name}" }) { item ->
+        itemsIndexed(items, key = { _, it -> "${it.series_path}/${it.name}" }) { position, item ->
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -881,7 +948,7 @@ private fun GalleryGrid(
                         .background(Color.Black.copy(alpha = 0.5f))
                         .padding(horizontal = 5.dp, vertical = 2.dp)
                 ) {
-                    Text("${item.index + 1}", color = Color.White, fontSize = 10.sp)
+                    Text("${position + 1}", color = Color.White, fontSize = 10.sp)
                 }
             }
         }
@@ -914,6 +981,8 @@ private fun SheetAction(text: String, danger: Boolean = false, onClick: () -> Un
 @Composable
 private fun EditBar(
     count: Int,
+    allSelected: Boolean,
+    onToggleAll: () -> Unit,
     onMove: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
@@ -925,10 +994,18 @@ private fun EditBar(
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(palette.elevated)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("已选 $count 项", color = palette.textSecondary, fontSize = 13.sp)
+        TextButton(onClick = onToggleAll) {
+            Text(
+                if (allSelected) "取消全选" else "全选",
+                color = palette.accent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Text("已选 $count 项", color = palette.textSecondary, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
         TextButton(onClick = onMove, enabled = count > 0) {
             Icon(Icons.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.accent)
@@ -951,6 +1028,7 @@ private fun EditBar(
 @Composable
 private fun NewFolderDialog(
     defaultKind: String?,
+    lockKind: Boolean,
     onCreate: (String, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -979,11 +1057,19 @@ private fun NewFolderDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(10.dp))
-                SegmentControl(
-                    options = listOf("漫画", "视频"),
-                    selectedIndex = kind,
-                    onSelect = { kind = it },
-                )
+                if (lockKind) {
+                    Text(
+                        "将在当前文件夹内创建，类型沿用上级",
+                        fontSize = 12.sp,
+                        color = palette.textSecondary,
+                    )
+                } else {
+                    SegmentControl(
+                        options = listOf("漫画", "视频"),
+                        selectedIndex = kind,
+                        onSelect = { kind = it },
+                    )
+                }
             }
         },
         confirmButton = {

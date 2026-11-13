@@ -1,4 +1,4 @@
-package com.comii.app.ui.screens
+﻿package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +59,10 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
     var readerModeIndex by remember {
         mutableIntStateOf(if (repository.settings.readerMode == "horizontal") 1 else 0)
     }
+    var videoMuted by remember { mutableStateOf(repository.settings.videoMuted) }
+    var pitchFollow by remember { mutableStateOf(repository.settings.videoPitchFollowsSpeed) }
+    var entryPrompt by remember { mutableStateOf(repository.settings.entryPrompt) }
+    var privacyBlur by remember { mutableStateOf(repository.settings.privacyBlur) }
 
     Column(
         Modifier
@@ -67,7 +71,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.5.0")
+        LargeTitle("设置", "Comii 2.6.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -134,6 +138,40 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
                 subtitle = "阅读器底部的进度条",
                 checked = showProgress,
                 onChange = { showProgress = it; repository.settings.showProgressBar = it },
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
+        SettingsGroup("视频") {
+            ToggleRow(
+                title = "默认静音",
+                subtitle = "打开视频时先静音，播放页右上角可随时开声音",
+                checked = videoMuted,
+                onChange = { videoMuted = it; repository.settings.videoMuted = it },
+            )
+            Separator()
+            ToggleRow(
+                title = "倍速时音调跟随",
+                subtitle = "开启后加速声音变尖、减速变低沉；关闭则保持原音调",
+                checked = pitchFollow,
+                onChange = { pitchFollow = it; repository.settings.videoPitchFollowsSpeed = it },
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
+        SettingsGroup("隐私") {
+            ToggleRow(
+                title = "切到后台时隐藏内容",
+                subtitle = "退到后台时应用界面变模糊，最近任务里也看不到内容",
+                checked = privacyBlur,
+                onChange = { privacyBlur = it; repository.settings.privacyBlur = it },
+            )
+            Separator()
+            ToggleRow(
+                title = "启动内容提示",
+                subtitle = "每次打开 App 先确认是否继续进入",
+                checked = entryPrompt,
+                onChange = { entryPrompt = it; repository.settings.entryPrompt = it },
             )
         }
 
@@ -240,3 +278,4 @@ private fun ToggleRow(
         )
     }
 }
+

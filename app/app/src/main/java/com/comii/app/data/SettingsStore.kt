@@ -49,6 +49,44 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("downloads_layout", "group").orEmpty()
         set(value) = prefs.edit().putString("downloads_layout", value).apply()
 
+    // ---------------------------------------------------------- server history
+    fun serverHistory(): List<String> =
+        prefs.getString("server_history", "").orEmpty()
+            .split("\n")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+
+    fun addServerHistory(url: String) {
+        val clean = url.trim()
+        if (clean.isEmpty()) return
+        val list = (listOf(clean) + serverHistory()).distinct().take(8)
+        prefs.edit().putString("server_history", list.joinToString("\n")).apply()
+    }
+
+    fun removeServerHistory(url: String) {
+        val list = serverHistory().filter { it != url }
+        prefs.edit().putString("server_history", list.joinToString("\n")).apply()
+    }
+
+    // ---------------------------------------------------------------- video
+    var videoMuted: Boolean
+        get() = prefs.getBoolean("video_muted", true)
+        set(value) = prefs.edit().putBoolean("video_muted", value).apply()
+
+    var videoPitchFollowsSpeed: Boolean
+        get() = prefs.getBoolean("video_pitch_follow", false)
+        set(value) = prefs.edit().putBoolean("video_pitch_follow", value).apply()
+
+    // ------------------------------------------------------- entry / privacy
+    var entryPrompt: Boolean
+        get() = prefs.getBoolean("entry_prompt", true)
+        set(value) = prefs.edit().putBoolean("entry_prompt", value).apply()
+
+    var privacyBlur: Boolean
+        get() = prefs.getBoolean("privacy_blur", true)
+        set(value) = prefs.edit().putBoolean("privacy_blur", value).apply()
+
     // Local mirror of reading positions, keyed by series path.
     fun localPage(path: String): Int = prefs.getInt("page_$path", 0)
 
