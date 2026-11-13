@@ -24,6 +24,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -214,14 +217,15 @@ fun CoverImage(
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Text(
-                when (kind) {
-                    NodeKind.VIDEO -> "▶"
-                    NodeKind.FOLDER -> "▤"
-                    else -> "◫"
+            Icon(
+                imageVector = when (kind) {
+                    NodeKind.VIDEO -> Icons.Rounded.PlayArrow
+                    NodeKind.FOLDER -> Icons.Rounded.Folder
+                    else -> Icons.Rounded.Image
                 },
-                fontSize = 26.sp,
-                color = palette.textTertiary,
+                contentDescription = null,
+                tint = palette.textTertiary,
+                modifier = Modifier.size(28.dp),
             )
         }
     }

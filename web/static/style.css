@@ -1101,3 +1101,6 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
 }
 
 .gallery-index{position:absolute;left:6px;bottom:6px;padding:1px 5px;border-radius:6px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;line-height:1.5;}
+
+.gallery-video{display:flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0}
+.gallery-video i{width:0;height:0;border-left:7px solid #fff;border-top:5px solid transparent;border-bottom:5px solid transparent;margin-left:2px}

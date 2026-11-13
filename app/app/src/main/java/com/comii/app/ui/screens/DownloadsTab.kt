@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
@@ -450,7 +451,7 @@ private fun OfflineCard(
                         .background(if (selected) palette.accent else Color.Black.copy(alpha = 0.35f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (selected) Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    if (selected) Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                 }
             }
         }
@@ -649,7 +650,7 @@ private fun CategorySheet(
                         ) {
                             Text(option, color = palette.textPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
                             if (series != null && option == series.category.ifBlank { UNCATEGORIZED }) {
-                                Text("✓", color = palette.accent, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Rounded.Check, contentDescription = null, tint = palette.accent, modifier = Modifier.size(16.dp))
                             }
                         }
                     }

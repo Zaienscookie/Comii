@@ -211,7 +211,7 @@ function galleryTile(item, position) {
   tile.className = "gallery-tile";
   tile.innerHTML = `
     <img src="${item.thumb}" loading="lazy" alt="">
-    ${item.kind === "video" ? '<span class="gallery-video">▶</span>' : ""}
+    ${item.kind === "video" ? '<span class="gallery-video"><i></i></span>' : ""}
     <span class="gallery-index">${position}</span>`;
   tile.addEventListener("click", () => {
     const base = KomiConfig.serverBase();
