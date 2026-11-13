@@ -1,9 +1,26 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
+
+// 固定签名：所有出包都用同一把 key，避免换机器后覆盖安装报「签名冲突」。
+// 路径与口令放在 app/local.properties（已在 .gitignore，不会提交）或环境变量里：
+//   COMII_KEYSTORE=/path/to/comii.jks
+//   COMII_KEYSTORE_PASSWORD=...
+//   COMII_KEY_ALIAS=comii
+//   COMII_KEY_PASSWORD=...
+val localProps = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun signingValue(key: String, fallback: String? = null): String? =
+    localProps.getProperty(key) ?: System.getenv(key) ?: fallback
+
+val comiiStore = signingValue("COMII_KEYSTORE")
 
 android {
     namespace = "com.comii.app"
@@ -18,10 +35,26 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        if (comiiStore != null) {
+            create("comii") {
+                storeFile = file(comiiStore)
+                storePassword = signingValue("COMII_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("COMII_KEY_ALIAS", "comii")
+                keyPassword = signingValue("COMII_KEY_PASSWORD") ?: signingValue("COMII_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (comiiStore != null) signingConfig = signingConfigs.getByName("comii")
+        }
+        debug {
+            // 本机调试包也走同一把 key，升级安装不会互相冲突
+            if (comiiStore != null) signingConfig = signingConfigs.getByName("comii")
         }
     }
 
