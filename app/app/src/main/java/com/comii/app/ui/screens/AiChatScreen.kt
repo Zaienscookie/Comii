@@ -157,9 +157,15 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         messages = current.messages
     }
 
-    LaunchedEffect(messages.size, streamText) {
+    LaunchedEffect(messages.size, streaming) {
         val total = messages.size + if (streaming) 1 else 0
-        if (total > 0) runCatching { listState.animateScrollToItem(total - 1) }
+        if (total <= 0) return@LaunchedEffect
+        val info = listState.layoutInfo
+        val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+        // 只有本来就在底部附近才跟随，避免每次回复都把画面顶一下
+        if (lastVisible >= total - 4) {
+            listState.scrollToItem(total - 1)
+        }
     }
 
     fun doSend(text: String, imagePath: String?, appendLocal: Boolean = true, appendUser: Boolean = true) {
@@ -389,14 +395,6 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 ),
             )
             Spacer(Modifier.width(8.dp))
-            if (streaming) {
-                CircularProgressIndicator(
-                    color = palette.accent,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-            }
             IconButton(
                 onClick = { submit() },
                 enabled = draft.isNotBlank() || attachPath != null,

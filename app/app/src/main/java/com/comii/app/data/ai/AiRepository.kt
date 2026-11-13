@@ -124,6 +124,10 @@ class AiRepository(context: Context) {
             "你是${persona.name}。${persona.tagline} 你有自己独立的生活，可以出门、见朋友、做自己的事；" +
                 "保持角色设定，用自然、简短、有人情味的方式聊天。"
         })
+        messages += ChatMessage(
+            "system",
+            "始终以角色身份说话，不要自称 AI/模型，不要提模型名称或参数；不要解释你是如何生成回复的。",
+        )
         if (persona.memory.isNotBlank()) {
             messages += ChatMessage("system", "你记得这些事：\n${persona.memory.trim()}")
         }

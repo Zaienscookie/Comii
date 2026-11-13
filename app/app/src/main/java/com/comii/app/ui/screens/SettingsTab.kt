@@ -50,6 +50,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
     var manualUpdate by remember { mutableStateOf<com.comii.app.data.AppUpdateInfo?>(null) }
     var tapTurn by remember { mutableStateOf(repository.settings.tapToTurn) }
     var landscape by remember { mutableStateOf(repository.settings.landscapeRotate) }
+    var autoRotate by remember { mutableStateOf(repository.settings.autoRotate) }
     var showProgress by remember { mutableStateOf(repository.settings.showProgressBar) }
     var themeIndex by remember {
         mutableIntStateOf(
@@ -75,7 +76,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.16.0")
+        LargeTitle("设置", "Comii 2.17.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -126,10 +127,10 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             )
             Separator()
             ToggleRow(
-                title = "旋转横图",
-                subtitle = "竖屏时自动把跨页横图旋转 90°",
-                checked = landscape,
-                onChange = { landscape = it; repository.settings.landscapeRotate = it },
+                title = "自动旋转",
+                subtitle = "阅读/视频跟随手机方向（立着竖屏、躺下横屏）",
+                checked = autoRotate,
+                onChange = { autoRotate = it; repository.settings.autoRotate = it },
             )
             Separator()
             ToggleRow(
@@ -316,6 +317,7 @@ private fun ToggleRow(
         )
     }
 }
+
 
 
 

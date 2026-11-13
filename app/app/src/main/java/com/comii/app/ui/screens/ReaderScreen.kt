@@ -40,6 +40,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -94,6 +95,18 @@ fun ReaderScreen(
     val portrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
     val repository = state.repository
     val settings = repository.settings
+    val autoRotate = settings.autoRotate
+    val activity = context as? android.app.Activity
+    DisposableEffect(autoRotate) {
+        if (autoRotate) {
+            activity?.requestedOrientation =
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        }
+        onDispose {
+            activity?.requestedOrientation =
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
     val launch = remember { com.comii.app.ui.ReaderLaunch.consume(path) }
     val allMode = launch?.all ?: all
     val initialPage = launch?.index ?: startPage
@@ -109,7 +122,7 @@ fun ReaderScreen(
 
     var mode by rememberSaveable { mutableStateOf(settings.readerMode) }
     var tapTurn by remember { mutableStateOf(settings.tapToTurn) }
-    var rotateLandscape by remember { mutableStateOf(settings.landscapeRotate) }
+    var rotateLandscape by remember { mutableStateOf(false) }
     var showProgress by remember { mutableStateOf(settings.showProgressBar) }
 
     var showBar by remember { mutableStateOf(true) }
@@ -539,11 +552,19 @@ private fun ReaderPageImage(
                 model = ImageRequest.Builder(context).data(model).crossfade(false).build(),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .then(gestureModifier)
-                    .then(zoomModifier),
+                modifier = if (fullHeight) {
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .then(gestureModifier)
+                        .then(zoomModifier)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .then(gestureModifier)
+                        .then(zoomModifier)
+                },
                 onSuccess = { state ->
                     val size = state.painter.intrinsicSize
                     if (size.width > 0 && size.height > 0) {

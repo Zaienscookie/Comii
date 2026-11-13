@@ -28,8 +28,13 @@ class SettingsStore(context: Context) {
         set(value) = prefs.edit().putBoolean("tap_turn", value).apply()
 
     var landscapeRotate: Boolean
-        get() = prefs.getBoolean("landscape_rotate", true)
+        get() = prefs.getBoolean("landscape_rotate", false)
         set(value) = prefs.edit().putBoolean("landscape_rotate", value).apply()
+
+    /** 阅读/视频跟随手机方向自动旋转。 */
+    var autoRotate: Boolean
+        get() = prefs.getBoolean("auto_rotate", false)
+        set(value) = prefs.edit().putBoolean("auto_rotate", value).apply()
 
     var showProgressBar: Boolean
         get() = prefs.getBoolean("show_progress", true)

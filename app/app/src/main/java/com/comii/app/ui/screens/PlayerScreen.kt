@@ -78,7 +78,12 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     var count by remember { mutableIntStateOf(0) }
     var landscape by remember { mutableStateOf(false) }
     val activity = context as? android.app.Activity
-    DisposableEffect(Unit) {
+    val autoRotate = settings.autoRotate
+    DisposableEffect(autoRotate) {
+        if (autoRotate) {
+            activity?.requestedOrientation =
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+        }
         onDispose {
             activity?.requestedOrientation =
                 android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
