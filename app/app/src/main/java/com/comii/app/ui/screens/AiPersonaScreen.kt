@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -80,20 +81,19 @@ fun AiPersonaScreen(state: AppState, personaId: String?, nav: NavHostController)
         mutableFloatStateOf((existing?.proactiveIntervalHours ?: 6).toFloat())
     }
     var avatarPath by remember { mutableStateOf(existing?.avatarPath.orEmpty()) }
+    var cropSource by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val pickAvatar = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        val id = existing?.id ?: "draft-${UUID.randomUUID()}"
-        val directory = File(context.filesDir, "ai_avatars").apply { mkdirs() }
-        val target = File(directory, "$id.jpg")
         runCatching {
             context.contentResolver.openInputStream(uri)?.use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+                android.graphics.BitmapFactory.decodeStream(input)
             }
-        }.onSuccess { avatarPath = target.absolutePath }
-            .onFailure { error = "头像保存失败：${it.message}" }
+        }.onSuccess { bitmap ->
+            if (bitmap != null) cropSource = bitmap else error = "无法读取这张图片"
+        }.onFailure { error = "头像读取失败：${it.message}" }
     }
 
     fun save() {
@@ -271,6 +271,85 @@ fun AiPersonaScreen(state: AppState, personaId: String?, nav: NavHostController)
             Spacer(Modifier.height(40.dp))
         }
     }
+
+    cropSource?.let { source ->
+        AvatarCropDialog(
+            source = source,
+            onDismiss = { cropSource = null },
+            onConfirm = { bitmap ->
+                runCatching {
+                    val directory = File(context.filesDir, "ai_avatars").apply { mkdirs() }
+                    val target = File(directory, "avatar-${System.currentTimeMillis()}.jpg")
+                    target.outputStream().use { output ->
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, output)
+                    }
+                    target.absolutePath
+                }.onSuccess { avatarPath = it }
+                    .onFailure { error = "头像保存失败：${it.message}" }
+                cropSource = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun AvatarCropDialog(
+    source: android.graphics.Bitmap,
+    onDismiss: () -> Unit,
+    onConfirm: (android.graphics.Bitmap) -> Unit,
+) {
+    val palette = ComiiTheme.palette
+    var zoom by remember(source) { mutableFloatStateOf(1f) }
+    var offsetX by remember(source) { mutableFloatStateOf(0f) }
+    var offsetY by remember(source) { mutableFloatStateOf(0f) }
+    val preview = remember(source, zoom, offsetX, offsetY) {
+        cropAvatarBitmap(source, zoom, offsetX, offsetY)
+    }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = palette.card,
+        title = { Text("裁剪头像", color = palette.textPrimary) },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                androidx.compose.foundation.Image(
+                    bitmap = preview.asImageBitmap(),
+                    contentDescription = "预览",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(180.dp).clip(CircleShape),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text("缩放 ${String.format("%.2f", zoom)}", color = palette.textSecondary, fontSize = 12.sp)
+                Slider(value = zoom, onValueChange = { zoom = it }, valueRange = 1f..3f)
+                Text("左右 ${String.format("%.2f", offsetX)}", color = palette.textSecondary, fontSize = 12.sp)
+                Slider(value = offsetX, onValueChange = { offsetX = it }, valueRange = -1f..1f)
+                Text("上下 ${String.format("%.2f", offsetY)}", color = palette.textSecondary, fontSize = 12.sp)
+                Slider(value = offsetY, onValueChange = { offsetY = it }, valueRange = -1f..1f)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(preview) }) {
+                Text("使用", color = palette.accent, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消", color = palette.textSecondary) }
+        },
+    )
+}
+
+private fun cropAvatarBitmap(
+    source: android.graphics.Bitmap,
+    zoom: Float,
+    offsetX: Float,
+    offsetY: Float,
+): android.graphics.Bitmap {
+    val side = (minOf(source.width, source.height) / zoom).toInt().coerceAtLeast(16)
+    val maxLeft = (source.width - side).coerceAtLeast(0)
+    val maxTop = (source.height - side).coerceAtLeast(0)
+    val left = ((maxLeft / 2f) + offsetX * (maxLeft / 2f)).toInt().coerceIn(0, maxLeft)
+    val top = ((maxTop / 2f) + offsetY * (maxTop / 2f)).toInt().coerceIn(0, maxTop)
+    val cropped = android.graphics.Bitmap.createBitmap(source, left, top, side, side)
+    return android.graphics.Bitmap.createScaledBitmap(cropped, 512, 512, true)
 }
 
 @Composable

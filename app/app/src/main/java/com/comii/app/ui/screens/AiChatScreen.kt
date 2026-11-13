@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -87,12 +90,15 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     var messages by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var draft by remember { mutableStateOf("") }
     var attachPath by remember { mutableStateOf<String?>(null) }
+    var cameraPath by remember { mutableStateOf<String?>(null) }
     var pendingText by remember { mutableStateOf("") }
+    var queuedTexts by remember { mutableStateOf<List<String>>(emptyList()) }
     var debounceJob by remember { mutableStateOf<Job?>(null) }
     var streaming by remember { mutableStateOf(false) }
     var streamText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var showSessions by remember { mutableStateOf(false) }
+    var showLife by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
 
@@ -109,6 +115,26 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             target
         }.onSuccess { attachPath = it.absolutePath }
             .onFailure { error = "图片读取失败：${it.message}" }
+    }
+
+    val takePicture = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) attachPath = cameraPath
+    }
+
+    fun launchCamera() {
+        runCatching {
+            val directory = java.io.File(context.filesDir, "ai_media").apply { mkdirs() }
+            val file = java.io.File(directory, "cam-${System.currentTimeMillis()}.jpg").apply { createNewFile() }
+            cameraPath = file.absolutePath
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file,
+            )
+            takePicture.launch(uri)
+        }.onFailure { error = "无法打开相机：${it.message}" }
     }
 
     // 虚拟人生自动运行：当天没有安排就静默生成，不需要手动点
@@ -157,11 +183,15 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     }
 
     fun submit() {
-        if (streaming) return
         val text = draft.trim()
         val image = attachPath
         if (text.isEmpty() && image == null) return
         draft = ""
+        if (streaming) {
+            // 正在回复时也能继续发，等这一轮结束后排队发出
+            if (text.isNotEmpty()) queuedTexts = queuedTexts + text
+            return
+        }
         attachPath = null
         if (image != null || !config.aggregate) {
             pendingText = ""
@@ -177,6 +207,14 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 pendingText = ""
                 doSend(combined, null)
             }
+        }
+    }
+
+    LaunchedEffect(streaming, queuedTexts) {
+        if (!streaming && queuedTexts.isNotEmpty()) {
+            val next = queuedTexts.joinToString("\n")
+            queuedTexts = emptyList()
+            doSend(next, null)
         }
     }
 
@@ -234,6 +272,26 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             }
         }
 
+        if (persona?.vlife?.enabled == true) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    persona.vlife.schedule.lines().firstOrNull()?.take(42)?.ifBlank { "今天的安排还没生成" }
+                        ?: "今天的安排还没生成",
+                    color = palette.textTertiary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { showLife = true }) {
+                    Text("查看日程", color = palette.accent, fontSize = 11.sp)
+                }
+            }
+        }
+
         if (error != null) {
             Text(
                 error ?: "",
@@ -261,10 +319,14 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 }
                 if (streaming) {
                     item(key = "streaming") {
-                        MessageBubble(
-                            ChatMessage("assistant", streamText.ifEmpty { "…" }, 0),
-                            streaming = true,
-                        )
+                        if (streamText.isEmpty()) {
+                            TypingBubble()
+                        } else {
+                            MessageBubble(
+                                ChatMessage("assistant", streamText.replace("|||", "\n"), 0),
+                                streaming = true,
+                            )
+                        }
                     }
                 }
             }
@@ -298,6 +360,9 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 if (config.multimodal) {
                     IconButton(onClick = { pickImage.launch("image/*") }) {
                         Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = "发送图片", tint = palette.accent)
+                    }
+                    IconButton(onClick = { launchCamera() }) {
+                        Icon(Icons.Rounded.PhotoCamera, contentDescription = "拍照", tint = palette.accent)
                     }
                 }
                 TextField(
@@ -337,6 +402,29 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 }
             }
         }
+        }
+    }
+
+    if (showLife) {
+        val life = persona?.vlife
+        BottomSheet(onDismiss = { showLife = false }) {
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                Text("今天的安排", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    life?.schedule?.ifBlank { "还没生成" } ?: "还没生成",
+                    color = palette.textPrimary,
+                    fontSize = 14.sp,
+                )
+                Spacer(Modifier.height(14.dp))
+                if (!life?.mood.isNullOrBlank()) {
+                    Text("心情：${life?.mood}", color = palette.textSecondary, fontSize = 13.sp)
+                }
+                if (!life?.outfit.isNullOrBlank()) {
+                    Text("穿搭：${life?.outfit}", color = palette.textSecondary, fontSize = 13.sp)
+                }
+                Spacer(Modifier.height(26.dp))
+            }
         }
     }
 
@@ -392,6 +480,42 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                     }
                 }
                 Spacer(Modifier.height(20.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TypingBubble() {
+    val palette = ComiiTheme.palette
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "typing")
+    val alpha by transition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(600),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "alpha",
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(palette.card)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("正在回复", color = palette.textSecondary, fontSize = 13.sp)
+            Spacer(Modifier.width(6.dp))
+            repeat(3) {
+                Box(
+                    Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(palette.accent.copy(alpha = alpha)),
+                )
+                Spacer(Modifier.width(3.dp))
             }
         }
     }

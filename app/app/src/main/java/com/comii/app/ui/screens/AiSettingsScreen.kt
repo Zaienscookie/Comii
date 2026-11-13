@@ -95,6 +95,7 @@ fun AiSettingsScreen(state: AppState, nav: NavHostController) {
     var stream by remember { mutableStateOf(current.stream) }
     var multimodal by remember { mutableStateOf(current.multimodal) }
     var aggregate by remember { mutableStateOf(current.aggregate) }
+    var segmentReplies by remember { mutableStateOf(current.segmentReplies) }
     var showKey by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
@@ -110,6 +111,7 @@ fun AiSettingsScreen(state: AppState, nav: NavHostController) {
         showReasoning = current.showReasoning,
         multimodal = multimodal,
         aggregate = aggregate,
+        segmentReplies = segmentReplies,
     )
 
     fun save() {
@@ -203,6 +205,14 @@ fun AiSettingsScreen(state: AppState, nav: NavHostController) {
                     Text("开启后聊天框可发相册图片给支持视觉的模型", color = palette.textSecondary, fontSize = 11.sp)
                 }
                 Switch(checked = multimodal, onCheckedChange = { multimodal = it })
+            }
+
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("分段回复", color = palette.textPrimary, fontSize = 14.sp)
+                    Text("让模型像真人一样把回复拆成多条短消息发送", color = palette.textSecondary, fontSize = 11.sp)
+                }
+                Switch(checked = segmentReplies, onCheckedChange = { segmentReplies = it })
             }
 
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {

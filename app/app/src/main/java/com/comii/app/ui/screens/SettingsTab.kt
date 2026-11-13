@@ -75,7 +75,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.11.0")
+        LargeTitle("设置", "Comii 2.13.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -187,16 +187,6 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
         Spacer(Modifier.height(18.dp))
         SettingsGroup("存储") {
             SettingsRow(title = "离线内容", subtitle = formatBytes(repository.offline.totalBytes()))
-            Separator()
-            SettingsRow(
-                title = "清除全部离线文件",
-                subtitle = "只删除手机上的副本",
-                onClick = {
-                    repository.offline.all().forEach { repository.offline.delete(it.path) }
-                    state.showToast("已清除离线文件")
-                },
-                showChevron = true,
-            )
         }
 
         Spacer(Modifier.height(18.dp))
@@ -326,6 +316,8 @@ private fun ToggleRow(
         )
     }
 }
+
+
 
 
 

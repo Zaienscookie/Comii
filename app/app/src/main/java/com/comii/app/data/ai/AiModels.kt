@@ -16,7 +16,9 @@ data class AiConfig(
     /** 多模态：允许发送图片。 */
     val multimodal: Boolean = false,
     /** 连续发多条时先等一下，合并成一轮再回复。 */
-    val aggregate: Boolean = true,
+    val aggregate: Boolean = false,
+    /** 让模型像真人一样把回复拆成多条短消息。 */
+    val segmentReplies: Boolean = false,
 )
 
 /** 虚拟人生：每天生成一份生活安排，聊天时注入当前状态（参考 astrbot_plugin_virtual_life）。 */

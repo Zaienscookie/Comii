@@ -319,43 +319,35 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    sections.forEach { (label, list) ->
-                        item(key = "header_$label", span = { GridItemSpan(maxLineSpan) }) {
-                            Text(
-                                label,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = palette.textSecondary,
-                                modifier = Modifier.padding(start = 2.dp, top = 6.dp, bottom = 2.dp),
-                            )
-                        }
-                        items(list, key = { it.path }) { item ->
-                            val cover = state.repository.offline.coverFile(item)
-                            OfflineCard(
-                                item = item,
-                                cover = cover,
-                                videoFile = item.videos.firstOrNull()?.let {
-                                    state.repository.offline.videoFile(item.path, it)
-                                },
-                                editing = editing,
-                                selected = selected.contains(item.path),
-                                onClick = {
-                                    if (editing) {
-                                        selected = if (selected.contains(item.path)) selected - item.path else selected + item.path
-                                    } else {
-                                        openOffline(item, nav)
-                                    }
-                                },
-                                onLongClick = {
-                                    if (editing) {
-                                        selected = if (selected.contains(item.path)) selected - item.path else selected + item.path
-                                    } else {
-                                        editing = true
-                                        selected = selected + item.path
-                                    }
-                                },
-                            )
-                        }
+                    items(
+                        filteredSeries.sortedWith(compareBy({ it.category }, { it.name })),
+                        key = { it.path },
+                    ) { item ->
+                        val cover = state.repository.offline.coverFile(item)
+                        OfflineCard(
+                            item = item,
+                            cover = cover,
+                            videoFile = item.videos.firstOrNull()?.let {
+                                state.repository.offline.videoFile(item.path, it)
+                            },
+                            editing = editing,
+                            selected = selected.contains(item.path),
+                            onClick = {
+                                if (editing) {
+                                    selected = if (selected.contains(item.path)) selected - item.path else selected + item.path
+                                } else {
+                                    openOffline(item, nav)
+                                }
+                            },
+                            onLongClick = {
+                                if (editing) {
+                                    selected = if (selected.contains(item.path)) selected - item.path else selected + item.path
+                                } else {
+                                    editing = true
+                                    selected = selected + item.path
+                                }
+                            },
+                        )
                     }
                 }
             }

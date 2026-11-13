@@ -125,6 +125,13 @@ class AiRepository(context: Context) {
         if (persona.memory.isNotBlank()) {
             messages += ChatMessage("system", "你记得这些事：\n${persona.memory.trim()}")
         }
+        if (config.segmentReplies) {
+            messages += ChatMessage(
+                "system",
+                "如果你想像真人发消息一样连发几条，请用 ||| 分隔每条消息，每条 1-2 句；" +
+                    "不需要分段时就正常回复，不要强行加分隔符。",
+            )
+        }
         persona.pluginIds.forEach { pluginId ->
             AiPluginRegistry.find(pluginId)?.inject(persona)?.takeIf { it.isNotBlank() }?.let {
                 messages += ChatMessage("system", it)
@@ -231,11 +238,19 @@ class AiRepository(context: Context) {
             throw if (error is AiException) error else AiException(error.message ?: "请求失败")
         }
 
-        val assistant = ChatMessage("assistant", answer.trim(), now())
-        current = current.copy(messages = current.messages + assistant, updatedAt = now())
+        val parts = if (config.segmentReplies) {
+            answer.split("|||").map { it.trim() }.filter { it.isNotEmpty() }
+        } else {
+            emptyList()
+        }
+        val answers = parts.ifEmpty { listOf(answer.trim()) }
+        val assistantMessages = answers.mapIndexed { index, text ->
+            ChatMessage("assistant", text, now() + index)
+        }
+        current = current.copy(messages = current.messages + assistantMessages, updatedAt = now())
         replaceConversation(current)
         runCatching { maybeSummarize(persona, current) }
-        assistant
+        assistantMessages.last()
     }
 
     private fun replaceConversation(conversation: Conversation) {
@@ -326,13 +341,16 @@ class AiRepository(context: Context) {
         if (!persona.proactive) return@withContext null
         val interval = persona.proactiveIntervalHours.coerceIn(1, 72) * 60L * 60L * 1000L
         val now = now()
-        if (now - persona.lastProactiveAt < interval) return@withContext null
+        // 不要像定时任务：实际触发时间在 0.7~1.6 倍间隔之间随机
+        val jitter = 0.7 + kotlin.random.Random.nextDouble() * 0.9
+        if (now - persona.lastProactiveAt < (interval * jitter).toLong()) return@withContext null
         val conversation = conversations(personaId).firstOrNull() ?: createConversation(personaId)
         val config = config()
         val instructions = ChatMessage(
             "system",
-            "现在没有新消息。请以${persona.name}的身份主动发一条 1-2 句的短消息，" +
-                "结合当前时间、虚拟生活状态和你们最近聊过的事，自然一点，不要解释你在做什么。",
+            "现在没有新消息。请以${persona.name}的身份主动发一条 1-3 句的短消息。" +
+                "要像真人随手发来的：可以分享刚刚在做的小事、吐槽、突然想到对方、发一句没头没尾的话；" +
+                "不要每次都问候、不要用固定句式、不要解释你在做什么。结合当前时间、虚拟生活状态和最近聊过的事。",
         )
         val text = runCatching {
             client.complete(

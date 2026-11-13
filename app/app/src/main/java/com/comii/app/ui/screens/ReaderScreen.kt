@@ -3,6 +3,7 @@ package com.comii.app.ui.screens
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -54,6 +55,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -160,10 +163,22 @@ fun ReaderScreen(
         val found = items.indexOfFirst {
             it.series_path == path && (startName.isEmpty() || it.name == startName)
         }
-        current = if (found >= 0) found else 0
+        current = if (startPage >= 0) {
+            startPage.coerceIn(0, items.lastIndex)
+        } else if (found >= 0) {
+            found
+        } else {
+            0
+        }
         title = items.getOrNull(current)?.series_name ?: "全部"
         loading = false
         delay(60)
+        if (mode == "horizontal") pagerState.scrollToPage(current) else listState.scrollToItem(current)
+    }
+
+    LaunchedEffect(all, names.size) {
+        if (!all || names.isEmpty()) return@LaunchedEffect
+        delay(150)
         if (mode == "horizontal") pagerState.scrollToPage(current) else listState.scrollToItem(current)
     }
 
@@ -469,6 +484,22 @@ private fun ReaderPageImage(
 ) {
     val context = LocalContext.current
     var imageSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    var zoom by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    var panOffset by remember { mutableStateOf(Offset.Zero) }
+    val gestureModifier = Modifier.pointerInput(fullHeight) {
+        if (fullHeight) {
+            detectTransformGestures { _, pan, scaleChange, _ ->
+                zoom = (zoom * scaleChange).coerceIn(1f, 4f)
+                panOffset = if (zoom > 1f) panOffset + pan else Offset.Zero
+            }
+        }
+    }
+    val zoomModifier = Modifier.graphicsLayer {
+        scaleX = zoom
+        scaleY = zoom
+        translationX = panOffset.x
+        translationY = panOffset.y
+    }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -489,7 +520,9 @@ private fun ReaderPageImage(
                 modifier = Modifier
                     .width(displayHeight)
                     .height(displayWidth)
-                    .rotate(90f),
+                    .rotate(90f)
+                    .then(gestureModifier)
+                    .then(zoomModifier),
                 onSuccess = { state ->
                     val size = state.painter.intrinsicSize
                     if (size.width > 0 && size.height > 0) {
@@ -502,7 +535,11 @@ private fun ReaderPageImage(
                 model = ImageRequest.Builder(context).data(model).crossfade(false).build(),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .then(gestureModifier)
+                    .then(zoomModifier),
                 onSuccess = { state ->
                     val size = state.painter.intrinsicSize
                     if (size.width > 0 && size.height > 0) {
