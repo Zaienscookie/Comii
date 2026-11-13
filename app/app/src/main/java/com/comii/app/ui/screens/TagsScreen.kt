@@ -56,7 +56,7 @@ fun TagsScreen(state: AppState, nav: NavHostController) {
     var loadingItems by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        tags = runCatching { state.repository.tags() }.getOrDefault(emptyList())
+        tags = runCatching { state.repository.tags().tags }.getOrDefault(emptyList())
         loading = false
     }
 

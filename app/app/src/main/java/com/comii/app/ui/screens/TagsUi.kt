@@ -103,7 +103,7 @@ fun TagEditorDialog(
     var saving by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        all = runCatching { state.repository.tags().map { it.name } }.getOrDefault(emptyList())
+        all = runCatching { state.repository.tags().tags.map { it.name } }.getOrDefault(emptyList())
     }
 
     fun add(raw: String) {
@@ -173,7 +173,7 @@ fun TagEditorDialog(
                 onClick = {
                     saving = true
                     scope.launch {
-                        runCatching { state.repository.saveTags(path, current) }
+                        runCatching { state.repository.saveTags(listOf(path), current) }
                             .onSuccess {
                                 state.showToast(if (current.isEmpty()) "已清除标签" else "标签已保存")
                                 onSaved(it)

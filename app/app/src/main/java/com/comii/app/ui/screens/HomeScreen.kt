@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -112,9 +114,10 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
                 },
             ) { currentTab ->
                 when (currentTab) {
-                    0 -> LibraryTab(state = state, nav = nav)
-                    1 -> DownloadsTab(state = state, nav = nav)
-                    2 -> AiScreen(state = state, nav = nav)
+                    0 -> PhotosTab(state = state, nav = nav)
+                    1 -> LibraryTab(state = state, nav = nav)
+                    2 -> DownloadsTab(state = state, nav = nav)
+                    3 -> AiScreen(state = state, nav = nav)
                     else -> SettingsTab(state = state, nav = nav)
                 }
             }
@@ -130,10 +133,11 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
 private fun ComiiTabBar(selected: Int, onSelect: (Int) -> Unit) {
     val palette = ComiiTheme.palette
     val tabs = listOf(
-        Triple("Comii", Icons.Rounded.AutoStories, 0),
-        Triple("下载", Icons.Rounded.Download, 1),
-        Triple("AI", Icons.Rounded.AutoAwesome, 2),
-        Triple("设置", Icons.Rounded.Settings, 3),
+        Triple("照片", Icons.Rounded.PhotoLibrary, 0),
+        Triple("相册", Icons.Rounded.Folder, 1),
+        Triple("下载", Icons.Rounded.Download, 2),
+        Triple("AI", Icons.Rounded.AutoAwesome, 3),
+        Triple("设置", Icons.Rounded.Settings, 4),
     )
     Column(
         Modifier

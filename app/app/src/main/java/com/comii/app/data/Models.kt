@@ -107,11 +107,13 @@ data class SeriesDetail(
 data class TagCount(
     val name: String = "",
     val count: Int = 0,
+    val group: String = "",
 )
 
 @Serializable
 data class TagsResponse(
     val tags: List<TagCount> = emptyList(),
+    val groups: List<String> = emptyList(),
 )
 
 @Serializable
@@ -128,7 +130,14 @@ data class TaggedResponse(
 )
 
 @Serializable
-data class TagsBody(val path: String, val tags: List<String> = emptyList())
+data class TagsBody(
+    val paths: List<String> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val mode: String = "add",
+)
+
+@Serializable
+data class TagCreateBody(val name: String, val group: String = "")
 
 @Serializable
 data class TrashEntry(

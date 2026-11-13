@@ -34,6 +34,7 @@ from ..models import (
     SetFolderKindRequest,
     StatsResponse,
     TagCount,
+    TagCreateRequest,
     TaggedResponse,
     TagsResponse,
     TagsUpdateRequest,
@@ -375,8 +376,23 @@ def set_album_cover(payload: AlbumCoverRequest) -> ActionResult:
 # ------------------------------------------------------------------- tags
 @router.get("/tags", response_model=TagsResponse)
 def tags_all() -> TagsResponse:
-    """Every tag in use with its series count, for the "history" suggestions."""
-    return TagsResponse(tags=[TagCount(**item) for item in tags.all_tags()])
+    """所有标签（含分组与使用次数）+ 已有分组，用于「历史标签」建议。"""
+    return TagsResponse(
+        tags=[TagCount(**item) for item in tags.all_tags()],
+        groups=tags.groups(),
+    )
+
+
+@router.post("/tags/create", response_model=TagCount)
+def tags_create(payload: TagCreateRequest) -> TagCount:
+    created = tags.create_tag(payload.name, payload.group)
+    return TagCount(name=created["name"], count=0, group=created["group"])
+
+
+@router.delete("/tags/{name}", response_model=ActionResult)
+def tags_delete(name: str) -> ActionResult:
+    removed = tags.delete_tag(name)
+    return ActionResult(status="ok", message=f"已从 {removed} 个相册移除标签")
 
 
 @router.get("/tags/series", response_model=SeriesTagsResponse)
@@ -387,12 +403,21 @@ def tags_series(path: str) -> SeriesTagsResponse:
 
 @router.put("/tags", response_model=SeriesTagsResponse)
 def tags_update(payload: TagsUpdateRequest) -> SeriesTagsResponse:
-    normalized = library.normalize_path(payload.path)
+    """给一个或多个路径加 / 删 / 替换标签（多选批量打标签）。"""
+    raw_paths = list(payload.paths) if payload.paths else ([payload.path] if payload.path else [])
+    normalized: list[str] = []
+    for raw in raw_paths:
+        path = library.normalize_path(raw)
+        if not path:
+            continue
+        library.resolve_directory(path)
+        normalized.append(path)
     if not normalized:
         raise HTTPException(status_code=400, detail="路径不合法")
-    library.resolve_directory(normalized)
-    saved = tags.set_tags(normalized, payload.tags)
-    return SeriesTagsResponse(path=normalized, tags=saved)
+    mode = payload.mode if payload.mode in {"add", "remove", "replace"} else "add"
+    tags.update_tags(normalized, payload.tags, mode=mode)
+    first = normalized[0]
+    return SeriesTagsResponse(path=first, tags=tags.tags_for(first))
 
 
 @router.get("/tagged", response_model=TaggedResponse)

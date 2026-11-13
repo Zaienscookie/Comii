@@ -50,12 +50,14 @@ class ComiiRepository(private val context: Context) {
     /** How many pages ahead the reader pre-downloads into the Coil cache. */
     fun prefetchPages(): Int = settings.prefetchPages.coerceIn(0, 12)
 
-    suspend fun tags(): List<TagCount> = requireApi().tags().tags
+    suspend fun tags(): TagsResponse = requireApi().tags()
 
     suspend fun seriesTags(path: String): List<String> = requireApi().seriesTags(path).tags
 
-    suspend fun saveTags(path: String, tags: List<String>): List<String> =
-        requireApi().saveTags(path, tags).tags
+    suspend fun saveTags(paths: List<String>, tags: List<String>, mode: String = "add"): List<String> =
+        requireApi().saveTags(paths, tags, mode).tags
+
+    suspend fun createTag(name: String, group: String): TagCount = requireApi().createTag(name, group)
 
     suspend fun tagged(tag: String): List<LibraryNode> = requireApi().tagged(tag).items
 

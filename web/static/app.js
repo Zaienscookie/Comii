@@ -82,6 +82,7 @@ function kindLabel(kind) {
 }
 
 async function loadLibrary() {
+  if (viewMode === "photos") return;
   try {
     const res = await KomiConfig.fetch("/api/tree");
     const data = await res.json();
@@ -1347,7 +1348,7 @@ function mediaUrlOf(item) {
 }
 
 function renderMedia() {
-  if (!mediaGrid) return;
+  if (!mediaGrid || viewMode === "photos") return;
   mediaGrid.hidden = mediaItems.length === 0;
   mediaGrid.innerHTML = "";
   if (!mediaItems.length) return;
@@ -1525,6 +1526,82 @@ async function showTagged(tag) {
   }
 }
 
+// ---------- 照片 / 相册 两种视图 ----------
+let viewMode = "albums";
+let photoItems = [];
+let photoTotal = 0;
+let photoLoading = false;
+
+function setView(mode) {
+  viewMode = mode;
+  document.querySelectorAll(".bn-item").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.view === mode);
+  });
+  document.querySelector(".hero-title").textContent = mode === "photos" ? "照片" : "相册";
+  document.body.classList.toggle("view-photos", mode === "photos");
+  const bc = document.getElementById("breadcrumb");
+  if (bc) bc.classList.toggle("hidden", mode === "photos");
+  const nf = document.getElementById("newFolderBtn");
+  if (nf) nf.style.display = mode === "photos" ? "none" : "";
+  if (mode === "photos") {
+    grid.hidden = true;
+    mediaGrid.hidden = false;
+    loadPhotos(true);
+  } else {
+    grid.hidden = false;
+    loadLibrary();
+  }
+}
+
+async function loadPhotos(reset) {
+  if (photoLoading) return;
+  if (!reset && photoItems.length >= photoTotal && photoTotal > 0) return;
+  photoLoading = true;
+  if (reset) {
+    photoItems = [];
+    photoTotal = 0;
+  }
+  try {
+    const res = await KomiConfig.fetch(`/api/gallery?limit=300&offset=${photoItems.length}`);
+    const data = await res.json();
+    photoItems = photoItems.concat(data.items || []);
+    photoTotal = data.total || photoItems.length;
+  } catch (e) {
+    // 忽略，下一次滚动再试
+  }
+  photoLoading = false;
+  renderPhotos();
+}
+
+function renderPhotos() {
+  if (!mediaGrid) return;
+  mediaGrid.hidden = false;
+  mediaGrid.classList.add("photo-grid");
+  mediaGrid.innerHTML = "";
+  heroSub.textContent = `共 ${photoTotal} 项`;
+  photoItems.forEach(item => {
+    const tile = document.createElement("div");
+    tile.className = "media-tile";
+    const dir = String(item.series || "").split("/").map(encodeURIComponent).join("/");
+    const name = encodeURIComponent(item.name);
+    const thumb = item.kind === "video" ? `/api/video_thumb/${dir}/${name}` : `/api/thumb/${dir}/${name}`;
+    tile.innerHTML = `<img src="${thumb}" loading="lazy" alt="">${item.kind === "video" ? '<span class="media-play">▶</span>' : ""}`;
+    tile.addEventListener("click", () => {
+      const base = KomiConfig.serverBase();
+      if (item.kind === "video") location.href = base + `/video.html?s=${encodeURIComponent(item.series)}`;
+      else location.href = base + `/reader.html?s=${encodeURIComponent(item.series)}&p=${item.index}`;
+    });
+    mediaGrid.appendChild(tile);
+  });
+}
+
+window.addEventListener("scroll", () => {
+  if (viewMode !== "photos" || photoLoading) return;
+  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 700) {
+    loadPhotos(false);
+  }
+}, { passive: true });
+
 // ---------- Init ----------
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
@@ -1536,6 +1613,30 @@ document.addEventListener("DOMContentLoaded", () => {
   bindMoveSheet();
   bindTrashSheet();
   bindPdfImport();
+  document.getElementById("searchToggle")?.addEventListener("click", () => {
+    document.querySelector(".search-wrap")?.classList.toggle("hidden");
+  });
+  document.getElementById("addToggle")?.addEventListener("click", () => {
+    document.getElementById("newFolderBtn")?.click();
+  });
+  const openMore = () => {
+    document.getElementById("moreOverlay")?.classList.add("show");
+    document.getElementById("moreSheet")?.classList.add("show");
+  };
+  const closeMore = () => {
+    document.getElementById("moreOverlay")?.classList.remove("show");
+    document.getElementById("moreSheet")?.classList.remove("show");
+  };
+  document.getElementById("moreToggle")?.addEventListener("click", openMore);
+  document.getElementById("moreOverlay")?.addEventListener("click", closeMore);
+  document.querySelectorAll("#moreSheet .more-item").forEach(btn => {
+    btn.addEventListener("click", closeMore);
+  });
+  document.querySelectorAll(".bn-item").forEach(btn => {
+    btn.addEventListener("click", () => setView(btn.dataset.view));
+  });
+  const initialView = new URLSearchParams(location.search).get("view");
+  setView(initialView === "photos" ? "photos" : "albums");
   document.getElementById("tagsToggle")?.addEventListener("click", openTags);
   document.getElementById("tagsOverlay")?.addEventListener("click", closeTags);
   document.getElementById("mediaShare")?.addEventListener("click", shareMedia);

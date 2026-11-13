@@ -1135,3 +1135,22 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
 .tags-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 16px; }
 .tag-chip { border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
 .tag-chip.clear { color: var(--text-2); }
+
+/* ---------- vivo 风格顶栏 / 底部导航 / 照片视图 ---------- */
+.search-wrap.hidden { display: none; }
+.bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-around; padding: 8px 6px 12px; background: var(--bg-elev); border-top: 1px solid var(--border); z-index: 30; }
+.bn-item { flex: 1; border: none; background: transparent; color: var(--text-2); font-size: 12px; font-weight: 600; padding: 8px 0; border-radius: 12px; }
+.bn-item.active { color: var(--accent); }
+.more-list { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 20px; }
+.more-item { border: none; background: var(--card); color: var(--text); text-align: left; font-size: 15px; padding: 14px 16px; border-radius: 12px; }
+.media-grid.photo-grid { grid-template-columns: repeat(4, 1fr); gap: 3px; padding-bottom: 80px; }
+.view-photos #grid { display: none; }
+#mediaGrid.photo-grid { display: grid; }
+.view-photos #newFolderBtn, .view-photos .search-wrap, .view-photos #breadcrumb { display: none !important; }
+body { padding-bottom: 64px; }
+
+/* 顶栏图标不要被挤出屏幕 */
+.nav .nav-inner { display: flex; align-items: center; gap: 8px; }
+.nav .logo { flex-shrink: 0; font-size: 20px; }
+.nav-right { flex-shrink: 0; display: flex; align-items: center; gap: 2px; }
+.nav-right .icon-btn { width: 36px; height: 36px; }

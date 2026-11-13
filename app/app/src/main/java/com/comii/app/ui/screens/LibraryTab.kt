@@ -1,11 +1,20 @@
 package com.comii.app.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +22,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,20 +31,21 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.DriveFileMove
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sell
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +82,7 @@ import coil.compose.AsyncImage
 import com.comii.app.data.LibraryNode
 import com.comii.app.data.NodeKind
 import com.comii.app.data.ReadingProgress
+import com.comii.app.data.TagCount
 import com.comii.app.ui.AppState
 import com.comii.app.ui.Routes
 import com.comii.app.ui.components.BottomSheet
@@ -80,12 +93,11 @@ import com.comii.app.ui.components.PrimaryButton
 import com.comii.app.ui.components.SearchField
 import com.comii.app.ui.components.formatBytes
 import com.comii.app.ui.theme.ComiiTheme
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** One photo / video of the current album. */
 private data class MediaEntry(val name: String, val isVideo: Boolean, val index: Int)
 
 private sealed interface LibraryDialog {
@@ -109,7 +121,6 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // 相册就是真实文件夹：根目录是相册列表，进去可以继续套子相册
     var path by rememberSaveable { mutableStateOf("") }
     val history = remember { mutableStateListOf<String>() }
     var browseData by remember { mutableStateOf<com.comii.app.data.BrowseResponse?>(null) }
@@ -118,6 +129,8 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -130,6 +143,8 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var searching by remember { mutableStateOf(false) }
     var selectedMedia by remember { mutableStateOf(setOf<String>()) }
     var askDeleteMedia by remember { mutableStateOf(false) }
+    var tagTargets by remember { mutableStateOf<List<String>>(emptyList()) }
+    var tagMediaTargets by remember { mutableStateOf<List<String>>(emptyList()) }
     val gridState = rememberLazyGridState()
 
     suspend fun reload() {
@@ -142,23 +157,23 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             return
         }
         val target = path
-        var failed: Throwable? = null
+        var failure: Throwable? = null
         repeat(3) { attempt ->
             val result = runCatching { state.repository.browse(target) }
-            result.onSuccess { response ->
-                browseData = response
-                failed = null
+            result.onSuccess {
+                browseData = it
+                failure = null
             }.onFailure {
-                failed = it
+                failure = it
                 if (attempt < 2) delay(400L * (attempt + 1))
             }
-            if (failed == null) return@repeat
+            if (failure == null) return@repeat
         }
-        if (failed != null) {
+        if (failure != null) {
             browseData = null
             media = emptyList()
             if (target.isEmpty()) {
-                error = failed!!.message ?: "加载失败"
+                error = failure!!.message ?: "加载失败"
             } else {
                 state.showToast("找不到「${target.substringAfterLast('/')}」，已回到上一级")
                 history.removeLastOrNull()
@@ -167,20 +182,12 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             loading = false
             return
         }
-        // 当前相册自己也可能直接放着照片 / 视频
-        if (target.isNotEmpty()) {
+        media = if (target.isEmpty()) emptyList() else {
             val detail = runCatching { state.repository.series(target) }.getOrNull()
-            val entries = buildList {
-                detail?.images?.forEachIndexed { index, name ->
-                    add(MediaEntry(name, false, index))
-                }
-                detail?.videos?.forEach { name ->
-                    add(MediaEntry(name, true, 0))
-                }
+            buildList {
+                detail?.images?.forEachIndexed { index, name -> add(MediaEntry(name, false, index)) }
+                detail?.videos?.forEach { name -> add(MediaEntry(name, true, 0)) }
             }
-            media = entries
-        } else {
-            media = emptyList()
         }
         progressMap = runCatching { state.repository.requireApi().progressAll() }
             .getOrDefault(emptyMap())
@@ -188,10 +195,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     }
 
     LaunchedEffect(path, refreshKey) { reload() }
-
-    LaunchedEffect(path) {
-        runCatching { gridState.scrollToItem(0) }
-    }
+    LaunchedEffect(path) { runCatching { gridState.scrollToItem(0) } }
 
     LaunchedEffect(query) {
         val keyword = query.trim()
@@ -207,17 +211,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     }
 
     BackHandler(enabled = path.isNotEmpty()) {
-        if (history.isNotEmpty()) {
-            path = history.removeAt(history.lastIndex)
-        } else {
-            path = ""
-        }
+        if (history.isNotEmpty()) path = history.removeAt(history.lastIndex) else path = ""
     }
 
     val allItems = browseData?.items.orEmpty()
     val showingSearch = query.isNotBlank()
     val gridItems = if (showingSearch) searchResults else allItems
-    val albumCount = allItems.count { it.isAlbum }
+    val albumCount = allItems.count { it.isAlbum || it.isFolder }
     val mediaCount = media.size
 
     fun openAlbum(node: LibraryNode) {
@@ -243,37 +243,28 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     state.repository.downloadFolder(node.path) { done, total ->
                         downloadState = DownloadProgress(node.name, done, total, "个系列")
                     }
-                }.onSuccess { count ->
-                    state.showToast("已下载「${node.name}」$count 个系列")
+                }.onSuccess { count -> state.showToast("已下载「${node.name}」$count 个系列") }
+                    .onFailure { state.showToast("下载失败：${it.message}") }
+                downloadState = null
+            }
+        } else {
+            downloadState = DownloadProgress(node.name, 0, 0, "页")
+            downloadJob = scope.launch {
+                runCatching {
+                    state.repository.downloadSeries(node.path, includeVideos = true) { done, total ->
+                        downloadState = DownloadProgress(node.name, done, total, "页")
+                    }
+                }.onSuccess { saved ->
+                    state.showToast("已下载「${node.name}」${formatBytes(saved.totalBytes)}")
                 }.onFailure { state.showToast("下载失败：${it.message}") }
                 downloadState = null
             }
-            return
         }
-        downloadState = DownloadProgress(node.name, 0, 0, "页")
-        downloadJob = scope.launch {
-            runCatching {
-                state.repository.downloadSeries(node.path, includeVideos = true) { done, total ->
-                    downloadState = DownloadProgress(node.name, done, total, "页")
-                }
-            }.onSuccess { offline ->
-                state.showToast("已下载「${offline.name}」${formatBytes(offline.totalBytes)}")
-            }.onFailure { state.showToast("下载失败：${it.message}") }
-            downloadState = null
-        }
-    }
-
-    fun cancelDownload() {
-        downloadJob?.cancel()
-        downloadJob = null
-        downloadState = null
-        downloadHidden = false
     }
 
     Column(Modifier.fillMaxSize()) {
-        // ---------------- 顶部工具栏：搜索 / 标签 / 刷新 / 新建 / 上传 / 回收站 / 编辑
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 6.dp, top = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (path.isNotEmpty()) {
@@ -288,14 +279,14 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     )
                 }
             } else {
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
             }
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (path.isEmpty()) "Comii" else path.substringAfterLast('/'),
-                    fontSize = if (path.isEmpty()) 30.sp else 24.sp,
+                    if (path.isEmpty()) "相册" else path.substringAfterLast('/'),
+                    fontSize = if (path.isEmpty()) 32.sp else 24.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (path.isEmpty()) palette.accent else palette.textPrimary,
+                    color = palette.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -306,47 +297,39 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                             if (albumCount > 0) append("$albumCount 个相册")
                             if (albumCount > 0 && mediaCount > 0) append(" · ")
                             if (mediaCount > 0) append("$mediaCount 项")
-                            if (albumCount == 0 && mediaCount == 0) append(if (path.isEmpty()) "还没有内容" else "空相册")
+                            if (albumCount == 0 && mediaCount == 0) append(if (path.isEmpty()) "还没有相册" else "空相册")
                         }
                     },
                     fontSize = 12.5.sp,
                     color = palette.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = { nav.navigate("tags") }) {
-                Icon(Icons.Rounded.Sell, contentDescription = "标签", tint = palette.accent, modifier = Modifier.size(21.dp))
-            }
-            IconButton(onClick = { refreshKey++ }) {
-                Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent, modifier = Modifier.size(21.dp))
+            IconButton(onClick = {
+                showSearch = !showSearch
+                if (!showSearch) query = ""
+            }) {
+                Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = palette.accent, modifier = Modifier.size(22.dp))
             }
             IconButton(onClick = { dialog = LibraryDialog.NewAlbum }) {
-                Icon(Icons.Rounded.CreateNewFolder, contentDescription = "新建相册", tint = palette.accent, modifier = Modifier.size(21.dp))
+                Icon(Icons.Rounded.Add, contentDescription = "新建相册", tint = palette.accent, modifier = Modifier.size(24.dp))
             }
-            IconButton(onClick = { nav.navigate(Routes.upload(path)) }) {
-                Icon(Icons.Rounded.Upload, contentDescription = "导入", tint = palette.accent, modifier = Modifier.size(21.dp))
-            }
-            IconButton(onClick = { nav.navigate("trash") }) {
-                Icon(Icons.Rounded.Delete, contentDescription = "回收站", tint = palette.accent, modifier = Modifier.size(21.dp))
-            }
-            if (!showingSearch) {
-                TextButton(onClick = {
-                    editing = !editing
-                    if (!editing) selected = emptySet()
-                }) {
-                    Text(if (editing) "完成" else "编辑", color = palette.accent, fontSize = 13.sp)
-                }
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Rounded.MoreVert, contentDescription = "更多", tint = palette.accent, modifier = Modifier.size(22.dp))
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        AnimatedVisibility(visible = showSearch) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+                SearchField(query, { query = it }, placeholder = "搜索相册、系列或文件名")
+            }
+        }
+
         if (downloadHidden && downloadState != null) {
             val progress = downloadState!!
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
+                    .padding(horizontal = 20.dp, vertical = 6.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(palette.card)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -365,18 +348,14 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                Spacer(Modifier.width(8.dp))
-                TextButton(onClick = { cancelDownload() }) {
-                    Text("取消", color = palette.danger, fontSize = 12.sp)
-                }
+                TextButton(onClick = {
+                    downloadJob?.cancel()
+                    downloadJob = null
+                    downloadState = null
+                    downloadHidden = false
+                }) { Text("取消", color = palette.danger, fontSize = 12.sp) }
             }
-            Spacer(Modifier.height(8.dp))
         }
-
-        Column(Modifier.padding(horizontal = 20.dp)) {
-            SearchField(query, { query = it }, placeholder = "搜索相册、系列或文件名")
-        }
-        Spacer(Modifier.height(12.dp))
 
         Box(Modifier.weight(1f)) {
             when {
@@ -407,14 +386,14 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 gridItems.isEmpty() && media.isEmpty() -> EmptyState(
                     icon = Icons.Rounded.Folder,
                     title = if (showingSearch) "没有匹配的相册" else "空相册",
-                    subtitle = if (showingSearch) "换个关键词试试" else "点右上角「新建相册」或「导入」放点东西进来",
+                    subtitle = if (showingSearch) "换个关键词试试" else "点右上角「+」新建相册，或从菜单里导入内容",
                 )
                 else -> LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    columns = GridCells.Fixed(if (path.isEmpty()) 3 else 4),
                     state = gridState,
-                    contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 120.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 4.dp, bottom = 120.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(gridItems, key = { it.path }) { node ->
@@ -424,6 +403,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                             progress = if (showingSearch) null else progressMap[node.path],
                             editing = editing && !showingSearch,
                             selected = selected.contains(node.path),
+                            compact = path.isNotEmpty(),
                             onClick = {
                                 if (editing && !showingSearch) {
                                     selected = if (selected.contains(node.path)) selected - node.path else selected + node.path
@@ -448,7 +428,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = palette.textSecondary,
-                                modifier = Modifier.padding(start = 2.dp, top = 6.dp),
+                                modifier = Modifier.padding(start = 2.dp, top = 8.dp),
                             )
                         }
                         items(media, key = { "media:${it.name}:${it.index}" }) { entry ->
@@ -462,20 +442,14 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                                 selecting = selectedMedia.isNotEmpty(),
                                 onClick = {
                                     if (selectedMedia.isNotEmpty()) {
-                                        selectedMedia = if (selectedMedia.contains(entry.name)) {
-                                            selectedMedia - entry.name
-                                        } else {
-                                            selectedMedia + entry.name
-                                        }
+                                        selectedMedia = if (selectedMedia.contains(entry.name)) selectedMedia - entry.name else selectedMedia + entry.name
                                     } else if (entry.isVideo) {
                                         nav.navigate(Routes.player(path, entry.name))
                                     } else {
                                         nav.navigate(Routes.reader(path, entry.index))
                                     }
                                 },
-                                onLongClick = {
-                                    selectedMedia = selectedMedia + entry.name
-                                },
+                                onLongClick = { selectedMedia = selectedMedia + entry.name },
                             )
                         }
                     }
@@ -493,6 +467,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                         val nodes = allItems.filter { selected.contains(it.path) }
                         if (nodes.size == 1) dialog = LibraryDialog.Rename(nodes.first())
                     },
+                    onTag = { tagTargets = allItems.filter { selected.contains(it.path) }.map { it.path } },
                     onDelete = {
                         val nodes = allItems.filter { selected.contains(it.path) }
                         if (nodes.isNotEmpty()) dialog = LibraryDialog.Delete(nodes)
@@ -517,12 +492,48 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                             }
                         }
                     },
+                    onTag = { tagMediaTargets = media.filter { selectedMedia.contains(it.name) }.map { it.name } },
                     onDelete = { askDeleteMedia = true },
                     onCancel = { selectedMedia = emptySet() },
                     modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 16.dp),
                 )
             }
         }
+    }
+
+    if (menuOpen) {
+        BottomSheet(onDismiss = { menuOpen = false }) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                MenuRow("导入内容", Icons.Rounded.Upload) { menuOpen = false; nav.navigate(Routes.upload(path)) }
+                MenuRow("标签", Icons.Rounded.Sell) { menuOpen = false; nav.navigate("tags") }
+                MenuRow("回收站", Icons.Rounded.Delete) { menuOpen = false; nav.navigate("trash") }
+                MenuRow(if (editing) "完成编辑" else "编辑", Icons.Rounded.Edit) {
+                    menuOpen = false
+                    editing = !editing
+                    if (!editing) selected = emptySet()
+                }
+                MenuRow("刷新", Icons.Rounded.Refresh) { menuOpen = false; refreshKey++ }
+                Spacer(Modifier.height(14.dp))
+            }
+        }
+    }
+
+    if (tagTargets.isNotEmpty() || tagMediaTargets.isNotEmpty()) {
+        TagBatchDialog(
+            state = state,
+            paths = tagTargets,
+            mediaPath = path,
+            mediaNames = tagMediaTargets,
+            onDismiss = { tagTargets = emptyList(); tagMediaTargets = emptyList() },
+            onDone = {
+                tagTargets = emptyList()
+                tagMediaTargets = emptyList()
+                selected = emptySet()
+                selectedMedia = emptySet()
+                editing = false
+                refreshKey++
+            },
+        )
     }
 
     sheetItem?.let { node ->
@@ -532,7 +543,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     CoverImage(
                         model = state.repository.mediaUrl(node.cover),
                         kind = node.kind,
-                        modifier = Modifier.width(52.dp).aspectRatio(0.7f),
+                        modifier = Modifier.width(52.dp).aspectRatio(1f),
                     )
                     Spacer(Modifier.width(12.dp))
                     Column {
@@ -547,15 +558,22 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 if (node.isAlbum || node.isFolder) {
                     SheetAction("设为相册封面") {
                         sheetItem = null
-                        scope.launch {
-                            runCatching { state.repository.setAlbumCover(node.path, "") }
-                            if (path.isNotEmpty()) {
+                        if (path.isEmpty()) {
+                            state.showToast("请先进入一个相册")
+                        } else {
+                            scope.launch {
                                 runCatching { state.repository.setAlbumCover(path, node.path) }
                                     .onSuccess { state.showToast("已设为相册封面"); refreshKey++ }
                                     .onFailure { state.showToast("设置失败：${it.message}") }
-                            } else {
-                                state.showToast("请进入一个相册后再设置它的封面")
                             }
+                        }
+                    }
+                    SheetAction("恢复默认封面") {
+                        sheetItem = null
+                        scope.launch {
+                            runCatching { state.repository.setAlbumCover(node.path, "") }
+                                .onSuccess { state.showToast("已恢复默认封面"); refreshKey++ }
+                                .onFailure { state.showToast("操作失败：${it.message}") }
                         }
                     }
                     SheetAction("下载整个相册") { sheetItem = null; startDownload(node) }
@@ -563,6 +581,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     SheetAction("设置封面") { sheetItem = null; dialog = LibraryDialog.SetCover(node) }
                     SheetAction("下载到本地") { sheetItem = null; startDownload(node) }
                 }
+                SheetAction("标签…") { sheetItem = null; tagTargets = listOf(node.path) }
                 SheetAction("删除", danger = true) { sheetItem = null; dialog = LibraryDialog.Delete(listOf(node)) }
                 Spacer(Modifier.height(14.dp))
             }
@@ -600,18 +619,16 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             nodes = current.nodes,
             onConfirm = { target ->
                 scope.launch {
-                    val result = runCatching {
-                        state.repository.move(current.nodes.map { it.path }, target)
-                    }
-                    result.onSuccess { batch ->
-                        if (batch.failed.isEmpty()) {
-                            state.showToast("已移动到「${target.ifBlank { "根目录" }}」")
-                        } else {
-                            state.showToast("部分移动失败：${batch.failed.first().message}")
+                    runCatching { state.repository.move(current.nodes.map { it.path }, target) }
+                        .onSuccess { batch ->
+                            state.showToast(
+                                if (batch.failed.isEmpty()) "已移动到「${target.ifBlank { "根目录" }}」"
+                                else "部分移动失败：${batch.failed.first().message}"
+                            )
+                            selected = emptySet()
+                            refreshKey++
                         }
-                        selected = emptySet()
-                        refreshKey++
-                    }.onFailure { state.showToast("移动失败：${it.message}") }
+                        .onFailure { state.showToast("移动失败：${it.message}") }
                 }
                 dialog = null
             },
@@ -667,13 +684,10 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         )
     }
 
-    downloadState?.takeIf { !downloadHidden }?.let { progress ->        ConfirmDialog(
+    downloadState?.takeIf { !downloadHidden }?.let { progress ->
+        ConfirmDialog(
             title = "正在下载「${progress.title}」",
-            message = if (progress.total > 0) {
-                "已下载 ${progress.done} / ${progress.total} ${progress.unit}"
-            } else {
-                "准备中…"
-            },
+            message = if (progress.total > 0) "已下载 ${progress.done} / ${progress.total} ${progress.unit}" else "准备中…",
             confirmText = "隐藏",
             dismissText = "后台继续",
             onConfirm = { downloadHidden = true },
@@ -683,92 +697,124 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 }
 
 @Composable
+private fun MenuRow(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    val palette = ComiiTheme.palette
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(palette.card)
+            .pointerInput(text) { detectTapGestures { onClick() } }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = palette.accent, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text, color = palette.textPrimary, fontSize = 15.sp)
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Pressable(
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, tween(110), label = "press")
+    Box(
+        modifier = modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+    ) { content() }
+}
+
+@Composable
 private fun AlbumCard(
     node: LibraryNode,
     coverUrl: String?,
     progress: ReadingProgress?,
     editing: Boolean,
     selected: Boolean,
+    compact: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
     val palette = ComiiTheme.palette
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(18.dp))
-            .pointerInput(node.path, editing) {
-                detectTapGestures(onTap = { onClick() }, onLongPress = { onLongClick() })
-            }
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(palette.card)
-        ) {
-            CoverImage(
-                model = coverUrl,
-                kind = node.kind,
-                modifier = Modifier.fillMaxSize(),
-            )
-            if (node.isAlbum || node.isFolder) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(horizontal = 7.dp, vertical = 3.dp),
-                ) {
-                    Text(
-                        "${node.child_count ?: 0} 个子相册",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
+    Column(Modifier.fillMaxWidth()) {
+        Pressable(onClick = onClick, onLongClick = onLongClick, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(if (compact) 8.dp else 12.dp))
+                    .background(palette.card)
+            ) {
+                CoverImage(
+                    model = coverUrl,
+                    kind = node.kind,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                if (node.isAlbum || node.isFolder) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                    ) {
+                        Text("${node.child_count ?: 0}", color = Color.White, fontSize = 9.sp)
+                    }
+                }
+                if (progress != null && progress.total > 0 && !node.isAlbum) {
+                    val fraction = ((progress.page + 1).toFloat() / progress.total).coerceIn(0f, 1f)
+                    LinearProgressIndicator(
+                        progress = { fraction },
+                        color = palette.accent,
+                        trackColor = Color.Black.copy(alpha = 0.35f),
+                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
                     )
                 }
-            }
-            if (progress != null && progress.total > 0 && !node.isAlbum) {
-                val fraction = ((progress.page + 1).toFloat() / progress.total).coerceIn(0f, 1f)
-                LinearProgressIndicator(
-                    progress = { fraction },
-                    color = palette.accent,
-                    trackColor = Color.Black.copy(alpha = 0.35f),
-                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
-                )
-            }
-            if (editing) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(if (selected) palette.accent else Color.Black.copy(alpha = 0.35f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (selected) Text("✓", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                if (editing) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(if (selected) palette.accent else Color.Black.copy(alpha = 0.35f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (selected) Text("✓", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(if (compact) 3.dp else 5.dp))
         Text(
             node.name,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            fontSize = 13.5.sp,
+            fontSize = if (compact) 11.sp else 12.5.sp,
             fontWeight = FontWeight.Medium,
             color = palette.textPrimary,
-            modifier = Modifier.padding(horizontal = 2.dp),
         )
         Text(
             nodeSubtitle(node),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            fontSize = 11.5.sp,
+            fontSize = if (compact) 9.5.sp else 11.sp,
             color = palette.textSecondary,
-            modifier = Modifier.padding(horizontal = 2.dp),
         )
     }
 }
@@ -783,45 +829,44 @@ private fun MediaTile(
     onLongClick: () -> Unit,
 ) {
     val palette = ComiiTheme.palette
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(palette.card)
-            .pointerInput(entry.name, selecting) {
-                detectTapGestures(onTap = { onClick() }, onLongPress = { onLongClick() })
+    Pressable(onClick = onClick, onLongClick = onLongClick, modifier = Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(6.dp))
+                .background(palette.card)
+        ) {
+            AsyncImage(
+                model = model,
+                contentDescription = entry.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (entry.isVideo) {
+                Box(
+                    Modifier
+                        .align(Alignment.Center)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.45f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = "视频", tint = Color.White, modifier = Modifier.size(18.dp))
+                }
             }
-    ) {
-        AsyncImage(
-            model = model,
-            contentDescription = entry.name,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
-        if (entry.isVideo) {
-            Box(
-                Modifier
-                    .align(Alignment.Center)
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = "视频", tint = Color.White, modifier = Modifier.size(20.dp))
-            }
-        }
-        if (selecting || selected) {
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(if (selected) palette.accent else Color.Black.copy(alpha = 0.35f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (selected) Text("✓", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            if (selecting || selected) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) palette.accent else Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (selected) Text("✓", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -831,6 +876,7 @@ private fun MediaTile(
 private fun MediaBar(
     count: Int,
     onShare: () -> Unit,
+    onTag: () -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -841,54 +887,16 @@ private fun MediaBar(
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(palette.elevated)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("已选 $count 项", color = palette.textSecondary, fontSize = 13.sp)
+        Text("已选 $count 项", color = palette.textSecondary, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
-        TextButton(onClick = onShare) { Text("分享", color = palette.accent, fontSize = 13.sp) }
-        TextButton(onClick = onDelete) { Text("删除", color = palette.danger, fontSize = 13.sp) }
-        TextButton(onClick = onCancel) { Text("取消", color = palette.textSecondary, fontSize = 13.sp) }
+        TextButton(onClick = onTag) { Text("标签", color = palette.accent, fontSize = 12.sp) }
+        TextButton(onClick = onShare) { Text("分享", color = palette.accent, fontSize = 12.sp) }
+        TextButton(onClick = onDelete) { Text("删除", color = palette.danger, fontSize = 12.sp) }
+        TextButton(onClick = onCancel) { Text("取消", color = palette.textSecondary, fontSize = 12.sp) }
     }
-}
-
-/** Download the picked media and hand them to the system share sheet. */
-private suspend fun shareMedia(
-    context: android.content.Context,
-    api: com.comii.app.data.ComiiApi,
-    path: String,
-    entries: List<MediaEntry>,
-) {
-    val directory = java.io.File(context.cacheDir, "share").apply { mkdirs() }
-    val uris = entries.mapNotNull { entry ->
-        runCatching {
-            val url = if (entry.isVideo) api.videoUrl(path, entry.name) else api.imageUrl(path, entry.name)
-            val target = java.io.File(directory, entry.name)
-            com.comii.app.data.Http.client.newCall(
-                okhttp3.Request.Builder().url(url).get().build()
-            ).execute().use { response ->
-                if (!response.isSuccessful) return@use null
-                response.body?.byteStream()?.use { input ->
-                    target.outputStream().use { output -> input.copyTo(output) }
-                }
-            }
-            androidx.core.content.FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                target,
-            )
-        }.getOrNull()
-    }
-    if (uris.isEmpty()) return
-    val intent = android.content.Intent(
-        if (uris.size == 1) android.content.Intent.ACTION_SEND else android.content.Intent.ACTION_SEND_MULTIPLE
-    ).apply {
-        type = if (entries.any { it.isVideo }) "video/*" else "image/*"
-        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (uris.size == 1) putExtra(android.content.Intent.EXTRA_STREAM, uris.first())
-        else putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, ArrayList(uris))
-    }
-    context.startActivity(android.content.Intent.createChooser(intent, "分享"))
 }
 
 private fun nodeSubtitle(node: LibraryNode): String = when {
@@ -928,6 +936,7 @@ private fun EditBar(
     count: Int,
     onMove: () -> Unit,
     onRename: () -> Unit,
+    onTag: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -937,25 +946,22 @@ private fun EditBar(
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(palette.elevated)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("已选 $count 项", color = palette.textSecondary, fontSize = 13.sp)
+        Text("已选 $count", color = palette.textSecondary, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
         TextButton(onClick = onMove, enabled = count > 0) {
-            Icon(Icons.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.accent)
-            Spacer(Modifier.width(4.dp))
-            Text("移动", color = palette.accent, fontSize = 13.sp)
+            Text("移动", color = palette.accent, fontSize = 12.sp)
         }
         TextButton(onClick = onRename, enabled = count == 1) {
-            Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = if (count == 1) palette.accent else palette.textTertiary)
-            Spacer(Modifier.width(4.dp))
-            Text("重命名", color = if (count == 1) palette.accent else palette.textTertiary, fontSize = 13.sp)
+            Text("重命名", color = if (count == 1) palette.accent else palette.textTertiary, fontSize = 12.sp)
+        }
+        TextButton(onClick = onTag, enabled = count > 0) {
+            Text("标签", color = palette.accent, fontSize = 12.sp)
         }
         TextButton(onClick = onDelete, enabled = count > 0) {
-            Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.danger)
-            Spacer(Modifier.width(4.dp))
-            Text("删除", color = palette.danger, fontSize = 13.sp)
+            Text("删除", color = palette.danger, fontSize = 12.sp)
         }
     }
 }
@@ -987,10 +993,7 @@ private fun NewAlbumDialog(onCreate: (String) -> Unit, onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(
-                onClick = {
-                    val clean = name.trim()
-                    if (clean.isNotEmpty()) onCreate(clean)
-                },
+                onClick = { name.trim().takeIf { it.isNotEmpty() }?.let(onCreate) },
                 enabled = name.isNotBlank(),
             ) { Text("创建", color = palette.accent, fontWeight = FontWeight.SemiBold) }
         },
@@ -1058,17 +1061,12 @@ private fun MoveDialog(
                 }
             } else {
                 Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(320.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(palette.card)
+                    Modifier.fillMaxWidth().height(320.dp).clip(RoundedCornerShape(14.dp)).background(palette.card)
                 ) {
                     androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxSize()) {
                         items(folders.size) { index ->
                             val folder = folders[index]
-                            val isCurrent = nodes.any { it.path == folder.path }
-                            val disabled = isCurrent || nodes.any { folder.path.startsWith(it.path + "/") || folder.path == it.path }
+                            val disabled = nodes.any { it.path == folder.path || folder.path.startsWith(it.path + "/") }
                             Row(
                                 Modifier
                                     .fillMaxWidth()
@@ -1119,7 +1117,6 @@ private fun CoverPickerDialog(
     val scope = rememberCoroutineScope()
     var images by remember { mutableStateOf<List<String>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
-    var saving by remember { mutableStateOf(false) }
 
     LaunchedEffect(node.path) {
         images = runCatching { state.repository.series(node.path).images }.getOrDefault(emptyList())
@@ -1127,8 +1124,6 @@ private fun CoverPickerDialog(
     }
 
     fun apply(name: String) {
-        if (saving) return
-        saving = true
         scope.launch {
             runCatching { state.repository.setCover(node.path, name) }
                 .onSuccess {
@@ -1136,26 +1131,17 @@ private fun CoverPickerDialog(
                     onDone()
                 }
                 .onFailure { state.showToast("设置失败：${it.message}") }
-            saving = false
         }
     }
 
     BottomSheet(onDismiss = onDismiss) {
         Column(Modifier.padding(horizontal = 16.dp)) {
-            Text(
-                "选择封面 · ${node.name}",
-                color = palette.textPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Text("选择封面 · ${node.name}", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(10.dp))
             if (loading) {
-                Box(Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = palette.accent)
                 }
-            } else if (images.isEmpty()) {
-                Text("这个相册没有图片可作为封面", color = palette.textSecondary, fontSize = 13.sp)
-                Spacer(Modifier.height(20.dp))
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
@@ -1188,4 +1174,181 @@ private fun CoverPickerDialog(
             Spacer(Modifier.height(16.dp))
         }
     }
+}
+
+/** 批量打标签：给选中的相册 / 系列，或当前相册里选中的照片打标签。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TagBatchDialog(
+    state: AppState,
+    paths: List<String>,
+    mediaPath: String,
+    mediaNames: List<String>,
+    onDismiss: () -> Unit,
+    onDone: () -> Unit,
+) {
+    val palette = ComiiTheme.palette
+    val scope = rememberCoroutineScope()
+    var allTags by remember { mutableStateOf<List<TagCount>>(emptyList()) }
+    var picked by remember { mutableStateOf(setOf<String>()) }
+    var input by remember { mutableStateOf("") }
+    var groupInput by remember { mutableStateOf("") }
+    var saving by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        allTags = runCatching { state.repository.tags() }.getOrNull()?.tags.orEmpty()
+    }
+
+    val targets = if (paths.isNotEmpty()) paths else mediaNames.map { "$mediaPath/$it" }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = palette.card,
+        title = {
+            Text(
+                "打标签 · ${if (paths.isNotEmpty()) "${paths.size} 个相册" else "${mediaNames.size} 个文件"}",
+                color = palette.textPrimary,
+                fontSize = 17.sp,
+            )
+        },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                allTags.groupBy { it.group.ifBlank { "未分组" } }.forEach { (group, tags) ->
+                    Text(group, color = palette.textSecondary, fontSize = 12.sp)
+                    Spacer(Modifier.height(6.dp))
+                    FlowRow {
+                        tags.forEach { tag ->
+                            TagChip(
+                                text = tag.name,
+                                selected = picked.contains(tag.name),
+                                onClick = {
+                                    picked = if (picked.contains(tag.name)) picked - tag.name else picked + tag.name
+                                },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        singleLine = true,
+                        placeholder = { Text("新标签", color = palette.textTertiary, fontSize = 13.sp) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = palette.background,
+                            unfocusedContainerColor = palette.background,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    TextField(
+                        value = groupInput,
+                        onValueChange = { groupInput = it },
+                        singleLine = true,
+                        placeholder = { Text("分组", color = palette.textTertiary, fontSize = 13.sp) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = palette.background,
+                            unfocusedContainerColor = palette.background,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                        modifier = Modifier.width(96.dp),
+                    )
+                    TextButton(
+                        enabled = input.isNotBlank(),
+                        onClick = {
+                            val name = input.trim()
+                            if (name.isNotEmpty()) {
+                                picked = picked + name
+                                input = ""
+                                scope.launch {
+                                    runCatching { state.repository.createTag(name, groupInput.trim()) }
+                                        .onSuccess { created -> allTags = allTags + created }
+                                }
+                            }
+                        },
+                    ) { Text("添加", color = palette.accent) }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !saving && picked.isNotEmpty(),
+                onClick = {
+                    saving = true
+                    scope.launch {
+                        val ok = runCatching {
+                            state.repository.saveTags(targets, picked.toList(), mode = "add")
+                        }.isSuccess
+                        saving = false
+                        if (ok) {
+                            state.showToast("标签已保存")
+                            onDone()
+                        } else {
+                            state.showToast("保存失败")
+                        }
+                    }
+                },
+            ) { Text("保存", color = palette.accent, fontWeight = FontWeight.SemiBold) }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                if (picked.isEmpty()) {
+                    onDismiss()
+                } else {
+                    saving = true
+                    scope.launch {
+                        runCatching { state.repository.saveTags(targets, picked.toList(), mode = "remove") }
+                        saving = false
+                        state.showToast("已移除选中标签")
+                        onDone()
+                    }
+                }
+            }) { Text("移除", color = palette.textSecondary) }
+        },
+    )
+}
+
+/** Download the picked media and hand them to the system share sheet. */
+private suspend fun shareMedia(
+    context: android.content.Context,
+    api: com.comii.app.data.ComiiApi,
+    path: String,
+    entries: List<MediaEntry>,
+) {
+    val directory = java.io.File(context.cacheDir, "share").apply { mkdirs() }
+    val uris = entries.mapNotNull { entry ->
+        runCatching {
+            val url = if (entry.isVideo) api.videoUrl(path, entry.name) else api.imageUrl(path, entry.name)
+            val target = java.io.File(directory, entry.name)
+            com.comii.app.data.Http.client.newCall(
+                okhttp3.Request.Builder().url(url).get().build()
+            ).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                response.body?.byteStream()?.use { input ->
+                    target.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+            androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                target,
+            )
+        }.getOrNull()
+    }
+    if (uris.isEmpty()) return
+    val intent = android.content.Intent(
+        if (uris.size == 1) android.content.Intent.ACTION_SEND else android.content.Intent.ACTION_SEND_MULTIPLE
+    ).apply {
+        type = if (entries.any { it.isVideo }) "video/*" else "image/*"
+        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (uris.size == 1) putExtra(android.content.Intent.EXTRA_STREAM, uris.first())
+        else putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, ArrayList(uris))
+    }
+    context.startActivity(android.content.Intent.createChooser(intent, "分享"))
 }

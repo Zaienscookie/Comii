@@ -203,10 +203,17 @@ class StatsResponse(BaseModel):
 class TagCount(BaseModel):
     name: str
     count: int = 0
+    group: str = ""
 
 
 class TagsResponse(BaseModel):
     tags: list[TagCount] = Field(default_factory=list)
+    groups: list[str] = Field(default_factory=list)
+
+
+class TagCreateRequest(BaseModel):
+    name: str
+    group: str = ""
 
 
 class SeriesTagsResponse(BaseModel):
@@ -215,8 +222,10 @@ class SeriesTagsResponse(BaseModel):
 
 
 class TagsUpdateRequest(BaseModel):
-    path: str
+    path: str = ""
+    paths: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
+    mode: str = "add"
 
 
 class TaggedResponse(BaseModel):

@@ -169,8 +169,11 @@ class ComiiApi(val baseUrl: String) {
     suspend fun seriesTags(path: String): SeriesTags =
         decode(get("/tags/series?path=${encode(path)}"))
 
-    suspend fun saveTags(path: String, tags: List<String>): SeriesTags =
-        decode(put("/tags", ComiiJson.encodeToString(TagsBody(path, tags))))
+    suspend fun saveTags(paths: List<String>, tags: List<String>, mode: String = "add"): SeriesTags =
+        decode(put("/tags", ComiiJson.encodeToString(TagsBody(paths, tags, mode))))
+
+    suspend fun createTag(name: String, group: String): TagCount =
+        decode(post("/tags/create", ComiiJson.encodeToString(TagCreateBody(name, group))))
 
     suspend fun tagged(tag: String): TaggedResponse =
         decode(get("/tagged?tag=${encode(tag)}"))
