@@ -1,0 +1,32 @@
+services:
+  comii:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: comii:latest
+    container_name: comii
+    restart: unless-stopped
+    ports:
+      - "8000:8000"   # WebUI
+      - "8001:8001"   # App 数据接口
+    environment:
+      COMII_LIBRARY: /library
+      COMII_DATA: /data
+      COMII_PORT: "8000"
+      COMII_API_PORT: "8001"
+      COMII_MAX_UPLOAD_MB: "2048"
+      COMII_LOG_LEVEL: info
+    volumes:
+      # 数据：缩略图、回收站、进度、更新包
+      - /volume1/docker/comii/data:/data
+      # 媒体库：容器里的 /library 下必须能直接看到 comic 和 video
+      - /volume1/comic:/library/comic
+      - /volume1/video:/library/video
+      # 如果你是一个总目录（里面已有 comic、video），改成：
+      # - /volume1/media:/library
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8001/api/v1/ping', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
