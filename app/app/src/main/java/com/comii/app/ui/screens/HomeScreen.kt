@@ -1,4 +1,4 @@
-package com.comii.app.ui.screens
+﻿package com.comii.app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -46,6 +47,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.comii.app.ui.AppState
+import com.comii.app.data.AppUpdateInfo
+import com.comii.app.data.AppUpdater
+import com.comii.app.ui.components.AppUpdateDialog
 import com.comii.app.ui.theme.ComiiTheme
 
 @Composable
@@ -53,6 +57,17 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
     val palette = ComiiTheme.palette
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
+    var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+
+    // 启动时静默检查更新：没有新版本就不显示任何东西
+    LaunchedEffect(Unit) {
+        if (!state.hasServer) return@LaunchedEffect
+        val settings = state.repository.settings
+        val now = System.currentTimeMillis()
+        if (now - settings.lastUpdateCheck < 6L * 60 * 60 * 1000) return@LaunchedEffect
+        settings.lastUpdateCheck = now
+        updateInfo = runCatching { AppUpdater.check(state.serverUrl) }.getOrNull()
+    }
 
     LaunchedEffect(state.toastMessage) {
         val message = state.toastMessage
@@ -104,6 +119,10 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
                 }
             }
         }
+    }
+
+    updateInfo?.let { info ->
+        AppUpdateDialog(state = state, info = info, onDismiss = { updateInfo = null })
     }
 }
 
@@ -160,3 +179,4 @@ private fun TabItem(label: String, icon: ImageVector, selected: Boolean, onClick
         )
     }
 }
+

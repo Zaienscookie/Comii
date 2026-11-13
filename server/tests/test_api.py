@@ -29,6 +29,7 @@ def library_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(settings, "trash_index", (data / "trash" / "index.json").resolve())
     monkeypatch.setattr(settings, "progress_file", (data / "progress.json").resolve())
     monkeypatch.setattr(settings, "log_root", (data / "logs").resolve())
+    monkeypatch.setattr(settings, "update_root", (data / "updates").resolve())
     settings.ensure_directories()
 
     series_a = root / "author_a" / "0001_first_series"
@@ -212,6 +213,30 @@ def test_export_zip(client: TestClient) -> None:
         names = bundle.namelist()
     assert "0001_first_series/001.jpg" in names
     assert any(name.endswith(".mp4") for name in names)
+
+
+def test_app_update_channel(client: TestClient) -> None:
+    empty = client.get("/api/v1/app/update").json()
+    assert empty["available"] is False
+
+    updates_dir = settings.update_root
+    apk = updates_dir / "comii-9.9.9.apk"
+    apk.write_bytes(b"PK\x03\x04comii-demo-apk")
+    (updates_dir / "update.json").write_text(
+        '{"versionCode": 99, "versionName": "9.9.9", "notes": "test build", "apk": "comii-9.9.9.apk"}',
+        encoding="utf-8",
+    )
+
+    body = client.get("/api/v1/app/update").json()
+    assert body["available"] is True
+    assert body["versionCode"] == 99
+    assert body["versionName"] == "9.9.9"
+    assert body["size"] == apk.stat().st_size
+
+    download = client.get(body["url"])
+    assert download.status_code == 200
+    assert download.content.startswith(b"PK")
+    assert download.headers["content-type"] == "application/vnd.android.package-archive"
 
 
 def test_stats(client: TestClient) -> None:

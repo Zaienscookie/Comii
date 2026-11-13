@@ -87,6 +87,10 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("privacy_blur", true)
         set(value) = prefs.edit().putBoolean("privacy_blur", value).apply()
 
+    var lastUpdateCheck: Long
+        get() = prefs.getLong("last_update_check", 0L)
+        set(value) = prefs.edit().putLong("last_update_check", value).apply()
+
     // Local mirror of reading positions, keyed by series path.
     fun localPage(path: String): Int = prefs.getInt("page_$path", 0)
 

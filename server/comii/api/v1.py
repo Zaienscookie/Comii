@@ -12,6 +12,7 @@ from starlette.background import BackgroundTask
 from ..config import settings
 from ..models import (
     ActionResult,
+    AppUpdateInfo,
     BatchResult,
     BrowseResponse,
     CollectionResponse,
@@ -32,7 +33,7 @@ from ..models import (
     TrashEntry,
     TrashListResponse,
 )
-from ..services import archive, importers, library, manage, media, progress, thumbs, trash
+from ..services import archive, importers, library, manage, media, progress, thumbs, trash, updates
 
 router = APIRouter(prefix=settings.api_prefix, tags=["comii"])
 
@@ -315,6 +316,24 @@ def progress_one(path: str) -> ReadingProgress:
 @router.put("/progress", response_model=ReadingProgress)
 def progress_update(payload: ProgressUpdate) -> ReadingProgress:
     return progress.update(payload.path, payload.page, payload.total)
+
+
+# ------------------------------------------------------------------ update
+@router.get("/app/update", response_model=AppUpdateInfo, tags=["app"])
+def app_update() -> AppUpdateInfo:
+    return updates.latest_update()
+
+
+@router.get("/app/update/download", tags=["app"])
+def app_update_download() -> FileResponse:
+    apk = updates.apk_path()
+    if apk is None:
+        raise HTTPException(status_code=404, detail="没有可用的更新包")
+    return FileResponse(
+        apk,
+        media_type="application/vnd.android.package-archive",
+        filename=apk.name,
+    )
 
 
 # ------------------------------------------------------------------ logs

@@ -13,8 +13,8 @@ android {
         applicationId = "com.comii.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 13
-        versionName = "2.7.0"
+        versionCode = 14
+        versionName = "2.8.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -36,6 +36,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -74,6 +75,7 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
 
 
 

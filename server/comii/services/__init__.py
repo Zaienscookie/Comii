@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from . import archive, importers, library, manage, media, progress, thumbs, trash
+from . import archive, importers, library, manage, media, progress, thumbs, trash, updates
 
 __all__ = [
     "archive",
@@ -13,4 +13,5 @@ __all__ = [
     "progress",
     "thumbs",
     "trash",
+    "updates",
 ]

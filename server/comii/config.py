@@ -30,7 +30,7 @@ class Settings:
 
     app_name = "Comii"
     api_prefix = "/api/v1"
-    version = "2.6.1"
+    version = "2.8.0"
 
     def __init__(self) -> None:
         self.project_root = PROJECT_ROOT
@@ -41,6 +41,7 @@ class Settings:
         self.trash_index = self.trash_root / "index.json"
         self.progress_file = self.data_root / "progress.json"
         self.log_root = self.data_root / "logs"
+        self.update_root = self.data_root / "updates"
         self.host = os.environ.get("COMII_HOST", "0.0.0.0")
         self.port = _env_int("COMII_PORT", 8000)
         self.api_port = _env_int("COMII_API_PORT", 8001)
@@ -56,10 +57,12 @@ class Settings:
             self.thumb_root,
             self.trash_root,
             self.log_root,
+            self.update_root,
         ):
             directory.mkdir(parents=True, exist_ok=True)
 
 
 settings = Settings()
+
 
 

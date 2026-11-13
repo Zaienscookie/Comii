@@ -1,4 +1,4 @@
-package com.comii.app.ui.screens
+﻿package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -39,11 +39,15 @@ import com.comii.app.ui.components.SettingsGroup
 import com.comii.app.ui.components.SettingsRow
 import com.comii.app.ui.components.formatBytes
 import com.comii.app.ui.theme.ComiiTheme
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsTab(state: AppState, nav: NavHostController) {
     val palette = ComiiTheme.palette
     val repository = state.repository
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    var manualUpdate by remember { mutableStateOf<com.comii.app.data.AppUpdateInfo?>(null) }
     var tapTurn by remember { mutableStateOf(repository.settings.tapToTurn) }
     var landscape by remember { mutableStateOf(repository.settings.landscapeRotate) }
     var showProgress by remember { mutableStateOf(repository.settings.showProgressBar) }
@@ -71,7 +75,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.7.0")
+        LargeTitle("设置", "Comii 2.8.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -210,8 +214,47 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             SettingsRow(title = "Comii", subtitle = "个人漫画仓库 · 原生客户端")
             Separator()
             SettingsRow(title = "服务端 API", subtitle = "/api/v1 · 与服务器版本兼容")
+            Separator()
+            SettingsRow(
+                title = "检查更新",
+                subtitle = if (checking) {
+                    "正在检查…"
+                } else {
+                    "当前 v${com.comii.app.data.AppUpdater.currentVersionName}"
+                },
+                showChevron = true,
+                onClick = {
+                    if (!checking) {
+                        if (!state.hasServer) {
+                            state.showToast("先在设置里配置服务器地址")
+                        } else {
+                            checking = true
+                            scope.launch {
+                                val info = runCatching {
+                                    com.comii.app.data.AppUpdater.check(state.serverUrl)
+                                }.getOrNull()
+                                checking = false
+                                repository.settings.lastUpdateCheck = System.currentTimeMillis()
+                                if (info == null) {
+                                    state.showToast("已是最新版本")
+                                } else {
+                                    manualUpdate = info
+                                }
+                            }
+                        }
+                    }
+                },
+            )
         }
         Spacer(Modifier.height(110.dp))
+    }
+
+    manualUpdate?.let { info ->
+        com.comii.app.ui.components.AppUpdateDialog(
+            state = state,
+            info = info,
+            onDismiss = { manualUpdate = null },
+        )
     }
 }
 
@@ -288,6 +331,8 @@ private fun ToggleRow(
         )
     }
 }
+
+
 
 
 

@@ -181,3 +181,13 @@ class StatsResponse(BaseModel):
     video_count: int = 0
     total_bytes: int = 0
     library: str = ""
+
+
+class AppUpdateInfo(BaseModel):
+    available: bool = False
+    versionCode: int = 0
+    versionName: str = ""
+    notes: str = ""
+    size: int = 0
+    sha256: str = ""
+    url: str = ""
