@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -92,8 +93,8 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     var attachPath by remember { mutableStateOf<String?>(null) }
     var cameraPath by remember { mutableStateOf<String?>(null) }
     var pendingText by remember { mutableStateOf("") }
-    var queuedTexts by remember { mutableStateOf<List<Pair<String, String?>>>(emptyList()) }
-    var debounceJob by remember { mutableStateOf<Job?>(null) }
+    var pendingBatch by remember { mutableStateOf<List<Pair<String, String?>>>(emptyList()) }
+    var batchJob by remember { mutableStateOf<Job?>(null) }
     var streaming by remember { mutableStateOf(false) }
     var streamText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -163,23 +164,34 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         runCatching { listState.scrollToItem(total - 1) }
     }
 
-    fun doSend(text: String, imagePath: String?, appendLocal: Boolean = true, appendUser: Boolean = true) {
-        if (text.isBlank() && imagePath == null) return
+    var doSendBatchRef: ((List<Pair<String, String?>>) -> Unit)? = null
+
+    fun scheduleBatch(delayMs: Long = 550) {
+        if (pendingBatch.isEmpty()) return
+        batchJob?.cancel()
+        batchJob = scope.launch {
+            delay(delayMs)
+            if (streaming) return@launch
+            val batch = pendingBatch
+            pendingBatch = emptyList()
+            doSendBatchRef?.invoke(batch)
+        }
+    }
+
+    fun doSendBatch(batch: List<Pair<String, String?>>) {
+        if (batch.isEmpty()) return
         val current = conversation ?: return
         error = null
         streaming = true
         streamText = ""
-        if (appendLocal) {
-            messages = messages + ChatMessage("user", text, System.currentTimeMillis(), imagePath)
-        }
         scope.launch {
             try {
-                ai.send(
+                ai.sendBatch(
                     personaId = personaId,
                     conversationId = current.id,
-                    text = text,
-                    imagePath = imagePath,
-                    appendUser = appendUser,
+                    outgoing = batch.map { (text, image) ->
+                        ChatMessage("user", text, System.currentTimeMillis(), image)
+                    },
                     onMessage = { message ->
                         messages = messages + message
                         streamText = ""
@@ -193,58 +205,22 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             } finally {
                 streaming = false
                 streamText = ""
+                if (pendingBatch.isNotEmpty()) scheduleBatch(200)
             }
         }
     }
+    doSendBatchRef = { batch -> doSendBatch(batch) }
 
     fun submit() {
         val text = draft.trim()
         val image = attachPath
         if (text.isEmpty() && image == null) return
         draft = ""
-        if (streaming) {
-            // 回复中也能继续发：消息立即上屏并写入会话，等这一轮结束后逐条发送
-            attachPath = null
-            messages = messages + ChatMessage("user", text, System.currentTimeMillis(), image)
-            queuedTexts = queuedTexts + (text to image)
-            return
-        }
         attachPath = null
-        pendingText = ""
-        debounceJob?.cancel()
-        doSend(text, image)
-    }
-
-    LaunchedEffect(streaming, queuedTexts) {
-        if (!streaming && queuedTexts.isNotEmpty()) {
-            val batch = queuedTexts
-            queuedTexts = emptyList()
-            val current = conversation ?: return@LaunchedEffect
-            streaming = true
-            streamText = ""
-            scope.launch {
-                try {
-                    ai.sendBatch(
-                        personaId = personaId,
-                        conversationId = current.id,
-                        outgoing = batch.map { (text, image) ->
-                            ChatMessage("user", text, System.currentTimeMillis(), image)
-                        },
-                        onMessage = { message ->
-                            messages = messages + message
-                            streamText = ""
-                        },
-                    ) { delta -> streamText += delta }
-                    messages = ai.conversation(current.id)?.messages ?: messages
-                    personaVersion++
-                } catch (failure: Exception) {
-                    error = failure.message ?: "请求失败"
-                } finally {
-                    streaming = false
-                    streamText = ""
-                }
-            }
-        }
+        // 消息立即上屏；同一小段时间内发的多条会合成一次请求
+        messages = messages + ChatMessage("user", text, System.currentTimeMillis(), image)
+        pendingBatch = pendingBatch + (text to image)
+        if (!streaming) scheduleBatch()
     }
 
     Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding().imePadding()) {
@@ -399,9 +375,19 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 TextField(
                     value = draft,
                     onValueChange = { draft = it },
-                    modifier = Modifier.weight(1f),
-                placeholder = { Text("说点什么…", color = palette.textTertiary) },
-                maxLines = 4,
+                    modifier = Modifier
+                        .weight(1f)
+                        .onFocusChanged { focus ->
+                            if (focus.isFocused) {
+                                scope.launch {
+                                    delay(320)
+                                    val total = messages.size + if (streaming) 1 else 0
+                                    if (total > 0) runCatching { listState.scrollToItem(total - 1) }
+                                }
+                            }
+                        },
+                    placeholder = { Text("说点什么…", color = palette.textTertiary) },
+                    maxLines = 4,
                 shape = RoundedCornerShape(18.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 colors = TextFieldDefaults.colors(

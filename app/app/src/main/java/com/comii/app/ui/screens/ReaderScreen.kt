@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -33,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -128,6 +130,7 @@ fun ReaderScreen(
     var showProgress by remember { mutableStateOf(settings.showProgressBar) }
 
     var showBar by remember { mutableStateOf(true) }
+    var manualLandscape by remember { mutableStateOf(false) }
     var showGrid by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var current by remember { mutableIntStateOf(0) }
@@ -376,6 +379,16 @@ fun ReaderScreen(
                 IconButton(onClick = { showGrid = true }) {
                     Icon(Icons.Rounded.GridView, contentDescription = "页码", tint = Color.White)
                 }
+                IconButton(onClick = {
+                    manualLandscape = !manualLandscape
+                    activity?.requestedOrientation = if (manualLandscape) {
+                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    } else {
+                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    }
+                }) {
+                    Icon(Icons.Rounded.ScreenRotation, contentDescription = "横竖屏切换", tint = Color.White)
+                }
                 IconButton(onClick = { showSettings = true }) {
                     Icon(Icons.Rounded.Tune, contentDescription = "阅读设置", tint = Color.White)
                 }
@@ -532,15 +545,22 @@ private fun ReaderPageImage(
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState()),
             ) {
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = null,
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier
+                Box(
+                    Modifier
                         .fillMaxWidth()
-                        .then(gestureModifier)
-                        .then(zoomModifier),
-                )
+                        .heightIn(min = pageHeight),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AsyncImage(
+                        model = imageRequest,
+                        contentDescription = null,
+                        contentScale = ContentScale.FillWidth,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(gestureModifier)
+                            .then(zoomModifier),
+                    )
+                }
             }
         } else {
             AsyncImage(
