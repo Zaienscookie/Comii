@@ -47,6 +47,37 @@ Comii 不把路径存数据库，它直接读一个**媒体库根目录**（容�
 
 ## 3. Docker 部署（推荐）
 
+### 3.0 直接用已经构建好的镜像（不用在 NAS 上 build）
+
+已经在一台 x86_64 构建机上构建好 `comii:2.24.0`，NAS 只需要导入镜像：
+
+```bash
+# 1) 从构建机下载镜像包（约几百 MB）
+scp debug@192.168.89.153:/home/debug/comii-2.24.0-image.tar.gz .
+
+# 2) 传到 NAS，或直接从本机推到 NAS
+scp comii-2.24.0-image.tar.gz admin@NAS_IP:/volume1/docker/
+
+# 3) 在 NAS 上导入
+gunzip -c /volume1/docker/comii-2.24.0-image.tar.gz | docker load
+# 或者先 gunzip，再 docker load -i comii-2.24.0-image.tar
+```
+
+导入后确认：
+
+```bash
+docker images | grep comii
+```
+
+然后使用 [docker-compose.image.yml](D:\.Desktop\komi_source_delivery\deploy\docker-compose.image.yml)（不需要 build），改好 volumes 后：
+
+```bash
+docker compose -f deploy/docker-compose.image.yml up -d
+```
+
+> 镜像是 x86_64 的；如果你的绿联是 ARM 机型，需要重新构建 ARM 版本。
+> 镜像包只包含程序，不包含你的漫画/视频；媒体仍然从挂载目录读取。
+
 ### 3.1 把源码放到 NAS
 
 任选一种：
