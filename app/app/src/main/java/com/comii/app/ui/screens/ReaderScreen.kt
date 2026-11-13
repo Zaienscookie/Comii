@@ -465,7 +465,6 @@ fun ReaderScreen(
                 )
                 Spacer(Modifier.height(12.dp))
                 SettingsSwitchRow("点击翻页", tapTurn) { tapTurn = it; settings.tapToTurn = it }
-                SettingsSwitchRow("旋转横图", rotateLandscape) { rotateLandscape = it; settings.landscapeRotate = it }
                 SettingsSwitchRow("显示进度条", showProgress) { showProgress = it; settings.showProgressBar = it }
                 Spacer(Modifier.height(24.dp))
             }
@@ -500,7 +499,6 @@ private fun ReaderPageImage(
     pageHeight: androidx.compose.ui.unit.Dp,
 ) {
     val context = LocalContext.current
-    var imageSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
     var zoom by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
     val gestureModifier = Modifier.pointerInput(fullHeight) {
@@ -521,57 +519,19 @@ private fun ReaderPageImage(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (fullHeight || rotate) Modifier.height(pageHeight) else Modifier),
+            .then(if (fullHeight) Modifier.height(pageHeight) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
-        val containerWidth = maxWidth
-        val containerHeight = maxHeight
-        val wide = imageSize.width > imageSize.height && imageSize.height > 0
-        if (rotate && wide && containerHeight > containerWidth) {
-            val displayHeight = containerHeight
-            val displayWidth = displayHeight * (imageSize.height.toFloat() / imageSize.width.toFloat())
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(model).crossfade(false).build(),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .width(displayHeight)
-                    .height(displayWidth)
-                    .rotate(90f)
-                    .then(gestureModifier)
-                    .then(zoomModifier),
-                onSuccess = { state ->
-                    val size = state.painter.intrinsicSize
-                    if (size.width > 0 && size.height > 0) {
-                        imageSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
-                    }
-                },
-            )
-        } else {
-            AsyncImage(
-                model = ImageRequest.Builder(context).data(model).crossfade(false).build(),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = if (fullHeight) {
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .then(gestureModifier)
-                        .then(zoomModifier)
-                } else {
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .then(gestureModifier)
-                        .then(zoomModifier)
-                },
-                onSuccess = { state ->
-                    val size = state.painter.intrinsicSize
-                    if (size.width > 0 && size.height > 0) {
-                        imageSize = androidx.compose.ui.unit.IntSize(size.width.toInt(), size.height.toInt())
-                    }
-                },
-            )
-        }
+        AsyncImage(
+            model = ImageRequest.Builder(context).data(model).crossfade(false).build(),
+            contentDescription = null,
+            // 横屏翻页时铺满整屏，避免两侧大黑边；上下滚动仍完整显示
+            contentScale = if (fullHeight) ContentScale.Crop else ContentScale.Fit,
+            modifier = if (fullHeight) {
+                Modifier.fillMaxSize().then(gestureModifier).then(zoomModifier)
+            } else {
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp).then(gestureModifier).then(zoomModifier)
+            },
+        )
     }
 }

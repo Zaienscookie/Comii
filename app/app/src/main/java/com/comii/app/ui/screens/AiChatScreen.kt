@@ -160,12 +160,7 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     LaunchedEffect(messages.size, streaming) {
         val total = messages.size + if (streaming) 1 else 0
         if (total <= 0) return@LaunchedEffect
-        val info = listState.layoutInfo
-        val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
-        // 只有本来就在底部附近才跟随，避免每次回复都把画面顶一下
-        if (lastVisible >= total - 4) {
-            listState.scrollToItem(total - 1)
-        }
+        runCatching { listState.scrollToItem(total - 1) }
     }
 
     fun doSend(text: String, imagePath: String?, appendLocal: Boolean = true, appendUser: Boolean = true) {
