@@ -217,9 +217,33 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
 
     LaunchedEffect(streaming, queuedTexts) {
         if (!streaming && queuedTexts.isNotEmpty()) {
-            val (next, image) = queuedTexts.first()
-            queuedTexts = queuedTexts.drop(1)
-            doSend(next, image, appendLocal = false, appendUser = true)
+            val batch = queuedTexts
+            queuedTexts = emptyList()
+            val current = conversation ?: return@LaunchedEffect
+            streaming = true
+            streamText = ""
+            scope.launch {
+                try {
+                    ai.sendBatch(
+                        personaId = personaId,
+                        conversationId = current.id,
+                        outgoing = batch.map { (text, image) ->
+                            ChatMessage("user", text, System.currentTimeMillis(), image)
+                        },
+                        onMessage = { message ->
+                            messages = messages + message
+                            streamText = ""
+                        },
+                    ) { delta -> streamText += delta }
+                    messages = ai.conversation(current.id)?.messages ?: messages
+                    personaVersion++
+                } catch (failure: Exception) {
+                    error = failure.message ?: "请求失败"
+                } finally {
+                    streaming = false
+                    streamText = ""
+                }
+            }
         }
     }
 

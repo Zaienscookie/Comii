@@ -283,6 +283,57 @@ class AiRepository(context: Context) {
         last
     }
 
+    /** 把回复中连续发来的多条消息合并成一次请求，但消息本身仍逐条保存。 */
+    suspend fun sendBatch(
+        personaId: String,
+        conversationId: String,
+        outgoing: List<ChatMessage>,
+        onMessage: (ChatMessage) -> Unit = {},
+        onDelta: (String) -> Unit = {},
+    ): ChatMessage = withContext(Dispatchers.IO + NonCancellable) {
+        if (outgoing.isEmpty()) throw AiException("没有要发送的消息")
+        val persona = persona(personaId)?.let {
+            it.copy(affection = (it.affection + outgoing.size).coerceAtMost(100))
+        } ?: throw AiException("角色不存在")
+        val joined = outgoing.joinToString("\n") { it.content }
+        val withHeart = updateHeart(persona, joined)
+        savePersona(withHeart)
+        val conversation = conversation(conversationId) ?: throw AiException("会话不存在")
+        val config = config()
+        var current = conversation.copy(
+            messages = conversation.messages + outgoing,
+            updatedAt = now(),
+            title = if (conversation.title == "新对话") joined.take(18) else conversation.title,
+        )
+        replaceConversation(current)
+        val context = buildMessages(withHeart, current)
+        val temperature = withHeart.temperature ?: config.temperature
+        val answer = try {
+            if (config.stream) client.stream(config, context, temperature, onDelta)
+            else client.complete(config, context, temperature).also(onDelta)
+        } catch (error: Exception) {
+            throw if (error is AiException) error else AiException(error.message ?: "请求失败")
+        }
+        val parts = if (config.segmentReplies) {
+            val byDelimiter = answer.split("|||").map { it.trim() }.filter { it.isNotEmpty() }
+            if (byDelimiter.size > 1) byDelimiter else answer.split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
+        } else {
+            emptyList()
+        }
+        val answers = parts.ifEmpty { listOf(answer.trim()) }
+        var last = ChatMessage("assistant", answers.last(), now())
+        answers.forEachIndexed { index, part ->
+            val message = ChatMessage("assistant", part, now() + index)
+            current = current.copy(messages = current.messages + message, updatedAt = now())
+            replaceConversation(current)
+            onMessage(message)
+            last = message
+            if (answers.size > 1 && index != answers.lastIndex) delay(650)
+        }
+        runCatching { maybeSummarize(withHeart, current) }
+        last
+    }
+
     /** 先把用户消息写进会话（用于回复中继续发消息时立即上屏）。 */
     suspend fun appendUserMessage(
         personaId: String,

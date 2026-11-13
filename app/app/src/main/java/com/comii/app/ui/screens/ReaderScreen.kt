@@ -4,6 +4,8 @@ import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -520,18 +522,37 @@ private fun ReaderPageImage(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (fullHeight) Modifier.height(pageHeight) else Modifier),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.TopCenter,
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(context).data(model).crossfade(false).build(),
-            contentDescription = null,
-            // 横屏翻页时铺满整屏，避免两侧大黑边；上下滚动仍完整显示
-            contentScale = if (fullHeight) ContentScale.Crop else ContentScale.Fit,
-            modifier = if (fullHeight) {
-                Modifier.fillMaxSize().then(gestureModifier).then(zoomModifier)
-            } else {
-                Modifier.fillMaxWidth().padding(horizontal = 8.dp).then(gestureModifier).then(zoomModifier)
-            },
-        )
+        val imageRequest = ImageRequest.Builder(context).data(model).crossfade(false).build()
+        if (fullHeight) {
+            // 横向翻页：按屏幕宽度铺满（不放大裁切），长图在页内上下滚动
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillWidth,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(gestureModifier)
+                        .then(zoomModifier),
+                )
+            }
+        } else {
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .then(gestureModifier)
+                    .then(zoomModifier),
+            )
+        }
     }
 }
