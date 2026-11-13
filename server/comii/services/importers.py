@@ -20,7 +20,7 @@ from ..config import settings
 from ..models import ImportResult
 from . import library
 
-ARCHIVE_EXTENSIONS = {".zip", ".cbz"}
+ARCHIVE_EXTENSIONS = {".zip", ".cbz", ".7z"}
 PDF_EXTENSIONS = {".pdf"}
 MAX_NAME_LENGTH = 120
 
@@ -103,7 +103,9 @@ def _is_ignored_archive_entry(name: str) -> bool:
     return False
 
 
-def _extract_images(archive_bytes: bytes, staging: Path) -> int:
+def _extract_images(archive_bytes: bytes, staging: Path, suffix: str = ".zip") -> int:
+    if suffix == ".7z":
+        return _extract_7z_images(archive_bytes, staging)
     written = 0
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as bundle:
         for info in bundle.infolist():
@@ -127,6 +129,39 @@ def _extract_images(archive_bytes: bytes, staging: Path) -> int:
     return written
 
 
+def _extract_7z_images(archive_bytes: bytes, staging: Path) -> int:
+    try:
+        import py7zr
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise HTTPException(status_code=501, detail="服务器缺少 7z 组件 py7zr") from exc
+
+    temporary = staging / ".comii_7z"
+    temporary.mkdir(parents=True, exist_ok=True)
+    try:
+        with py7zr.SevenZipFile(io.BytesIO(archive_bytes), mode="r") as archive:
+            archive.extractall(path=temporary)
+        written = 0
+        for source in sorted(temporary.rglob("*")):
+            if not source.is_file():
+                continue
+            relative = str(source.relative_to(temporary))
+            if _is_ignored_archive_entry(relative):
+                continue
+            suffix = source.suffix.lower()
+            if suffix not in library.IMAGE_EXTENSIONS:
+                continue
+            destination = staging / source.name
+            counter = 1
+            while destination.exists():
+                destination = staging / f"{source.stem}_{counter}{suffix}"
+                counter += 1
+            shutil.move(str(source), str(destination))
+            written += 1
+        return written
+    finally:
+        shutil.rmtree(temporary, ignore_errors=True)
+
+
 def _flatten_single_directory(staging: Path) -> None:
     entries = [entry for entry in staging.iterdir()]
     directories = [entry for entry in entries if entry.is_dir()]
@@ -137,10 +172,10 @@ def _flatten_single_directory(staging: Path) -> None:
         inner.rmdir()
 
 
-def import_archive(raw: bytes, folder: str, name: str = "") -> ImportResult:
+def import_archive(raw: bytes, folder: str, name: str = "", suffix: str = ".zip") -> ImportResult:
     staging = Path(tempfile.mkdtemp(prefix="comii_cbz_"))
     try:
-        written = _extract_images(raw, staging)
+        written = _extract_images(raw, staging, suffix)
         if not written:
             raise HTTPException(status_code=400, detail="压缩包中没有图片")
         _flatten_single_directory(staging)
@@ -185,7 +220,7 @@ def import_uploads(files: Iterable[UploadFile], folder: str, name: str = "") -> 
     uploads[0].file.seek(0)
 
     if len(uploads) == 1 and first_suffix in ARCHIVE_EXTENSIONS:
-        return import_archive(payload, folder, name or fallback_name)
+        return import_archive(payload, folder, name or fallback_name, first_suffix)
     if len(uploads) == 1 and first_suffix in PDF_EXTENSIONS:
         return import_pdf(payload, folder, name or fallback_name, dpi=200)
 

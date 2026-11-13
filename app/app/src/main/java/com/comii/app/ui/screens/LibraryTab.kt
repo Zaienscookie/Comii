@@ -2,6 +2,7 @@ package com.comii.app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -65,6 +67,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -144,7 +147,34 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     val galleryGrid = rememberLazyGridState()
     val folderGrid = rememberLazyGridState()
 
+    // 记住「全部」的滚动位置，从阅读器返回时回到原处
+    LaunchedEffect(galleryGrid) {
+        snapshotFlow { galleryGrid.firstVisibleItemIndex to galleryGrid.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                state.galleryScrollIndex = index
+                state.galleryScrollOffset = offset
+            }
+    }
+    LaunchedEffect(flatItems.size) {
+        if (flatItems.isNotEmpty() && !state.galleryScrollRestored) {
+            state.galleryScrollRestored = true
+            galleryGrid.scrollToItem(state.galleryScrollIndex, state.galleryScrollOffset)
+        }
+    }
+
     val galleryMode = path.isEmpty() || layout == "flat"
+
+    // 网络抖动时静默重试，避免频繁弹「加载失败」
+    suspend fun <T> retryLoad(block: suspend () -> T): Result<T> {
+        var lastError: Throwable? = null
+        repeat(3) { attempt ->
+            val result = runCatching { block() }
+            if (result.isSuccess) return result
+            lastError = result.exceptionOrNull()
+            if (attempt < 2) kotlinx.coroutines.delay(400L * (attempt + 1))
+        }
+        return Result.failure(lastError ?: IllegalStateException("加载失败"))
+    }
 
     suspend fun reload() {
         loading = true
@@ -156,12 +186,12 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             loading = false
             return
         }
-        rootItems = runCatching { state.repository.browse("").items }.getOrDefault(rootItems)
+        retryLoad { state.repository.browse("").items }.onSuccess { rootItems = it }
         val target = path
         if (galleryMode) {
             browseData = null
             val sort = if (target.isEmpty()) "recent" else "name"
-            runCatching {
+            retryLoad {
                 state.repository.gallery(limit = GALLERY_PAGE, offset = 0, path = target, sort = sort)
             }.onSuccess { response ->
                 flatItems = response.items
@@ -182,7 +212,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         } else {
             flatItems = emptyList()
             flatTotal = 0
-            runCatching { state.repository.browse(target) }.onSuccess { response ->
+            retryLoad { state.repository.browse(target) }.onSuccess { response ->
                 browseData = response
                 progressMap = runCatching { state.repository.requireApi().progressAll() }
                     .getOrDefault(emptyMap())
@@ -551,7 +581,14 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                         if (item.kind == "video") {
                             nav.navigate(Routes.player(item.series_path, item.name))
                         } else {
-                            nav.navigate(Routes.reader(item.series_path, item.index))
+                            nav.navigate(
+                                Routes.reader(
+                                    path = item.series_path,
+                                    page = item.index,
+                                    all = true,
+                                    name = item.name,
+                                )
+                            )
                         }
                     },
                 )
@@ -919,7 +956,10 @@ private fun GalleryGrid(
                     }
             ) {
                 AsyncImage(
-                    model = resolveUrl(item.thumb),
+                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                        .data(resolveUrl(item.thumb))
+                        .crossfade(180)
+                        .build(),
                     contentDescription = item.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
@@ -990,39 +1030,84 @@ private fun EditBar(
     modifier: Modifier = Modifier,
 ) {
     val palette = ComiiTheme.palette
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(palette.elevated)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        TextButton(onClick = onToggleAll) {
-            Text(
-                if (allSelected) "取消全选" else "全选",
-                color = palette.accent,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("已选 $count 项", color = palette.textSecondary, fontSize = 12.sp)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onToggleAll) {
+                Text(
+                    if (allSelected) "取消全选" else "全选",
+                    color = palette.accent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            EditAction(
+                text = "移动",
+                icon = Icons.Rounded.DriveFileMove,
+                enabled = count > 0,
+                onClick = onMove,
+                modifier = Modifier.weight(1f),
+            )
+            EditAction(
+                text = "重命名",
+                icon = Icons.Rounded.Edit,
+                enabled = count == 1,
+                onClick = onRename,
+                modifier = Modifier.weight(1f),
+            )
+            EditAction(
+                text = "删除",
+                icon = Icons.Rounded.Delete,
+                enabled = count > 0,
+                danger = true,
+                onClick = onDelete,
+                modifier = Modifier.weight(1f),
             )
         }
-        Text("已选 $count 项", color = palette.textSecondary, fontSize = 12.sp)
-        Spacer(Modifier.weight(1f))
-        TextButton(onClick = onMove, enabled = count > 0) {
-            Icon(Icons.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.accent)
-            Spacer(Modifier.width(4.dp))
-            Text("移动", color = palette.accent, fontSize = 13.sp)
-        }
-        TextButton(onClick = onRename, enabled = count == 1) {
-            Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp), tint = if (count == 1) palette.accent else palette.textTertiary)
-            Spacer(Modifier.width(4.dp))
-            Text("重命名", color = if (count == 1) palette.accent else palette.textTertiary, fontSize = 13.sp)
-        }
-        TextButton(onClick = onDelete, enabled = count > 0) {
-            Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.danger)
-            Spacer(Modifier.width(4.dp))
-            Text("删除", color = palette.danger, fontSize = 13.sp)
-        }
+    }
+}
+
+@Composable
+private fun EditAction(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    danger: Boolean = false,
+) {
+    val palette = ComiiTheme.palette
+    val background = when {
+        !enabled -> palette.card.copy(alpha = 0.5f)
+        danger -> palette.danger
+        else -> palette.card
+    }
+    val contentColor = when {
+        !enabled -> palette.textTertiary
+        danger -> Color.White
+        else -> palette.accent
+    }
+    Row(
+        modifier = modifier
+            .height(42.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(background)
+            .clickable(enabled = enabled) { onClick() },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(17.dp), tint = contentColor)
+        Spacer(Modifier.width(5.dp))
+        Text(text, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 

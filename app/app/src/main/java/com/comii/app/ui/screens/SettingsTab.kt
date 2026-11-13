@@ -75,7 +75,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.9.2")
+        LargeTitle("设置", "Comii 2.10.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -142,6 +142,16 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
                 subtitle = "阅读器底部的进度条",
                 checked = showProgress,
                 onChange = { showProgress = it; repository.settings.showProgressBar = it },
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
+        SettingsGroup("AI") {
+            SettingsRow(
+                title = "AI 服务设置",
+                subtitle = "OpenAI 兼容接口、Key、模型、上下文",
+                showChevron = true,
+                onClick = { nav.navigate("ai/settings") },
             )
         }
 
@@ -321,6 +331,7 @@ private fun ToggleRow(
         )
     }
 }
+
 
 
 

@@ -114,7 +114,7 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
                 when (currentTab) {
                     0 -> LibraryTab(state = state, nav = nav)
                     1 -> DownloadsTab(state = state, nav = nav)
-                    2 -> WebAiScreen(state = state, nav = nav)
+                    2 -> AiScreen(state = state, nav = nav)
                     else -> SettingsTab(state = state, nav = nav)
                 }
             }

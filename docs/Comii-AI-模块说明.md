@@ -1,85 +1,56 @@
-# Comii AI 模块说明（2.9.x：内嵌网页版）
+# Comii AI（原生版，2.10.0）
 
-> App 2.9.1 · 服务端 2.9.0
-> 入口：App 底部 **AI** 标签（WebView）或浏览器打开 `http://<服务器>:8001/ai.html`
+> 入口：App 底部 **AI**；配置：**AI 右上角齿轮** 或 **设置 → AI 服务设置**
+> 数据只存在手机本地，不上传 Comii 服务器
 
-## 1. 为什么改成网页
-
-原先 AI 是原生 Compose 页面，改人格/交互都要重新打包 APK。
-现在 AI 的界面、人格、会话、插件全部在 WebUI 源码里：
+## 1. 结构（AstrBot 思路）
 
 ```
-web/static/ai.html   # 结构
-web/static/ai.css    # 外观
-web/static/ai.js     # 人格 / 会话 / 上下文 / 插件 / 请求逻辑
+Persona 人格 → Conversation 会话 → Context（人格 + 记忆 + 插件 + 最近 N 条）
 ```
 
-改完这三个文件、部署服务器，App 里 **下拉刷新/重开页面** 就是新版，不用重新装 APK。
-App 只负责用 WebView 打开 `serverUrl/ai.html`（数据端口 8001 直接提供，不换端口）。
+- 多个人格、每个人格多条独立会话
+- 人格可写：system prompt、开场白、长期记忆、温度、主题色
+- 上下文条数可调（默认 20），超出后自动归纳（见下）
 
-## 2. 结构（对齐 AstrBot 的思路）
+## 2. 虚拟人生插件
 
-```
-Persona 人格 → Conversation 会话 → Context 组装（人格 + 记忆 + 插件 + 最近 N 条）
-```
+参考 `astrbot_plugin_virtual_life`，在人格编辑页开启「虚拟人生」后：
 
-| 位置 | 内容 |
-|---|---|
-| `ai.js` 里的 `state.config` | Base URL / API Key / 模型 / 温度 / 上下文条数 / 流式 |
-| `state.personas` | 多个 OC：名字、简介、system prompt、开场白、长期记忆、主题色、温度、插件 |
-| `state.conversations` | 每个角色的多条独立会话 |
-| `buildContext()` | 人格提示 → 记忆 → 插件注入 → 最近 N 条消息 |
-| `PLUGINS` | 插件数组，实现 `inject()` 即可；内置「时间感知」「环境氛围」 |
+- 填写城市、身份/职业
+- 点「生成今日日程」让模型生成当天的生活安排、心情、穿搭
+- 之后每次聊天都会把「现在时间 + 今天的安排 + 心情 + 穿搭」注入 system，让角色有连续的生活状态
+- 也可以手动编辑日程/心情/穿搭
 
-所有数据都在 WebView / 浏览器的 `localStorage`（key `comii-ai-v1`），不上传服务器。
+## 3. 记忆
 
-### 主题与布局
+- **自动归纳**：一条会话超过 30 条消息时，把较早的对话压缩成 2-5 句写进「长期记忆」，只保留最近 10 条，避免上下文被撑爆
+- **手动整理**：人格编辑页「把旧对话归纳进长期记忆」
+- **数据保留**：正常覆盖安装/应用内更新不会删除人格、记忆和聊天；只有卸载或清除应用数据才会
+- **导出/导入**：AI 设置 →「导出 AI 数据（JSON）」/「从 JSON 导入」，换机或重装前可备份
 
-- App 打开时带 `?theme=dark|light`，页面直接跟随 App 的深浅色；右上角也有手动切换按钮。
-- 页面布局用 `body{display:flex}` + `.app{flex:1;min-height:0}`，不依赖 `calc(100% - 固定高度)`，避免 WebView 高度计算出问题时内容被裁掉。
-- 如果页面显示异常，右下角会弹出 JS 错误提示，方便定位。
+## 4. 主动消息
 
-## 3. 请求链路
+人格编辑页开启「主动发消息」，设置间隔（1-24 小时）：
 
-```
-WebView 页面  --POST /api/v1/ai/chat-->  Comii 服务器  --POST /chat/completions-->  OpenAI 兼容服务
-```
+- 打开 App / 进入 AI 页时检查，超过间隔就让角色主动发一条（结合时间、虚拟生活、最近对话）
+- 同时发一条系统通知（Android 13+ 会请求通知权限）
+- 消息会直接出现在对应会话里
 
-- 服务器只做转发（`server/comii/api/ai.py`），**不落库、不存 Key**；Key 每次随请求带上。
-- 支持 SSE 流式与非流式；上游错误会原样带回页面。
-- 因为走同源代理，浏览器/WebView 不需要上游开 CORS。
-- 该网关要求浏览器 UA，服务器代理已固定带 UA。
+> 限制：目前是「打开 App 时检查」，不是系统级后台定时任务；App 完全退出时不会主动发。
 
-## 4. 使用
+## 5. 服务配置
 
-1. App 里先配置服务器（`192.168.2.126:8001`），打开 **AI**。
-2. 首次会自动带一个示例角色「小满」；右上角 **⚙** 填 Base URL / Key / 模型，点「测试连接」。
-3. **＋** 新建角色；聊天页右上角：新建会话、会话列表、编辑角色。
-4. 浏览器也可以直接开 `http://<服务器>:8001/ai.html` 调。
-
-默认 Base URL / 模型：
+OpenAI 兼容，只调用 `POST /chat/completions`，支持流式/非流式。
 
 ```
-https://yachiyo8000-maxtoken.pages.dev/v1
-Yachiyo-v8000-flash
+Base URL: https://yachiyo8000-maxtoken.pages.dev/v1
+模型:     Yachiyo-v8000-flash
+Key:      自己填，只存本机
 ```
 
-## 5. 已知限制（demo）
+## 6. 已知限制
 
-- 上下文按「最近 N 条」截断，没有自动摘要/长期记忆检索。
-- 没有工具调用 / MCP / 知识库 / Embedding。
-- 插件是网页里的 JS 注入点，不是 AstrBot 的 Python 插件热加载。
-- Key 明文存在 WebView 的 localStorage（App 私有目录），卸载即清。
-- App 内 WebView 禁用了缓存（`LOAD_NO_CACHE`），保证改完网页立即生效，代价是每次重新拉取页面。
-
-## 6. 想改 AI 时改哪里
-
-| 想改 | 文件 |
-|---|---|
-| 布局、气泡、输入框 | `ai.html` / `ai.css` |
-| 人格字段、会话逻辑 | `ai.js` 的 `openPersonaEditor` / `openSessions` |
-| 上下文组装、截断 | `ai.js` 的 `buildContext` |
-| 插件 | `ai.js` 的 `PLUGINS` |
-| 代理/超时/UA | `server/comii/api/ai.py` |
-
-改完 `python tools/dev/deploy_frp.py .` 部署即可。
+- 没有工具调用 / 知识库 / Embedding
+- 主动消息依赖打开 App 触发
+- Key 以明文存在 App 私有目录（demo 取舍）

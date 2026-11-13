@@ -79,6 +79,8 @@ fun ReaderScreen(
     state: AppState,
     path: String,
     startPage: Int = -1,
+    startName: String = "",
+    all: Boolean = false,
     nav: NavHostController,
 ) {
     val palette = ComiiTheme.palette
@@ -94,6 +96,7 @@ fun ReaderScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var title by remember { mutableStateOf(path.substringAfterLast('/')) }
     var names by remember { mutableStateOf<List<String>>(emptyList()) }
+    var allItems by remember { mutableStateOf<List<com.comii.app.data.GalleryItem>>(emptyList()) }
     var localDir by remember { mutableStateOf<File?>(null) }
     var serverBase by remember { mutableStateOf(repository.apiOrNull()) }
 
@@ -120,6 +123,13 @@ fun ReaderScreen(
         return if (dir != null) File(dir, name) else serverBase?.thumbUrl(path, name)
     }
 
+    /** 「全部」模式下按全局位置取图。 */
+    fun pageModel(index: Int): Any? {
+        if (!all) return model(names.getOrNull(index) ?: return null)
+        val item = allItems.getOrNull(index) ?: return null
+        return serverBase?.imageUrl(item.series_path, item.name)
+    }
+
     fun goTo(index: Int) {
         val target = index.coerceIn(0, (names.size - 1).coerceAtLeast(0))
         scope.launch {
@@ -128,7 +138,37 @@ fun ReaderScreen(
         current = target
     }
 
+    LaunchedEffect(all, path, startName) {
+        if (!all) return@LaunchedEffect
+        val api = repository.apiOrNull()
+        if (api == null) {
+            error = "未配置服务器"
+            loading = false
+            return@LaunchedEffect
+        }
+        val response = runCatching {
+            repository.gallery(limit = 5000, offset = 0, path = "", sort = "recent")
+        }.getOrNull()
+        val items = response?.items?.filter { it.kind != "video" }.orEmpty()
+        if (items.isEmpty()) {
+            error = "没有可阅读的图片"
+            loading = false
+            return@LaunchedEffect
+        }
+        allItems = items
+        names = items.map { it.name }
+        val found = items.indexOfFirst {
+            it.series_path == path && (startName.isEmpty() || it.name == startName)
+        }
+        current = if (found >= 0) found else 0
+        title = items.getOrNull(current)?.series_name ?: "全部"
+        loading = false
+        delay(60)
+        if (mode == "horizontal") pagerState.scrollToPage(current) else listState.scrollToItem(current)
+    }
+
     LaunchedEffect(path, startPage) {
+        if (all) return@LaunchedEffect
         val offline = repository.offline.find(path)
         if (offline != null && offline.images.isNotEmpty()) {
             names = offline.images
@@ -181,18 +221,27 @@ fun ReaderScreen(
     LaunchedEffect(listState, names.size) {
         snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
             if (index != current) current = index
+            if (all) title = allItems.getOrNull(index)?.series_name ?: title
         }
     }
     LaunchedEffect(pagerState, names.size) {
         snapshotFlow { pagerState.currentPage }.collect { page ->
             if (page != current) current = page
+            if (all) title = allItems.getOrNull(page)?.series_name ?: title
         }
     }
 
-    LaunchedEffect(current, names.size) {
+    LaunchedEffect(current, names.size, allItems) {
         if (names.isEmpty()) return@LaunchedEffect
         delay(500)
-        repository.saveProgress(path, current, names.size)
+        if (all) {
+            val item = allItems.getOrNull(current) ?: return@LaunchedEffect
+            val series = allItems.filter { it.series_path == item.series_path }
+            val local = series.indexOfFirst { it.name == item.name }.coerceAtLeast(0)
+            repository.saveProgress(item.series_path, local, series.size)
+        } else {
+            repository.saveProgress(path, current, names.size)
+        }
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -232,7 +281,7 @@ fun ReaderScreen(
                     if (mode == "horizontal") {
                         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                             ReaderPageImage(
-                                model = model(names[page]),
+                                model = pageModel(page),
                                 rotate = rotateLandscape && portrait,
                                 fullHeight = true,
                                 pageHeight = screenHeight,
@@ -242,7 +291,7 @@ fun ReaderScreen(
                         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                             items(names.size) { index ->
                                 ReaderPageImage(
-                                    model = model(names[index]),
+                                    model = pageModel(index),
                                     rotate = rotateLandscape && portrait,
                                     fullHeight = false,
                                     pageHeight = screenHeight,
@@ -286,24 +335,21 @@ fun ReaderScreen(
             }
 
             if (showProgress) {
-                Column(
+                // 贴在最底部的一条细线，不挡画面
+                Box(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.55f))
                         .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .height(2.dp)
+                        .background(Color.White.copy(alpha = 0.18f)),
                 ) {
-                    Slider(
-                        value = current.toFloat(),
-                        onValueChange = { value -> current = value.toInt() },
-                        onValueChangeFinished = { goTo(current) },
-                        valueRange = 0f..((names.size - 1).coerceAtLeast(1)).toFloat(),
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = palette.accent,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.25f),
-                        ),
+                    val ratio = if (names.size <= 1) 1f else (current + 1).toFloat() / names.size
+                    Box(
+                        Modifier
+                            .fillMaxWidth(ratio.coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .background(palette.accent),
                     )
                 }
             }

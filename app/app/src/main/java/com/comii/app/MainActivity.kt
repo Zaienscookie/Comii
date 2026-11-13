@@ -55,6 +55,9 @@ import com.comii.app.data.CrashLog
 import com.comii.app.ui.AppState
 import com.comii.app.ui.Routes
 import com.comii.app.ui.components.PrimaryButton
+import com.comii.app.ui.screens.AiChatScreen
+import com.comii.app.ui.screens.AiPersonaScreen
+import com.comii.app.ui.screens.AiSettingsScreen
 import com.comii.app.ui.screens.HomeScreen
 import com.comii.app.ui.screens.PlayerScreen
 import com.comii.app.ui.screens.ReaderScreen
@@ -67,11 +70,14 @@ import com.comii.app.ui.theme.ComiiTheme
 class ComiiApplication : Application() {
     lateinit var repository: ComiiRepository
         private set
+    lateinit var aiRepository: com.comii.app.data.ai.AiRepository
+        private set
 
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
         repository = ComiiRepository(this)
+        aiRepository = com.comii.app.data.ai.AiRepository(this)
     }
 }
 
@@ -79,9 +85,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
         setContent {
             val app = application as ComiiApplication
-            val state = remember { AppState(app.repository) }
+            val state = remember { AppState(app.repository, app.aiRepository) }
             val settings = app.repository.settings
             val dark = when (state.themeMode) {
                 "light" -> false
@@ -105,7 +117,13 @@ class MainActivity : ComponentActivity() {
                             }
                             Lifecycle.Event.ON_RESUME -> {
                                 paused = false
-                                window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                // 打开「后台隐藏」时始终禁止截图/最近任务预览，
+                                // 否则系统会在切后台的瞬间先截一张图，遮罩来不及画。
+                                if (settings.privacyBlur) {
+                                    window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                } else {
+                                    window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                }
                             }
                             else -> Unit
                         }
@@ -120,6 +138,11 @@ class MainActivity : ComponentActivity() {
                         val controller = WindowCompat.getInsetsController(window, view)
                         controller.isAppearanceLightStatusBars = !dark
                         controller.isAppearanceLightNavigationBars = !dark
+                        if (settings.privacyBlur) {
+                            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        }
                     }
                 }
 
@@ -208,12 +231,29 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
             SeriesScreen(state = state, path = path, nav = nav)
         }
         composable(
-            "reader/{path}?page={page}",
-            arguments = listOf(navArgument("page") { type = NavType.IntType; defaultValue = -1 }),
+            "reader/{path}?page={page}&all={all}&name={name}",
+            arguments = listOf(
+                navArgument("page") { type = NavType.IntType; defaultValue = -1 },
+                navArgument("all") { type = NavType.IntType; defaultValue = 0 },
+                navArgument("name") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
         ) { entry ->
             val path = Routes.decode(entry.arguments?.getString("path").orEmpty())
             val page = entry.arguments?.getInt("page") ?: -1
-            ReaderScreen(state = state, path = path, startPage = page, nav = nav)
+            val all = (entry.arguments?.getInt("all") ?: 0) == 1
+            val name = Routes.decode(entry.arguments?.getString("name").orEmpty())
+            ReaderScreen(
+                state = state,
+                path = path,
+                startPage = page,
+                startName = name,
+                all = all,
+                nav = nav,
+            )
         }
         composable("player/{path}/{name}") { entry ->
             val path = Routes.decode(entry.arguments?.getString("path").orEmpty())
@@ -231,6 +271,29 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
                 onDone = { nav.popBackStack() },
                 onCancel = { nav.popBackStack() },
             )
+        }
+        composable("ai/chat/{personaId}") { entry ->
+            val personaId = entry.arguments?.getString("personaId").orEmpty()
+            AiChatScreen(state = state, personaId = personaId, nav = nav)
+        }
+        composable(
+            "ai/persona?personaId={personaId}",
+            arguments = listOf(
+                navArgument("personaId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            ),
+        ) { entry ->
+            AiPersonaScreen(
+                state = state,
+                personaId = entry.arguments?.getString("personaId"),
+                nav = nav,
+            )
+        }
+        composable("ai/settings") {
+            AiSettingsScreen(state = state, nav = nav)
         }
     }
 }

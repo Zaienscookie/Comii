@@ -335,6 +335,23 @@ def trash_sweep() -> dict:
     return {"status": "ok", "removed": removed}
 
 
+@router.post("/import/upload")
+async def import_upload(
+    files: list[UploadFile] = File(...),
+    folder: str = Form(""),
+    name: str = Form(""),
+) -> dict:
+    result = importers.import_uploads(files, folder, name)
+    return {
+        "status": "ok",
+        "series": result.name,
+        "path": result.path,
+        "pages": result.pages,
+        "images": result.images,
+        "videos": result.videos,
+    }
+
+
 # ---------------------------------------------------------------- import
 @router.post("/import/pdf")
 async def import_pdf(

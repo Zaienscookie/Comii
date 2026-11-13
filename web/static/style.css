@@ -1104,3 +1104,11 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
 
 .gallery-video{display:flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0}
 .gallery-video i{width:0;height:0;border-left:7px solid #fff;border-top:5px solid transparent;border-bottom:5px solid transparent;margin-left:2px}
+
+.drop-zone{margin-top:10px;padding:18px;border:1px dashed rgba(127,127,127,.35);border-radius:14px;text-align:center;color:var(--text-secondary,#8e8e93);font-size:13px}
+.drop-zone.dragging{border-color:var(--accent,#0a84ff);color:var(--accent,#0a84ff);background:rgba(10,132,255,.06)}
+.import-list{margin-top:10px;display:flex;flex-direction:column;gap:6px;max-height:180px;overflow:auto}
+.import-item{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:var(--card,#fff);font-size:13px}
+.import-size{color:var(--text-secondary,#8e8e93);flex:none}
+.import-progress{height:6px;border-radius:3px;background:rgba(127,127,127,.25);overflow:hidden;margin-top:12px}
+.import-progress-bar{height:100%;width:0;background:var(--accent,#0a84ff);transition:width .15s ease}

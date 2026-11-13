@@ -24,12 +24,12 @@ import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -56,9 +56,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavHostController
 import com.comii.app.ui.AppState
+import com.comii.app.ui.components.BottomSheet
 import com.comii.app.ui.theme.ComiiTheme
-
-private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
+import java.util.Locale
 
 @Composable
 fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostController) {
@@ -71,8 +71,9 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     var title by remember { mutableStateOf(path.substringAfterLast('/')) }
     var muted by remember { mutableStateOf(settings.videoMuted) }
     var speed by remember { mutableFloatStateOf(1f) }
+    var pitch by remember { mutableFloatStateOf(1f) }
     var pitchFollows by remember { mutableStateOf(settings.videoPitchFollowsSpeed) }
-    var showSpeed by remember { mutableStateOf(false) }
+    var showTuning by remember { mutableStateOf(false) }
     var index by remember { mutableIntStateOf(0) }
     var count by remember { mutableIntStateOf(0) }
     var landscape by remember { mutableStateOf(false) }
@@ -88,7 +89,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
         activePlayer.volume = if (muted) 0f else 1f
         activePlayer.playbackParameters = PlaybackParameters(
             speed,
-            if (pitchFollows) speed else 1f,
+            if (pitchFollows) speed else pitch,
         )
     }
 
@@ -102,7 +103,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     DisposableEffect(Unit) {
         onDispose { player.release() }
     }
-    LaunchedEffect(muted, speed, pitchFollows) { applyPlayback(player) }
+    LaunchedEffect(muted, speed, pitch, pitchFollows) { applyPlayback(player) }
 
     LaunchedEffect(path, startName) {
         val offline = state.repository.offline.find(path)
@@ -151,7 +152,6 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
         onDispose { player.removeListener(listener) }
     }
 
-    // 左右滑动切换上一个 / 下一个视频
     var dragTotal by remember { mutableFloatStateOf(0f) }
     Box(
         Modifier
@@ -226,64 +226,20 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     )
                 }
             }
-            IconButton(onClick = {
-                muted = !muted
-                settings.videoMuted = muted
-            }) {
+            IconButton(onClick = { muted = !muted }) {
                 Icon(
                     if (muted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
                     contentDescription = if (muted) "取消静音" else "静音",
                     tint = Color.White,
                 )
             }
-            Box {
-                IconButton(onClick = { showSpeed = true }) {
-                    Icon(Icons.Rounded.Speed, contentDescription = "播放速度", tint = Color.White)
-                }
-                DropdownMenu(
-                    expanded = showSpeed,
-                    onDismissRequest = { showSpeed = false },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(palette.elevated),
-                ) {
-                    SPEEDS.forEach { value ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    if (value == 1f) "1.0x（原速）" else "${value}x",
-                                    color = if (speed == value) palette.accent else palette.textPrimary,
-                                    fontSize = 14.sp,
-                                )
-                            },
-                            onClick = {
-                                speed = value
-                                showSpeed = false
-                            },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("音调跟随速度", color = palette.textPrimary, fontSize = 13.sp)
-                                    Text(
-                                        if (pitchFollows) "变速时声音一起变高/变低" else "保持原音调",
-                                        color = palette.textSecondary,
-                                        fontSize = 10.sp,
-                                    )
-                                }
-                                Spacer(Modifier.width(8.dp))
-                                Switch(
-                                    checked = pitchFollows,
-                                    onCheckedChange = {
-                                        pitchFollows = it
-                                        settings.videoPitchFollowsSpeed = it
-                                    },
-                                )
-                            }
-                        },
-                        onClick = { },
+            IconButton(onClick = { showTuning = true }) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Rounded.Speed, contentDescription = "播放速度 / 音调", tint = Color.White)
+                    Text(
+                        String.format(Locale.US, "%.2fx", speed),
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 9.sp,
                     )
                 }
             }
@@ -299,6 +255,65 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
             }
             IconButton(onClick = { nav.popBackStack() }) {
                 Icon(Icons.Rounded.Close, contentDescription = "关闭", tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+        }
+    }
+
+    if (showTuning) {
+        BottomSheet(onDismiss = { showTuning = false }) {
+            Column(Modifier.padding(horizontal = 22.dp)) {
+                Text("播放速度与音调", color = palette.textPrimary, fontSize = 18.sp)
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "速度 ${String.format(Locale.US, "%.2fx", speed)}",
+                    color = palette.textSecondary,
+                    fontSize = 12.sp,
+                )
+                Slider(
+                    value = speed,
+                    onValueChange = { speed = it },
+                    valueRange = 0.5f..3f,
+                    steps = 49,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("音调跟随速度", color = palette.textPrimary, fontSize = 14.sp)
+                        Text(
+                            if (pitchFollows) "变速时声音一起变高/变低" else "保持你单独设置的音调",
+                            color = palette.textSecondary,
+                            fontSize = 11.sp,
+                        )
+                    }
+                    Switch(checked = pitchFollows, onCheckedChange = { pitchFollows = it })
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "音调 ${String.format(Locale.US, "%.2f", pitch)}",
+                    color = if (pitchFollows) palette.textTertiary else palette.textSecondary,
+                    fontSize = 12.sp,
+                )
+                Slider(
+                    value = pitch,
+                    onValueChange = { pitch = it },
+                    valueRange = 0.5f..2f,
+                    steps = 149,
+                    enabled = !pitchFollows,
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("低 0.50", color = palette.textTertiary, fontSize = 10.sp)
+                    Text("原音 1.00", color = palette.textTertiary, fontSize = 10.sp)
+                    Text("高 2.00", color = palette.textTertiary, fontSize = 10.sp)
+                }
+                Spacer(Modifier.height(10.dp))
+                TextButton(onClick = {
+                    speed = 1f
+                    pitch = 1f
+                    pitchFollows = false
+                }) {
+                    Text("恢复默认（1.00x / 原音）", color = palette.accent, fontSize = 13.sp)
+                }
+                Spacer(Modifier.height(26.dp))
             }
         }
     }

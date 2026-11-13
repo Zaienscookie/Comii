@@ -45,6 +45,7 @@ const GALLERY_PAGE = 300;
 let bootstrapped = false;
 let editMode = false;
 let folderMode = true;          // 文件夹功能启用
+let layoutMode = "folders";     // 按文件夹 / 全部图片（视频）
 let selectedItems = new Set();  // 编辑模式多选集合
 let clipItems = [];             // vivo 风格移动剪贴板: [{name, path}]
 
@@ -122,10 +123,12 @@ async function loadLibrary() {
       }
     }
 
-    // 「全部」= 整库相册（图片 + 视频缩略图平铺），按页加载，滚到底自动续载
-    if (!currentPath && filter === "all" && !query) {
+    // 全部 / 漫画·视频的「全部图片 / 全部视频」都走相册网格
+    const flatMode = filter === "all" || layoutMode === "flat";
+    if (!query && flatMode) {
+      const kind = filter === "all" ? "all" : filter;
       try {
-        const gres = await KomiConfig.fetch(`/api/gallery?limit=${GALLERY_PAGE}&offset=0`);
+        const gres = await KomiConfig.fetch(`/api/gallery?kind=${kind}&limit=${GALLERY_PAGE}&offset=0`);
         const gdata = await gres.json();
         gallery = gdata.items || [];
         galleryTotal = typeof gdata.total === "number" ? gdata.total : gallery.length;
@@ -246,7 +249,8 @@ async function loadMoreGallery() {
   if (!nearBottom) return;
   galleryLoading = true;
   try {
-    const res = await KomiConfig.fetch(`/api/gallery?limit=${GALLERY_PAGE}&offset=${gallery.length}`);
+    const kind = filter === "all" ? "all" : filter;
+    const res = await KomiConfig.fetch(`/api/gallery?kind=${kind}&limit=${GALLERY_PAGE}&offset=${gallery.length}`);
     const data = await res.json();
     const items = data.items || [];
     if (typeof data.total === "number") galleryTotal = data.total;
@@ -940,14 +944,33 @@ function bindMoveSheet() {
 }
 
 function bindSegments() {
+  const layoutBox = document.getElementById("layoutSegments");
+  const flatBtn = document.getElementById("layoutFlatBtn");
+  if (layoutBox) {
+    layoutBox.querySelectorAll(".seg").forEach(btn => {
+      btn.addEventListener("click", () => {
+        layoutMode = btn.dataset.layout === "flat" ? "flat" : "folders";
+        layoutBox.querySelectorAll(".seg").forEach(b => b.classList.toggle("active", b === btn));
+        folderMode = filter !== "all" && layoutMode === "folders";
+        document.body.classList.toggle("show-folders", folderMode);
+        loadLibrary();
+      });
+    });
+  }
+  const syncLayout = () => {
+    if (flatBtn) flatBtn.textContent = filter === "video" ? "全部视频" : "全部图片";
+    if (layoutBox) layoutBox.classList.toggle("hidden", filter === "all");
+  };
   document.querySelectorAll(".seg").forEach(seg => {
     seg.addEventListener("click", () => {
       const nextFilter = seg.dataset.filter;
+      if (!nextFilter) return;
       filter = nextFilter;
       // 文件夹功能仅漫画/视频分类启用；"全部"隐藏文件夹与新建按钮
-      folderMode = filter !== "all";
+      folderMode = filter !== "all" && layoutMode === "folders";
       document.body.classList.toggle("filter-all", filter === "all");
       document.body.classList.toggle("show-folders", folderMode);
+      syncLayout();
       if (!editMode) { selectedItems.clear(); clipItems = []; }
 
       // 「漫画 / 视频」直接对应根目录的 comic / video 文件夹
@@ -1070,62 +1093,115 @@ function openRenameSheet(item) {
   overlay.onclick = closeRename;
 }
 
-// ---------- PDF 导入 ----------
+// ---------- 导入内容（图片 / PDF / ZIP / CBZ / 7Z / 视频） ----------
 function bindPdfImport() {
   const btn = document.getElementById("importToggle");
-  const overlay = document.getElementById("pdfOverlay");
-  const sheet = document.getElementById("pdfSheet");
-  const file = document.getElementById("pdfFile");
-  const name = document.getElementById("pdfName");
-  const folder = document.getElementById("pdfFolder");
-  const importBtn = document.getElementById("pdfImport");
+  const overlay = document.getElementById("importOverlay");
+  const sheet = document.getElementById("importSheet");
+  const input = document.getElementById("importFiles");
+  const drop = document.getElementById("importDrop");
+  const list = document.getElementById("importList");
+  const name = document.getElementById("importName");
+  const folder = document.getElementById("importFolder");
+  const start = document.getElementById("importStart");
+  const status = document.getElementById("importStatus");
+  const bar = document.getElementById("importProgressBar");
   if (!btn || !sheet) return;
 
-  let dpi = 200;
-  const dpiBox = document.getElementById("pdfDpi");
-  if (dpiBox) {
-    dpiBox.querySelectorAll(".type-opt").forEach(opt => {
-      opt.addEventListener("click", () => {
-        dpiBox.querySelectorAll(".type-opt").forEach(o => o.classList.remove("active"));
-        opt.classList.add("active");
-        dpi = parseInt(opt.dataset.dpi || "200", 10);
-      });
-    });
-  }
+  let files = [];
+
+  const displaySize = (size) => {
+    if (size >= 1024 * 1024) return (size / 1024 / 1024).toFixed(1) + " MB";
+    return Math.max(1, Math.round(size / 1024)) + " KB";
+  };
+
+  const renderFiles = () => {
+    list.innerHTML = files.map(f =>
+      `<div class="import-item"><span>${escapeHtml(f.name)}</span><span class="import-size">${displaySize(f.size)}</span></div>`
+    ).join("");
+    status.textContent = files.length ? `已选择 ${files.length} 个文件` : "";
+  };
+
+  const addFiles = (incoming) => {
+    const next = new Map(files.map(f => [f.name + ":" + f.size, f]));
+    Array.from(incoming || []).forEach(f => next.set(f.name + ":" + f.size, f));
+    files = Array.from(next.values());
+    renderFiles();
+  };
+
+  const close = () => {
+    sheet.classList.remove("show");
+    overlay.classList.remove("show");
+  };
 
   btn.addEventListener("click", () => {
-    file.value = ""; name.value = ""; folder.value = currentPath;
-    sheet.classList.add("show"); overlay.classList.add("show");
+    files = [];
+    input.value = "";
+    name.value = "";
+    folder.value = currentPath || "";
+    bar.style.width = "0%";
+    renderFiles();
+    sheet.classList.add("show");
+    overlay.classList.add("show");
   });
-  overlay.addEventListener("click", () => { sheet.classList.remove("show"); overlay.classList.remove("show"); });
+  overlay.addEventListener("click", close);
+  input.addEventListener("change", () => addFiles(input.files));
+  ["dragenter", "dragover"].forEach(type => drop.addEventListener(type, e => {
+    e.preventDefault();
+    drop.classList.add("dragging");
+  }));
+  ["dragleave", "drop"].forEach(type => drop.addEventListener(type, e => {
+    e.preventDefault();
+    drop.classList.remove("dragging");
+  }));
+  drop.addEventListener("drop", e => {
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
 
-  importBtn.addEventListener("click", async () => {
-    const f = file.files && file.files[0];
-    if (!f) { toast("请选择 PDF 文件"); return; }
-    if (f.type && !f.type.includes("pdf") && !f.name.toLowerCase().endsWith(".pdf")) {
-      toast("仅支持 PDF 文件"); return;
-    }
-    importBtn.disabled = true;
-    importBtn.textContent = "导入中…";
-    try {
-      const fd = new FormData();
-      fd.append("file", f);
-      fd.append("name", name.value.trim());
-      fd.append("folder", folder.value.trim());
-      // dpi 通过 query 传给后端 (后端用固定 200 也可后续调)
-      const res = await KomiConfig.fetch("/api/import/pdf?dpi=" + dpi, { method: "POST", body: fd });
-      const d = await res.json().catch(() => ({}));
-      if (res.ok) {
-        toast(`已导入「${d.series}」${d.pages}页`);
-        sheet.classList.remove("show"); overlay.classList.remove("show");
+  start.addEventListener("click", () => {
+    if (!files.length) { toast("请选择文件"); return; }
+    start.disabled = true;
+    start.textContent = "上传中…";
+    status.textContent = "正在上传…";
+    bar.style.width = "0%";
+    const form = new FormData();
+    files.forEach(f => form.append("files", f));
+    form.append("name", name.value.trim());
+    form.append("folder", folder.value.trim());
+
+    const xhr = new XMLHttpRequest();
+    const base = KomiConfig.serverBase ? KomiConfig.serverBase() : "";
+    xhr.open("POST", base + "/api/import/upload");
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const percent = Math.round((event.loaded / event.total) * 100);
+      bar.style.width = percent + "%";
+      status.textContent = "正在上传… " + percent + "%";
+    };
+    xhr.onload = () => {
+      start.disabled = false;
+      start.textContent = "开始上传";
+      let data = {};
+      try { data = JSON.parse(xhr.responseText || "{}"); } catch (e) { data = {}; }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const parts = [];
+        if (data.images) parts.push(`${data.images} 张图片`);
+        if (data.videos) parts.push(`${data.videos} 个视频`);
+        toast(`已导入「${data.series || "内容"}」${parts.length ? " · " + parts.join(" / ") : ""}`);
+        close();
         loadLibrary();
-      } else { toast("导入失败: " + (d.detail || res.status)); }
-    } catch (e) {
-      toast("导入失败: " + e.message);
-    } finally {
-      importBtn.disabled = false;
-      importBtn.textContent = "开始导入";
-    }
+      } else {
+        toast("导入失败：" + (data.detail || ("HTTP " + xhr.status)));
+        status.textContent = "上传失败";
+      }
+    };
+    xhr.onerror = () => {
+      start.disabled = false;
+      start.textContent = "开始上传";
+      toast("上传失败：网络错误");
+      status.textContent = "上传失败";
+    };
+    xhr.send(form);
   });
 }
 

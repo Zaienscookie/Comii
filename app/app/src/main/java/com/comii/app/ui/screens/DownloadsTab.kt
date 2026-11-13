@@ -1,6 +1,7 @@
 package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +68,7 @@ import com.comii.app.ui.components.CoverImage
 import com.comii.app.ui.components.EmptyState
 import com.comii.app.ui.components.LargeTitle
 import com.comii.app.ui.components.SegmentControl
+import com.comii.app.ui.components.VideoThumbnail
 import com.comii.app.ui.components.formatBytes
 import com.comii.app.ui.theme.ComiiTheme
 import kotlinx.coroutines.launch
@@ -90,6 +92,7 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
     var categories by remember { mutableStateOf(safeCategories(state)) }
     var activeCategory by rememberSaveable { mutableStateOf("") }
     var layout by rememberSaveable { mutableStateOf(state.repository.settings.downloadsLayout) }
+    var mainFilter by rememberSaveable { mutableStateOf("all") }
     var editing by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var pendingDelete by remember { mutableStateOf<List<OfflineSeries>>(emptyList()) }
@@ -107,12 +110,24 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
         categories.filter { it.isNotBlank() && it != UNCATEGORIZED }.distinct()
     }
     val flatMode = layout == "flat"
+    val filteredSeries = remember(visibleSeries, mainFilter) {
+        when (mainFilter) {
+            "manga" -> visibleSeries.filter { it.kind == NodeKind.MANGA }
+            "video" -> visibleSeries.filter { it.kind == NodeKind.VIDEO }
+            else -> visibleSeries
+        }
+    }
+    val layoutOptions = when (mainFilter) {
+        "manga" -> listOf("按文件夹", "全部图片")
+        "video" -> listOf("按文件夹", "全部视频")
+        else -> listOf("按文件夹", "全部")
+    }
 
-    val sections = remember(visibleSeries, activeCategory, validCategories, version) {
+    val sections = remember(filteredSeries, activeCategory, validCategories, version) {
         val groups = LinkedHashMap<String, MutableList<OfflineSeries>>()
         groups[UNCATEGORIZED] = mutableListOf()
         validCategories.forEach { groups[it] = mutableListOf() }
-        visibleSeries.forEach { series ->
+        filteredSeries.forEach { series ->
             val key = series.category.ifBlank { UNCATEGORIZED }
             groups.getOrPut(key) { mutableListOf() }.add(series)
         }
@@ -125,15 +140,20 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
         result
     }
 
-    // 「全部」：按分类 + 系列名排序，图片和视频按顺序摊平
-    val flatMedia = remember(visibleSeries, version, flatMode) {
-        if (!flatMode) emptyList() else visibleSeries
+    // 平铺视图：全部 = 图片+视频；漫画 = 只图片；视频 = 只视频
+    val flatMedia = remember(filteredSeries, version, flatMode, mainFilter) {
+        if (!flatMode) emptyList() else filteredSeries
             .sortedWith(compareBy({ it.category }, { it.name }))
             .flatMap { series ->
-                series.images.mapIndexed { index, name -> OfflineImage(series, name, index) } +
+                val images = if (mainFilter == "video") emptyList() else {
+                    series.images.mapIndexed { index, name -> OfflineImage(series, name, index) }
+                }
+                val videos = if (mainFilter == "manga") emptyList() else {
                     series.videos.mapIndexed { index, name ->
                         OfflineImage(series, name, series.images.size + index, true)
                     }
+                }
+                images + videos
             }
     }
 
@@ -164,7 +184,26 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
         Spacer(Modifier.height(8.dp))
         Column(Modifier.padding(horizontal = 20.dp)) {
             SegmentControl(
-                options = listOf("分类", "全部"),
+                options = listOf("全部", "漫画", "视频"),
+                selectedIndex = when (mainFilter) {
+                    "manga" -> 1
+                    "video" -> 2
+                    else -> 0
+                },
+                onSelect = { index ->
+                    mainFilter = when (index) {
+                        1 -> "manga"
+                        2 -> "video"
+                        else -> "all"
+                    }
+                    activeCategory = ""
+                    editing = false
+                    selected = emptySet()
+                },
+            )
+            Spacer(Modifier.height(8.dp))
+            SegmentControl(
+                options = layoutOptions,
                 selectedIndex = if (flatMode) 1 else 0,
                 onSelect = { index ->
                     layout = if (index == 0) "group" else "flat"
@@ -197,10 +236,19 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
 
         Box(Modifier.weight(1f)) {
             when {
-                visibleSeries.isEmpty() -> EmptyState(
+                filteredSeries.isEmpty() -> EmptyState(
                     icon = Icons.Rounded.Download,
-                    title = if (query.isBlank()) "还没有离线内容" else "没有匹配的下载",
-                    subtitle = if (query.isBlank()) "在 Comii 里长按系列，选择「下载到本地」，没有网络也能看" else "换个关键词试试",
+                    title = when {
+                        query.isNotBlank() -> "没有匹配的下载"
+                        mainFilter == "video" -> "还没有离线视频"
+                        mainFilter == "manga" -> "还没有离线漫画"
+                        else -> "还没有离线内容"
+                    },
+                    subtitle = if (query.isNotBlank()) {
+                        "换个关键词试试"
+                    } else {
+                        "在 Comii 里长按系列，选择「下载到本地」，没有网络也能看"
+                    },
                 )
                 flatMode -> LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
@@ -227,24 +275,23 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                                 }
                         ) {
                             if (media.isVideo) {
-                                Column(
-                                    Modifier.fillMaxSize(),
-                                    verticalArrangement = Arrangement.Center,
-                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                VideoThumbnail(
+                                    file = state.repository.offline.videoFile(media.series.path, media.name),
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                Box(
+                                    Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .padding(5.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                        .padding(3.dp),
                                 ) {
                                     Icon(
                                         Icons.Rounded.PlayArrow,
                                         contentDescription = "视频",
                                         tint = Color.White,
-                                        modifier = Modifier.size(28.dp),
-                                    )
-                                    Text(
-                                        media.name,
-                                        color = Color.White.copy(alpha = 0.75f),
-                                        fontSize = 9.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(horizontal = 6.dp),
+                                        modifier = Modifier.size(14.dp),
                                     )
                                 }
                             } else {
@@ -290,6 +337,9 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                             OfflineCard(
                                 item = item,
                                 cover = cover,
+                                videoFile = item.videos.firstOrNull()?.let {
+                                    state.repository.offline.videoFile(item.path, it)
+                                },
                                 editing = editing,
                                 selected = selected.contains(item.path),
                                 onClick = {
@@ -405,6 +455,7 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
 private fun OfflineCard(
     item: OfflineSeries,
     cover: java.io.File?,
+    videoFile: java.io.File?,
     editing: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
@@ -425,7 +476,13 @@ private fun OfflineCard(
                 .clip(RoundedCornerShape(16.dp))
                 .background(palette.card)
         ) {
-            CoverImage(model = cover, kind = item.kind, modifier = Modifier.fillMaxSize())
+            if (cover != null) {
+                CoverImage(model = cover, kind = item.kind, modifier = Modifier.fillMaxSize())
+            } else if (item.kind == NodeKind.VIDEO && videoFile != null) {
+                VideoThumbnail(file = videoFile, modifier = Modifier.fillMaxSize())
+            } else {
+                CoverImage(model = null, kind = item.kind, modifier = Modifier.fillMaxSize())
+            }
             Box(
                 Modifier
                     .align(Alignment.TopStart)
@@ -489,34 +546,77 @@ private fun DownloadsEditBar(
     modifier: Modifier = Modifier,
 ) {
     val palette = ComiiTheme.palette
-    Row(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(palette.elevated)
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        TextButton(onClick = onToggleAll) {
-            Text(
-                if (allSelected) "取消全选" else "全选",
-                color = palette.accent,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("已选 $count 项", color = palette.textSecondary, fontSize = 12.sp)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onToggleAll) {
+                Text(
+                    if (allSelected) "取消全选" else "全选",
+                    color = palette.accent,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DownloadAction(
+                text = "移动到分类",
+                icon = Icons.Rounded.DriveFileMove,
+                enabled = count > 0,
+                onClick = onMove,
+                modifier = Modifier.weight(1f),
+            )
+            DownloadAction(
+                text = "删除",
+                icon = Icons.Rounded.Delete,
+                enabled = count > 0,
+                onClick = onDelete,
+                danger = true,
+                modifier = Modifier.weight(1f),
             )
         }
-        Text("已选 $count 项", color = palette.textSecondary, fontSize = 12.sp)
-        Spacer(Modifier.weight(1f))
-        TextButton(onClick = onMove, enabled = count > 0) {
-            Icon(Icons.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.accent)
-            Spacer(Modifier.width(4.dp))
-            Text("移动到分类", color = palette.accent, fontSize = 13.sp)
-        }
-        TextButton(onClick = onDelete, enabled = count > 0) {
-            Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = palette.danger)
-            Spacer(Modifier.width(4.dp))
-            Text("删除", color = palette.danger, fontSize = 13.sp)
-        }
+    }
+}
+
+@Composable
+private fun DownloadAction(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    danger: Boolean = false,
+) {
+    val palette = ComiiTheme.palette
+    val background = when {
+        !enabled -> palette.card.copy(alpha = 0.5f)
+        danger -> palette.danger
+        else -> palette.card
+    }
+    val contentColor = when {
+        !enabled -> palette.textTertiary
+        danger -> Color.White
+        else -> palette.accent
+    }
+    Row(
+        modifier = modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(background)
+            .clickable(enabled = enabled) { onClick() },
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(17.dp), tint = contentColor)
+        Spacer(Modifier.width(5.dp))
+        Text(text, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 
