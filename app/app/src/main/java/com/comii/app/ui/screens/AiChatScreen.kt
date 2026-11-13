@@ -141,6 +141,8 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     LaunchedEffect(personaId, personaVersion) {
         val current = ai.persona(personaId) ?: return@LaunchedEffect
         if (!current.vlife.enabled) return@LaunchedEffect
+        // 设定太少（比如乱填的 111/411）就不硬套模板日程
+        if ((current.systemPrompt.trim().length + current.tagline.trim().length) < 12) return@LaunchedEffect
         val today = java.time.LocalDate.now().toString()
         if (current.vlife.day != today || current.vlife.schedule.isBlank()) {
             runCatching { ai.generateDailyLife(personaId) }
@@ -240,7 +242,7 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             Column(Modifier.weight(1f)) {
                 Text(persona?.name ?: "角色", color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "好感 ${persona?.affection ?: 0} · 上下文 ${config.maxContextMessages} 条 · 本机存储",
+                    "${heartStateLabel(persona?.heart?.blame ?: 0.0)} · 好感 ${persona?.affection ?: 0} · 上下文 ${config.maxContextMessages} 条",
                     color = palette.textSecondary,
                     fontSize = 10.sp,
                 )
@@ -293,11 +295,13 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         }
 
         if (messages.isEmpty() && !streaming) {
-            EmptyState(
-                icon = Icons.Rounded.ChatBubbleOutline,
-                title = "和${persona?.name ?: "角色"}聊点什么",
-                subtitle = "它会记住这个人格设定和最近的对话",
-            )
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                EmptyState(
+                    icon = Icons.Rounded.ChatBubbleOutline,
+                    title = "和${persona?.name ?: "角色"}聊点什么",
+                    subtitle = "它会记住这个人格设定和最近的对话",
+                )
+            }
         } else {
             LazyColumn(
                 state = listState,
@@ -474,6 +478,14 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             }
         }
     }
+}
+
+private fun heartStateLabel(blame: Double): String = when {
+    blame >= 80 -> "回避"
+    blame >= 70 -> "害怕"
+    blame >= 55 -> "生气"
+    blame >= 25 -> "委屈"
+    else -> "日常"
 }
 
 @Composable

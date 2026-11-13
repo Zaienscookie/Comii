@@ -127,6 +127,7 @@ class AiRepository(context: Context) {
         if (persona.memory.isNotBlank()) {
             messages += ChatMessage("system", "你记得这些事：\n${persona.memory.trim()}")
         }
+        messages += ChatMessage("system", heartPrompt(persona))
         if (config.segmentReplies) {
             messages += ChatMessage(
                 "system",
@@ -172,10 +173,10 @@ class AiRepository(context: Context) {
             if (persona.vlife.city.isNotBlank()) appendLine("所在城市：${persona.vlife.city}")
             if (persona.vlife.occupation.isNotBlank()) appendLine("身份/职业：${persona.vlife.occupation}")
             if (persona.systemPrompt.isNotBlank()) appendLine("人格设定：${persona.systemPrompt.take(800)}")
-            appendLine("今天是 $today。请用第一人称安排这一天，输出 5-7 行：")
-            appendLine("- 上午 / 下午 / 晚上各一段，带具体时间、地点、正在做什么")
-            appendLine("- 最后两行分别写「心情：…」和「穿搭：…」")
-            appendLine("只输出安排本身，不要解释，不要用列表符号以外的格式。")
+            appendLine("今天是 $today。请按角色设定自然地安排这一天，不要套用「8 点起床 / 12 点午饭」这类模板；")
+            appendLine("时间、地点、活动要贴合角色身份和性格，可以出门、上班、见朋友。如果设定信息很少，就安排简单的一天。")
+            appendLine("输出 4-6 行，带具体时间；最后两行分别写「心情：…」和「穿搭：…」。")
+            appendLine("只输出安排本身，不要解释。")
         }
         val text = client.complete(
             config = config.copy(stream = false),
@@ -222,6 +223,8 @@ class AiRepository(context: Context) {
         val persona = persona(personaId)?.let {
             it.copy(affection = (it.affection + 1).coerceAtMost(100))
         } ?: throw AiException("角色不存在")
+        val withHeart = updateHeart(persona, text)
+        savePersona(withHeart)
         val conversation = conversation(conversationId) ?: throw AiException("会话不存在")
         val config = config()
         val userMessage = ChatMessage("user", text.trim(), now(), imagePath)
@@ -231,10 +234,9 @@ class AiRepository(context: Context) {
             title = if (conversation.title == "新对话") text.trim().take(18) else conversation.title,
         )
         replaceConversation(current)
-        if (persona.affection != persona(personaId)?.affection) savePersona(persona)
 
-        val context = buildMessages(persona, current)
-        val temperature = persona.temperature ?: config.temperature
+        val context = buildMessages(withHeart, current)
+        val temperature = withHeart.temperature ?: config.temperature
         val answer = try {
             if (config.stream) {
                 client.stream(config, context, temperature, onDelta)
@@ -260,10 +262,115 @@ class AiRepository(context: Context) {
             last = message
             if (answers.size > 1 && index != answers.lastIndex) delay(650)
         }
-        runCatching { maybeSummarize(persona, current) }
+        runCatching { maybeSummarize(withHeart, current) }
         last
     }
 
+    /** 九维情绪/状态/念头：简化版「鱼的心」。 */
+    private fun updateHeart(persona: Persona, text: String): Persona {
+        val heart = persona.heart
+        val timestamp = now()
+        val hours = if (heart.updatedAt > 0) {
+            ((timestamp - heart.updatedAt) / 3_600_000.0).coerceIn(0.0, 72.0)
+        } else {
+            0.0
+        }
+        fun decay(value: Double, baseline: Double, rate: Double): Double {
+            val factor = if (value > baseline) 1 - rate * hours else 1.0
+            return (baseline + (value - baseline) * factor).coerceIn(0.0, 100.0)
+        }
+        var attachment = decay(heart.attachment, 45.0, 0.01)
+        var curiosity = decay(heart.curiosity, 55.0, 0.03)
+        var reflection = decay(heart.reflection, 50.0, 0.04)
+        var duty = decay(heart.duty, 50.0, 0.03)
+        var social = decay(heart.social, 45.0, 0.04)
+        var fatigue = decay(heart.fatigue, 20.0, 0.08)
+        var intimacy = decay(heart.intimacy, 40.0, 0.01)
+        var stress = decay(heart.stress, 15.0, 0.04)
+        var joy = decay(heart.joy, 50.0, 0.05)
+        var blame = (heart.blame - 3.0 * hours).coerceIn(0.0, 100.0)
+
+        val lowered = text.lowercase()
+        val praise = listOf("厉害", "真棒", "喜欢", "谢谢", "可爱", "贴心", "乖", "好看")
+        val apology = listOf("对不起", "抱歉", "我错了", "别生气", "原谅")
+        val blameWords = listOf("烦", "滚", "闭嘴", "讨厌", "别烦", "不用你")
+        val question = listOf("？", "?", "吗", "怎么", "为什么", "帮我")
+
+        if (praise.any { lowered.contains(it) }) {
+            joy += 4.0
+            attachment += 2.0
+            intimacy += 2.0
+            stress -= 2.0
+        }
+        if (apology.any { lowered.contains(it) }) {
+            blame -= 12.0
+            stress -= 5.0
+        }
+        if (blameWords.any { lowered.contains(it) }) {
+            blame += 18.0
+            stress += 8.0
+            joy -= 5.0
+            attachment -= 2.0
+        }
+        if (question.any { lowered.contains(it) }) curiosity += 1.5
+        social += 1.2
+        intimacy += 0.1
+        fatigue += 0.4
+
+        val state = heartState(blame)
+        val thoughts = when (state) {
+            "生气" -> listOf("还在想刚才那句话", "有点委屈，不想先服软", "想听你解释清楚")
+            "委屈" -> listOf("想被哄一下", "是不是我太黏人了", "想等你先开口")
+            "害怕" -> listOf("怕你真的不想理我了", "想确认你还在", "不太敢多说")
+            "回避" -> listOf("想安静一会儿", "暂时不想解释", "先冷一冷")
+            else -> listOf("想找他说话", "想知道他今天怎么样", "想被夸一句", "想安静待一会儿", "想分享刚看到的东西")
+        }
+        val thought = if (heart.thought.isBlank() || timestamp - heart.updatedAt > 2 * 3_600_000L) {
+            thoughts.random()
+        } else {
+            heart.thought
+        }
+        val updated = heart.copy(
+            attachment = attachment.coerceIn(0.0, 100.0),
+            curiosity = curiosity.coerceIn(0.0, 100.0),
+            reflection = reflection.coerceIn(0.0, 100.0),
+            duty = duty.coerceIn(0.0, 100.0),
+            social = social.coerceIn(0.0, 100.0),
+            fatigue = fatigue.coerceIn(0.0, 100.0),
+            intimacy = intimacy.coerceIn(0.0, 100.0),
+            stress = stress.coerceIn(0.0, 100.0),
+            joy = joy.coerceIn(0.0, 100.0),
+            blame = blame.coerceIn(0.0, 100.0),
+            thought = thought,
+            updatedAt = timestamp,
+        )
+        return persona.copy(heart = updated)
+    }
+
+    private fun heartState(blame: Double): String = when {
+        blame >= 80 -> "回避"
+        blame >= 70 -> "害怕"
+        blame >= 55 -> "生气"
+        blame >= 25 -> "委屈"
+        else -> "日常"
+    }
+
+    private fun heartPrompt(persona: Persona): String {
+        val heart = persona.heart
+        val state = heartState(heart.blame)
+        val closeness = when {
+            heart.intimacy >= 70 -> "很亲近，说话可以更放松、更黏一点"
+            heart.intimacy >= 50 -> "关系不错，像熟人一样自然"
+            else -> "还在慢慢熟悉，保持一点分寸"
+        }
+        return buildString {
+            appendLine("你此刻的状态：$state。")
+            appendLine("依恋 ${heart.attachment.toInt()}，亲密 ${heart.intimacy.toInt()}，压力 ${heart.stress.toInt()}，疲惫 ${heart.fatigue.toInt()}，喜悦 ${heart.joy.toInt()}。")
+            appendLine("关系：$closeness。")
+            appendLine("你现在心里在惦记：${heart.thought}。")
+            append("说话方式要符合这个状态，不要把数值直接说出来。如果状态是生气/委屈，可以短一点、带点情绪；如果开心，可以主动分享。")
+        }
+    }
     private fun replaceConversation(conversation: Conversation) {
         synchronized(lock) {
             state = state.copy(
@@ -350,15 +457,41 @@ class AiRepository(context: Context) {
     suspend fun proactive(personaId: String): ChatMessage? = withContext(Dispatchers.IO) {
         val persona = persona(personaId) ?: return@withContext null
         if (!persona.proactive) return@withContext null
-        val interval = persona.proactiveIntervalHours.coerceIn(1, 72) * 60L * 60L * 1000L
+        val heart = persona.heart
         val now = now()
-        // 下一次时间在发送时就随机定好，避免每次打开 App 都在同一个点触发
-        val due = if (persona.nextProactiveAt > 0) {
-            persona.nextProactiveAt
-        } else {
-            persona.lastProactiveAt + (interval * (0.6 + kotlin.random.Random.nextDouble() * 1.4)).toLong()
+        val calendar = java.util.Calendar.getInstance()
+        val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+        // 人不会凌晨发消息：8 点前、23 点后不主动
+        if (hour < 8 || hour >= 23) return@withContext null
+        if (heart.nextProactiveAt == 0L) {
+            savePersona(
+                persona.copy(
+                    heart = heart.copy(
+                        nextProactiveAt = now + (1..4).random() * 3_600_000L,
+                    )
+                )
+            )
+            return@withContext null
         }
-        if (now < due) return@withContext null
+        if (now < heart.nextProactiveAt) return@withContext null
+        if (heart.blame >= 80) {
+            savePersona(persona.copy(heart = heart.copy(nextProactiveAt = now + 2 * 3_600_000L)))
+            return@withContext null
+        }
+        val chance = when {
+            heart.blame >= 55 -> 0.25
+            heart.fatigue >= 75 -> 0.35
+            heart.intimacy >= 65 -> 0.85
+            else -> 0.6
+        }
+        if (kotlin.random.Random.nextDouble() > chance) {
+            savePersona(
+                persona.copy(
+                    heart = heart.copy(nextProactiveAt = now + (1..3).random() * 3_600_000L),
+                )
+            )
+            return@withContext null
+        }
         val conversation = conversations(personaId).firstOrNull() ?: createConversation(personaId)
         val config = config()
         val instructions = ChatMessage(
@@ -379,11 +512,21 @@ class AiRepository(context: Context) {
         replaceConversation(
             conversation.copy(messages = conversation.messages + message, updatedAt = now())
         )
-        val nextGap = (interval * (0.6 + kotlin.random.Random.nextDouble() * 1.4)).toLong()
+        // 下一次随机落在 2~6 小时后，并保证仍在 8:00~23:00 之间
+        var next = now + ((2..6).random() * 3_600_000L) + kotlin.random.Random.nextLong(0, 1_800_000L)
+        val nextCalendar = java.util.Calendar.getInstance().apply { timeInMillis = next }
+        val nextHour = nextCalendar.get(java.util.Calendar.HOUR_OF_DAY)
+        if (nextHour >= 23 || nextHour < 8) {
+            nextCalendar.add(java.util.Calendar.DAY_OF_MONTH, if (nextHour >= 23) 1 else 0)
+            nextCalendar.set(java.util.Calendar.HOUR_OF_DAY, 9)
+            nextCalendar.set(java.util.Calendar.MINUTE, (0..50).random())
+            next = nextCalendar.timeInMillis
+        }
         savePersona(
             persona.copy(
                 lastProactiveAt = now,
-                nextProactiveAt = now + nextGap,
+                nextProactiveAt = next,
+                heart = heart.copy(nextProactiveAt = next, updatedAt = now),
             )
         )
         message

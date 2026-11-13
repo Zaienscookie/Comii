@@ -77,9 +77,6 @@ fun AiPersonaScreen(state: AppState, personaId: String?, nav: NavHostController)
     var pluginIds by remember { mutableStateOf(existing?.pluginIds.orEmpty()) }
     var temperature by remember { mutableFloatStateOf((existing?.temperature ?: 0.8).toFloat()) }
     var proactive by remember { mutableStateOf(existing?.proactive ?: false) }
-    var proactiveHours by remember {
-        mutableFloatStateOf((existing?.proactiveIntervalHours ?: 6).toFloat())
-    }
     var avatarPath by remember { mutableStateOf(existing?.avatarPath.orEmpty()) }
     var cropSource by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -114,7 +111,7 @@ fun AiPersonaScreen(state: AppState, personaId: String?, nav: NavHostController)
             createdAt = existing?.createdAt ?: System.currentTimeMillis(),
             vlife = (existing?.vlife ?: VirtualLife()).copy(enabled = pluginIds.contains("vlife")),
             proactive = proactive,
-            proactiveIntervalHours = proactiveHours.toInt(),
+            proactiveIntervalHours = existing?.proactiveIntervalHours ?: 6,
             lastProactiveAt = existing?.lastProactiveAt ?: 0L,
             avatarPath = avatarPath,
             affection = existing?.affection ?: 0,
@@ -238,15 +235,6 @@ fun AiPersonaScreen(state: AppState, personaId: String?, nav: NavHostController)
                     )
                 }
                 Switch(checked = proactive, onCheckedChange = { proactive = it })
-            }
-            if (proactive) {
-                Text("间隔 ${proactiveHours.toInt()} 小时", color = palette.textSecondary, fontSize = 12.sp)
-                Slider(
-                    value = proactiveHours,
-                    onValueChange = { proactiveHours = it },
-                    valueRange = 1f..24f,
-                    steps = 22,
-                )
             }
 
             Spacer(Modifier.height(20.dp))

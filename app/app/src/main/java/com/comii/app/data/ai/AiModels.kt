@@ -35,6 +35,24 @@ data class VirtualLife(
     val day: String = "",
 )
 
+/** 参考 astrbot_plugin_fish_heart 的简化情绪模型：九维 + 状态 + 念头。 */
+@Serializable
+data class Heart(
+    val attachment: Double = 45.0,
+    val curiosity: Double = 55.0,
+    val reflection: Double = 50.0,
+    val duty: Double = 50.0,
+    val social: Double = 45.0,
+    val fatigue: Double = 20.0,
+    val intimacy: Double = 40.0,
+    val stress: Double = 15.0,
+    val joy: Double = 50.0,
+    val blame: Double = 0.0,
+    val thought: String = "",
+    val updatedAt: Long = 0L,
+    val nextProactiveAt: Long = 0L,
+)
+
 /** 一个人格（OC 角色），对应 AstrBot 里的 Persona。 */
 @Serializable
 data class Persona(
@@ -60,6 +78,7 @@ data class Persona(
     val avatarPath: String = "",
     /** 好感度，随聊天自动增长。 */
     val affection: Int = 0,
+    val heart: Heart = Heart(),
 )
 
 @Serializable
