@@ -118,6 +118,9 @@ class ComiiRepository(private val context: Context) {
     suspend fun setAlbumCover(path: String, series: String): ActionResult =
         requireApi().setAlbumCover(path, series)
 
+    suspend fun deleteMedia(path: String, names: List<String>): ActionResult =
+        requireApi().deleteMedia(path, names)
+
     /**
      * Downloads every series below [path] and groups them under a local category
      * named after the folder, so a whole author / category is available offline.

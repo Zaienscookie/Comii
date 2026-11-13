@@ -1112,3 +1112,26 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
 .import-size{color:var(--text-secondary,#8e8e93);flex:none}
 .import-progress{height:6px;border-radius:3px;background:rgba(127,127,127,.25);overflow:hidden;margin-top:12px}
 .import-progress-bar{height:100%;width:0;background:var(--accent,#0a84ff);transition:width .15s ease}
+
+/* ---------- 相册（vivo 风格） ---------- */
+.grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; }
+.card-cover { aspect-ratio: 1 / 1; }
+.card.folder .card-cover { aspect-ratio: 1 / 1; }
+.media-grid { margin-top: 8px; }
+.media-heading { grid-column: 1 / -1; font-size: 12px; font-weight: 600; color: var(--text-2); padding: 10px 2px 2px; }
+.media-tile { position: relative; aspect-ratio: 1 / 1; border-radius: 10px; overflow: hidden; background: var(--card); cursor: pointer; }
+.media-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.media-tile.selected { outline: 3px solid var(--accent); outline-offset: -3px; }
+.media-check { position: absolute; top: 6px; right: 6px; width: 18px; height: 18px; border-radius: 50%; background: rgba(0,0,0,.35); }
+.media-tile.selected .media-check { background: var(--accent); }
+.media-tile.selected .media-check::after { content: "✓"; color: #fff; font-size: 12px; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.media-play { position: absolute; left: 8px; bottom: 8px; color: #fff; background: rgba(0,0,0,.45); border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+.media-bar { position: fixed; left: 12px; right: 12px; bottom: 14px; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 16px; background: var(--card); box-shadow: var(--shadow); z-index: 40; }
+.media-bar.hidden { display: none; }
+.media-bar span { font-size: 13px; color: var(--text-2); }
+.media-bar-actions { margin-left: auto; display: flex; gap: 6px; }
+.media-bar-btn { border: none; background: transparent; color: var(--accent); font-size: 14px; font-weight: 600; padding: 8px 10px; border-radius: 10px; }
+.media-bar-btn.danger { color: #ff453a; }
+.tags-list { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 16px; }
+.tag-chip { border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 999px; padding: 8px 12px; font-size: 13px; }
+.tag-chip.clear { color: var(--text-2); }

@@ -309,21 +309,36 @@ def browse(raw_path: str = "") -> BrowseResponse:
     items: list[LibraryNode] = []
     for directory in visible_directories(base):
         child_path = f"{normalized}/{directory.name}".lstrip("/")
-        series = _series_node(directory, child_path)
-        if series is not None:
-            items.append(series)
+        children = visible_directories(directory)
+        own_images, own_videos = list_media(directory)
+
+        if not children:
+            # Leaf directory: a real series (all images / videos / mixed).
+            series = _series_node(directory, child_path)
+            if series is not None:
+                items.append(series)
+                continue
+            # Empty folder the user just created: keep it visible for uploads.
+            items.append(
+                LibraryNode(
+                    name=directory.name,
+                    path=child_path,
+                    kind=NodeKind.album,
+                    child_count=0,
+                )
+            )
             continue
 
-        children = visible_directories(directory)
-        # Empty folders are real folders the user just created: keep them visible
-        # so uploads can target them.
-        cover = None
-        album = album_cover_child(directory)
-        if album is not None:
-            album_relative = album.relative_to(directory).as_posix()
+        # Directory with sub-directories: an album. It may also contain photos
+        # and videos of its own, which the client shows together with the
+        # sub-albums (vivo-gallery style).
+        cover = _cover_for(child_path, own_images, own_videos, directory)
+        configured = album_cover_child(directory)
+        if configured is not None:
+            album_relative = configured.relative_to(directory).as_posix()
             album_path = f"{child_path}/{album_relative}".lstrip("/")
-            preview = _series_node(album, album_path)
-            cover = preview.cover if preview is not None else first_series_cover(album, album_path)
+            preview = _series_node(configured, album_path)
+            cover = preview.cover if preview is not None else first_series_cover(configured, album_path)
         if cover is None:
             cover = first_series_cover(directory, child_path)
 
@@ -331,10 +346,11 @@ def browse(raw_path: str = "") -> BrowseResponse:
             LibraryNode(
                 name=directory.name,
                 path=child_path,
-                kind=NodeKind.folder,
+                kind=NodeKind.album,
                 cover=cover,
+                image_count=len(own_images),
+                video_count=len(own_videos),
                 child_count=len(children),
-                forced_kind=read_forced_kind(directory),
             )
         )
 
@@ -447,10 +463,11 @@ def node_for_path(raw_path: str) -> Optional[LibraryNode]:
     except HTTPException:
         return None
     node = _series_node(directory, normalized)
-    if node is not None:
-        return node
     children = visible_directories(directory)
-    cover = None
+    if not children and node is not None:
+        return node
+    own_images, own_videos = list_media(directory)
+    cover = _cover_for(normalized, own_images, own_videos, directory)
     album = album_cover_child(directory)
     if album is not None:
         album_relative = album.relative_to(directory).as_posix()
@@ -462,10 +479,11 @@ def node_for_path(raw_path: str) -> Optional[LibraryNode]:
     return LibraryNode(
         name=directory.name,
         path=normalized,
-        kind=NodeKind.folder,
+        kind=NodeKind.album,
         cover=cover,
+        image_count=len(own_images),
+        video_count=len(own_videos),
         child_count=len(children),
-        forced_kind=read_forced_kind(directory),
     )
 
 

@@ -18,7 +18,7 @@ from starlette.background import BackgroundTask
 
 from ..config import settings
 from ..models import NodeKind
-from ..services import archive, importers, library, manage, media, thumbs, trash
+from ..services import archive, importers, library, manage, media, media_trash, tags, thumbs, trash
 
 router = APIRouter(prefix="/api", tags=["legacy-web"])
 
@@ -47,43 +47,70 @@ def _build_tree(directory: Path, prefix: str = "") -> list[dict]:
     for entry in library.visible_directories(directory):
         rel = f"{prefix}/{entry.name}".lstrip("/")
         images, videos = library.list_media(entry)
-        if images or videos:
-            custom = library.custom_cover_name(entry)
-            if custom:
-                cover = _legacy_thumb_url(rel, custom)
-            elif images:
-                cover = _legacy_thumb_url(rel, images[0].name)
+        children = library.visible_directories(entry)
+
+        if not children:
+            if images or videos:
+                custom = library.custom_cover_name(entry)
+                if custom:
+                    cover = _legacy_thumb_url(rel, custom)
+                elif images:
+                    cover = _legacy_thumb_url(rel, images[0].name)
+                else:
+                    cover = _legacy_video_thumb_url(rel, videos[0].name)
+                items.append(
+                    {
+                        "name": entry.name,
+                        "path": rel,
+                        "kind": "series",
+                        "subkind": _series_kind(images, videos),
+                        "images": len(images),
+                        "videos": len(videos),
+                        "cover": cover,
+                    }
+                )
             else:
-                cover = _legacy_video_thumb_url(rel, videos[0].name)
-            items.append(
-                {
-                    "name": entry.name,
-                    "path": rel,
-                    "kind": "series",
-                    "subkind": _series_kind(images, videos),
-                    "images": len(images),
-                    "videos": len(videos),
-                    "cover": cover,
-                }
-            )
+                items.append(
+                    {
+                        "name": entry.name,
+                        "path": rel,
+                        "kind": "folder",
+                        "children": [],
+                        "images": 0,
+                        "videos": 0,
+                        "cover": None,
+                    }
+                )
+            continue
+
+        # Album: has sub-folders, may also hold its own photos / videos.
+        cover = None
+        custom = library.custom_cover_name(entry)
+        if custom:
+            cover = _legacy_thumb_url(rel, custom)
+        elif images:
+            cover = _legacy_thumb_url(rel, images[0].name)
+        elif videos:
+            cover = _legacy_video_thumb_url(rel, videos[0].name)
+        configured = library.album_cover_relative(entry)
+        if configured:
+            wanted = f"{rel}/{configured}"
+            children_tree = _build_tree(entry, rel)
+            cover = next((child.get("cover") for child in children_tree if child.get("path") == wanted), None) or cover
         else:
-            children = _build_tree(entry, rel)
-            forced = library.read_forced_kind(entry)
-            cover = None
-            configured = library.album_cover_relative(entry)
-            if configured:
-                wanted = f"{rel}/{configured}"
-                cover = next((child.get("cover") for child in children if child.get("path") == wanted), None)
-            if not cover:
-                cover = next((child.get("cover") for child in children if child.get("cover")), None)
-            items.append(
-                {
-                    "name": entry.name,
-                    "path": rel,
-                    "kind": "folder",
-                    "children": children,
-                    "forced_type": forced,
-                    "cover": cover,
+            children_tree = _build_tree(entry, rel)
+        if not cover:
+            cover = next((child.get("cover") for child in children_tree if child.get("cover")), None)
+        items.append(
+            {
+                "name": entry.name,
+                "path": rel,
+                "kind": "folder",
+                "children": children_tree,
+                "images": len(images),
+                "videos": len(videos),
+                "forced_type": library.read_forced_kind(entry),
+                "cover": cover,
                 }
             )
     return items
@@ -385,6 +412,39 @@ async def import_pdf(
         "pages": result.pages,
         "path": result.path,
     }
+
+
+@router.get("/tags")
+def legacy_tags() -> dict:
+    return {"tags": tags.all_tags()}
+
+
+@router.get("/tagged")
+def legacy_tagged(tag: str = "") -> dict:
+    items = []
+    for path in tags.series_paths(tag):
+        node = library.node_for_path(path)
+        if node is not None:
+            items.append(
+                {
+                    "name": node.name,
+                    "path": node.path,
+                    "kind": "folder" if (node.child_count or 0) > 0 else "series",
+                    "cover": node.cover,
+                    "images": node.image_count,
+                    "videos": node.video_count,
+                }
+            )
+    return {"tag": tag, "items": items, "total": len(items)}
+
+
+@router.post("/media/delete")
+async def legacy_media_delete(payload: dict) -> dict:
+    deleted = media_trash.delete_files(
+        str(payload.get("path", "")),
+        [str(name) for name in (payload.get("names") or [])],
+    )
+    return {"status": "ok", "deleted": deleted}
 
 
 @router.get("/export")

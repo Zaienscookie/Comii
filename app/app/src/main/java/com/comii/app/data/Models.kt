@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
 
 object NodeKind {
     const val FOLDER = "folder"
+    const val ALBUM = "album"
     const val MANGA = "manga"
     const val VIDEO = "video"
     const val MIXED = "mixed"
@@ -27,7 +28,8 @@ data class LibraryNode(
     val updated_at: Double? = null,
     val size: Long? = null,
 ) {
-    val isFolder: Boolean get() = kind == NodeKind.FOLDER
+    val isAlbum: Boolean get() = kind == NodeKind.ALBUM
+    val isFolder: Boolean get() = kind == NodeKind.FOLDER || kind == NodeKind.ALBUM
 }
 
 @Serializable
@@ -61,6 +63,9 @@ data class SetCoverBody(val path: String, val name: String = "")
 
 @Serializable
 data class AlbumCoverBody(val path: String, val series: String = "")
+
+@Serializable
+data class MediaDeleteBody(val path: String, val names: List<String> = emptyList())
 
 @Serializable
 data class BrowseResponse(

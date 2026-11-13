@@ -21,6 +21,7 @@ from ..models import (
     GalleryItem,
     GalleryResponse,
     ImportResult,
+    MediaDeleteRequest,
     MoveRequest,
     PingResponse,
     ProgressUpdate,
@@ -46,6 +47,7 @@ from ..services import (
     library,
     manage,
     media,
+    media_trash,
     progress,
     tags,
     thumbs,
@@ -190,6 +192,13 @@ def media_view(request: Request, path: str, name: str, w: int = 1080) -> Respons
             headers={"Cache-Control": "public, max-age=604800"},
         )
     return media.file_response(source, request)
+
+
+@router.post("/media/delete", response_model=ActionResult)
+def media_delete(payload: MediaDeleteRequest) -> ActionResult:
+    """删除单张 / 多张图片或视频（移入 data/trash/media，可人工找回）。"""
+    deleted = media_trash.delete_files(payload.path, payload.names)
+    return ActionResult(status="ok", path=payload.path, message=f"已删除 {deleted} 项")
 
 
 @router.get("/media/video")

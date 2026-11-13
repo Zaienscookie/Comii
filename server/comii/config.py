@@ -1,4 +1,4 @@
-﻿"""Runtime configuration for the Comii server.
+"""Runtime configuration for the Comii server.
 
 Every path can be overridden through the environment so the same code runs
 from the repository checkout, from ``/root/dev`` on the LAN server, or from a
@@ -30,7 +30,7 @@ class Settings:
 
     app_name = "Comii"
     api_prefix = "/api/v1"
-    version = "2.25.1"
+    version = "2.26.0"
 
     def __init__(self) -> None:
         self.project_root = PROJECT_ROOT

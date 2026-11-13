@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 class NodeKind(str, Enum):
     folder = "folder"
+    album = "album"
     manga = "manga"
     video = "video"
     mixed = "mixed"
@@ -106,6 +107,11 @@ class MoveRequest(BaseModel):
 
 class DeleteRequest(BaseModel):
     paths: list[str] = Field(default_factory=list)
+
+
+class MediaDeleteRequest(BaseModel):
+    path: str
+    names: list[str] = Field(default_factory=list)
 
 
 class ActionResult(BaseModel):

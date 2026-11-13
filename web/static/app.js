@@ -48,6 +48,9 @@ let folderMode = true;          // 文件夹功能启用
 let layoutMode = "folders";     // 按文件夹 / 全部图片（视频）
 let selectedItems = new Set();  // 编辑模式多选集合
 let clipItems = [];             // vivo 风格移动剪贴板: [{name, path}]
+let mediaItems = [];            // 当前相册自己的照片 / 视频
+let selectedMedia = new Set();  // 相册内多选的媒体文件名
+let tagResults = null;          // 标签筛选结果
 
 const grid = document.getElementById("grid");
 const empty = document.getElementById("empty");
@@ -97,53 +100,42 @@ async function loadLibrary() {
     }
     libraryData = { series: items, tree: data.tree || [] };
 
-    // 首次进入：默认落在「漫画」；支持 ?tab=all|comic|video 深链
+    // 根目录就是相册列表；支持 ?path= 深链直接进某个相册
     if (!bootstrapped) {
       bootstrapped = true;
       const params = new URLSearchParams(location.search);
-      const wanted = (params.get("tab") || "").toLowerCase();
-      if (wanted === "all" && !currentPath) {
-        filter = "all";
-        folderMode = false;
-        document.body.classList.remove("show-folders");
-        document.body.classList.add("filter-all");
-        return loadLibrary();
-      }
-      const targetName = wanted === "video" ? "video" : "comic";
-      const target = (data.tree || []).find(
-        it => it.kind === "folder" && (it.name || "").toLowerCase() === targetName
-      );
-      if (target && !currentPath) {
-        filter = targetName === "video" ? "video" : "manga";
-        folderMode = true;
-        document.body.classList.remove("filter-all");
-        document.body.classList.add("show-folders");
-        currentPath = target.path;
+      const wanted = params.get("path");
+      if (wanted) {
+        currentPath = wanted.replace(/^\/+|\/+$/g, "");
         return loadLibrary();
       }
     }
 
-    // 全部 / 漫画·视频的「全部图片 / 全部视频」都走相册网格
-    const flatMode = filter === "all" || layoutMode === "flat";
-    if (!query && flatMode) {
-      const kind = filter === "all" ? "all" : filter;
+    // 相册只按真实文件夹展示，不再有「全部/漫画/视频」聚合页
+    gallery = null;
+    galleryTotal = 0;
+    mediaItems = [];
+    if (currentPath && !query) {
       try {
-        const gres = await KomiConfig.fetch(`/api/gallery?kind=${kind}&limit=${GALLERY_PAGE}&offset=0`);
-        const gdata = await gres.json();
-        gallery = gdata.items || [];
-        galleryTotal = typeof gdata.total === "number" ? gdata.total : gallery.length;
+        const sres = await KomiConfig.fetch(`/api/series/${encodeURIComponent(currentPath)}`);
+        if (sres.ok) {
+          const detail = await sres.json();
+          (detail.images || []).forEach((name, index) => {
+            mediaItems.push({ name, index, isVideo: false });
+          });
+          (detail.videos || []).forEach((name) => {
+            mediaItems.push({ name, index: 0, isVideo: true });
+          });
+        }
       } catch (err) {
-        gallery = [];
-        galleryTotal = 0;
+        mediaItems = [];
       }
-    } else {
-      gallery = null;
-      galleryTotal = 0;
     }
+    selectedMedia.clear();
+    updateMediaBar();
 
     updateHero();
     render();
-    if (gallery) updateGalleryMeta();
   } catch (e) {
     heroSub.textContent = "加载失败";
     toast("无法加载库，请检查后端服务或服务器设置");
@@ -151,7 +143,8 @@ async function loadLibrary() {
 }
 
 function updateHero() {
-  heroSub.textContent = `${libraryData.series.length} 项`;
+  const count = (libraryData.series || []).length;
+  heroSub.textContent = currentPath ? `${count} 个子相册` : `${count} 个相册`;
 }
 
 function matches(item) {
@@ -168,15 +161,11 @@ function matches(item) {
 }
 
 function render() {
-  if (gallery && !query) {
-    renderGallery();
-    return;
-  }
   document.body.classList.remove("gallery-mode");
   grid.classList.remove("gallery-grid");
-  const items = query ? (searchResults || []) : libraryData.series.filter(matches);
+  const items = query ? (searchResults || []) : (tagResults || libraryData.series);
   grid.innerHTML = "";
-  empty.classList.toggle("hidden", items.length > 0);
+  empty.classList.toggle("hidden", items.length > 0 || mediaItems.length > 0);
 
   renderBreadcrumb();
   syncSegments();
@@ -192,6 +181,7 @@ function render() {
   if (folderMode) {
     bindDragDrop(items);
   }
+  renderMedia();
   syncEditBar();
 }
 
@@ -607,6 +597,9 @@ let currentPath = "";
 
 function openFolder(path) {
   currentPath = path;
+  selectedMedia.clear();
+  updateMediaBar();
+  tagResults = null;
   if (query) {
     query = "";
     searchResults = null;
@@ -1342,14 +1335,200 @@ async function downloadSeries(item) {
   }
 }
 
+// ---------- 相册内的照片 / 视频（vivo 相册式网格） ----------
+const mediaGrid = document.getElementById("mediaGrid");
+const mediaBar = document.getElementById("mediaBar");
+const mediaBarCount = document.getElementById("mediaBarCount");
+
+function mediaUrlOf(item) {
+  const dir = String(currentPath || "").split("/").filter(Boolean).map(encodeURIComponent).join("/");
+  const name = encodeURIComponent(item.name);
+  return item.isVideo ? `/api/video_thumb/${dir}/${name}` : `/api/thumb/${dir}/${name}`;
+}
+
+function renderMedia() {
+  if (!mediaGrid) return;
+  mediaGrid.hidden = mediaItems.length === 0;
+  mediaGrid.innerHTML = "";
+  if (!mediaItems.length) return;
+  const heading = document.createElement("div");
+  heading.className = "media-heading";
+  heading.textContent = `本相册内容 · ${mediaItems.length} 项`;
+  mediaGrid.appendChild(heading);
+  mediaItems.forEach(item => mediaGrid.appendChild(renderMediaTile(item)));
+  updateMediaBar();
+}
+
+function renderMediaTile(item) {
+  const tile = document.createElement("div");
+  tile.className = "media-tile" + (selectedMedia.has(item.name) ? " selected" : "");
+  tile.innerHTML = `<img src="${mediaUrlOf(item)}" loading="lazy" alt="">
+    ${item.isVideo ? '<span class="media-play">▶</span>' : ""}
+    <span class="media-check"></span>`;
+  let timer = null;
+  tile.addEventListener("pointerdown", () => {
+    timer = setTimeout(() => { timer = null; toggleMedia(item); }, 450);
+  });
+  const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  tile.addEventListener("pointerup", cancel);
+  tile.addEventListener("pointerleave", cancel);
+  tile.addEventListener("click", (e) => {
+    if (selectedMedia.size > 0 || tagResults) {
+      e.preventDefault();
+      toggleMedia(item);
+      return;
+    }
+    openMedia(item);
+  });
+  return tile;
+}
+
+function toggleMedia(item) {
+  if (selectedMedia.has(item.name)) selectedMedia.delete(item.name);
+  else selectedMedia.add(item.name);
+  renderMedia();
+}
+
+function updateMediaBar() {
+  if (!mediaBar) return;
+  mediaBar.classList.toggle("hidden", selectedMedia.size === 0);
+  if (mediaBarCount) mediaBarCount.textContent = `已选 ${selectedMedia.size} 项`;
+}
+
+function openMedia(item) {
+  const base = KomiConfig.serverBase();
+  if (item.isVideo) {
+    location.href = base + `/video.html?s=${encodeURIComponent(currentPath)}`;
+  } else {
+    location.href = base + `/reader.html?s=${encodeURIComponent(currentPath)}&p=${item.index}`;
+  }
+}
+
+async function deleteMedia() {
+  if (!selectedMedia.size) return;
+  const ok = confirm(`确定删除选中的 ${selectedMedia.size} 个文件吗？\n文件会移入服务器 data/trash/media，仍可手工找回。`);
+  if (!ok) return;
+  try {
+    const res = await KomiConfig.fetch(`/api/media/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: currentPath, names: Array.from(selectedMedia) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { toast("删除失败：" + (data.detail || res.status)); return; }
+    toast(`已删除 ${data.deleted || selectedMedia.size} 项`);
+    selectedMedia.clear();
+    updateMediaBar();
+    loadLibrary();
+  } catch (e) {
+    toast("删除失败：" + e.message);
+  }
+}
+
+async function shareMedia() {
+  if (!selectedMedia.size) return;
+  const items = mediaItems.filter(it => selectedMedia.has(it.name));
+  const base = KomiConfig.serverBase();
+  try {
+    toast("正在准备分享…");
+    const files = [];
+    for (const item of items) {
+      const url = base + (item.isVideo
+        ? `/api/video/${String(currentPath).split("/").map(encodeURIComponent).join("/")}/${encodeURIComponent(item.name)}`
+        : `/api/img/${String(currentPath).split("/").map(encodeURIComponent).join("/")}/${encodeURIComponent(item.name)}`);
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      files.push(new File([blob], item.name, { type: blob.type || (item.isVideo ? "video/mp4" : "image/jpeg") }));
+    }
+    if (!files.length) { toast("分享失败：没有取到文件"); return; }
+    if (navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ files, title: currentPath || "Comii" });
+    } else {
+      files.forEach(file => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(file);
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
+      toast("浏览器不支持直接分享，已开始下载");
+    }
+    selectedMedia.clear();
+    updateMediaBar();
+    renderMedia();
+  } catch (e) {
+    toast("分享失败：" + e.message);
+  }
+}
+
+// ---------- 标签 ----------
+const tagsSheet = document.getElementById("tagsSheet");
+const tagsOverlay = document.getElementById("tagsOverlay");
+const tagsList = document.getElementById("tagsList");
+
+async function openTags() {
+  tagsList.innerHTML = '<div class="setting-label">加载中…</div>';
+  tagsOverlay.classList.add("show");
+  tagsSheet.classList.add("show");
+  try {
+    const res = await KomiConfig.fetch("/api/tags");
+    const data = await res.json();
+    const tags = data.tags || [];
+    if (!tags.length) {
+      tagsList.innerHTML = '<div class="setting-label">还没有标签。在 App 的系列页里添加。</div>';
+      return;
+    }
+    tagsList.innerHTML = "";
+    tags.forEach(tag => {
+      const chip = document.createElement("button");
+      chip.className = "tag-chip";
+      chip.textContent = `${tag.name}（${tag.count}）`;
+      chip.addEventListener("click", () => {
+        closeTags();
+        showTagged(tag.name);
+      });
+      tagsList.appendChild(chip);
+    });
+    const clear = document.createElement("button");
+    clear.className = "tag-chip clear";
+    clear.textContent = "清除标签筛选";
+    clear.addEventListener("click", () => { closeTags(); tagResults = null; render(); });
+    tagsList.appendChild(clear);
+  } catch (e) {
+    tagsList.innerHTML = '<div class="setting-label">标签加载失败</div>';
+  }
+}
+
+function closeTags() {
+  tagsOverlay.classList.remove("show");
+  tagsSheet.classList.remove("show");
+}
+
+async function showTagged(tag) {
+  try {
+    const res = await KomiConfig.fetch(`/api/tagged?tag=${encodeURIComponent(tag)}`);
+    const data = await res.json();
+    tagResults = (data.items || []).map(node => ({
+      name: node.name,
+      path: node.path,
+      kind: node.kind === "folder" ? "folder" : "series",
+      images: node.images || 0,
+      videos: node.videos || 0,
+      cover: node.cover,
+    }));
+    toast(`标签「${tag}」· ${tagResults.length} 项`);
+    render();
+  } catch (e) {
+    toast("标签查询失败：" + e.message);
+  }
+}
+
 // ---------- Init ----------
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   bindSegments();
-  const layoutBoxInit = document.getElementById("layoutSegments");
-  if (layoutBoxInit) layoutBoxInit.classList.toggle("hidden", filter === "all");
-  const flatBtnInit = document.getElementById("layoutFlatBtn");
-  if (flatBtnInit) flatBtnInit.textContent = filter === "video" ? "全部视频" : "全部图片";
   bindServerSheet();
   bindEditToggle();
   bindEditBar();
@@ -1357,10 +1536,18 @@ document.addEventListener("DOMContentLoaded", () => {
   bindMoveSheet();
   bindTrashSheet();
   bindPdfImport();
-  // 默认启用文件夹功能 (漫画/视频分类)，"全部"隐藏
-  folderMode = filter !== "all";
-  document.body.classList.toggle("filter-all", filter === "all");
-  document.body.classList.toggle("show-folders", folderMode);
+  document.getElementById("tagsToggle")?.addEventListener("click", openTags);
+  document.getElementById("tagsOverlay")?.addEventListener("click", closeTags);
+  document.getElementById("mediaShare")?.addEventListener("click", shareMedia);
+  document.getElementById("mediaDelete")?.addEventListener("click", deleteMedia);
+  document.getElementById("mediaCancel")?.addEventListener("click", () => {
+    selectedMedia.clear();
+    updateMediaBar();
+    renderMedia();
+  });
+  folderMode = true;
+  document.body.classList.add("show-folders");
+  document.body.classList.remove("filter-all");
   if (search) {
     // 递归搜索：文件夹名、系列名、媒体文件名（由服务端 /api/search 匹配）
     search.addEventListener("input", debounce(async e => {

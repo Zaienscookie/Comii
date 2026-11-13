@@ -117,6 +117,9 @@ class ComiiApi(val baseUrl: String) {
     suspend fun setAlbumCover(path: String, series: String): ActionResult =
         decode(post("/album_cover", ComiiJson.encodeToString(AlbumCoverBody(path, series))))
 
+    suspend fun deleteMedia(path: String, names: List<String>): ActionResult =
+        decode(post("/media/delete", ComiiJson.encodeToString(MediaDeleteBody(path, names))))
+
     suspend fun trash(): TrashListResponse = decode(get("/trash"))
 
     suspend fun progressAll(): Map<String, ReadingProgress> = decode(get("/progress"))

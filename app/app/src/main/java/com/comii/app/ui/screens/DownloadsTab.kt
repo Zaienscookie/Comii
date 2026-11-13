@@ -196,37 +196,20 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
         }
         Spacer(Modifier.height(8.dp))
         Column(Modifier.padding(horizontal = 20.dp)) {
-            SegmentControl(
-                options = listOf("全部", "漫画", "视频"),
-                selectedIndex = when (mainFilter) {
-                    "manga" -> 1
-                    "video" -> 2
-                    else -> 0
-                },
-                onSelect = { index ->
-                    mainFilter = when (index) {
-                        1 -> "manga"
-                        2 -> "video"
-                        else -> "all"
-                    }
-                    activeCategory = ""
-                    editing = false
-                    selected = emptySet()
-                },
-            )
-            Spacer(Modifier.height(8.dp))
-            SegmentControl(
-                options = layoutOptions,
-                selectedIndex = if (flatMode) 1 else 0,
-                onSelect = { index ->
-                    layout = if (index == 0) "group" else "flat"
-                    state.repository.settings.downloadsLayout = layout
-                    editing = false
-                    selected = emptySet()
-                },
-            )
-            if (!flatMode) {
-                Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CategoryChip("全部", activeCategory.isBlank()) { activeCategory = "" }
+                validCategories.forEach { name ->
+                    CategoryChip(name, activeCategory == name) { activeCategory = name }
+                }
+                Spacer(Modifier.weight(1f))
+                AddCategoryChip {
+                    sheetSeries = null
+                    startInCreate = true
+                    showCategorySheet = true
+                }
             }
         }
         Spacer(Modifier.height(10.dp))
