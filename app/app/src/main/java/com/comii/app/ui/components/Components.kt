@@ -214,7 +214,26 @@ fun VideoThumbnail(
             val retriever = android.media.MediaMetadataRetriever()
             try {
                 retriever.setDataSource(target.path)
-                retriever.getFrameAtTime(1_000_000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                val bitmap = retriever.getFrameAtTime(
+                    1_000_000,
+                    android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                )
+                val rotation = retriever
+                    .extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                    ?.toIntOrNull() ?: 0
+                if (bitmap != null && rotation != 0) {
+                    android.graphics.Bitmap.createBitmap(
+                        bitmap,
+                        0,
+                        0,
+                        bitmap.width,
+                        bitmap.height,
+                        android.graphics.Matrix().apply { postRotate(rotation.toFloat()) },
+                        true,
+                    )
+                } else {
+                    bitmap
+                }
             } catch (error: Exception) {
                 null
             } finally {

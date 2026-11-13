@@ -189,6 +189,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     PlayerView(ctx).apply {
                         this.player = player
                         useController = true
+                        resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
                         setShowNextButton(true)
                         setShowPreviousButton(true)
                         setBackgroundColor(android.graphics.Color.BLACK)

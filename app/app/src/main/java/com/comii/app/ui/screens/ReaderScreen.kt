@@ -540,27 +540,40 @@ private fun ReaderPageImage(
     ) {
         val imageRequest = ImageRequest.Builder(context).data(model).crossfade(false).build()
         if (fullHeight) {
-            // 横向翻页：按屏幕宽度铺满（不放大裁切），长图在页内上下滚动
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()),
-            ) {
+            if (maxWidth > maxHeight) {
+                // 横屏：整张图缩放到屏幕内，避免只看到一半
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(gestureModifier)
+                        .then(zoomModifier),
+                )
+            } else {
+                // 竖屏：按宽度铺满，长图在页内上下滚动
                 Box(
                     Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = pageHeight),
-                    contentAlignment = Alignment.Center,
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
                 ) {
-                    AsyncImage(
-                        model = imageRequest,
-                        contentDescription = null,
-                        contentScale = ContentScale.FillWidth,
-                        modifier = Modifier
+                    Box(
+                        Modifier
                             .fillMaxWidth()
-                            .then(gestureModifier)
-                            .then(zoomModifier),
-                    )
+                            .heightIn(min = pageHeight),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AsyncImage(
+                            model = imageRequest,
+                            contentDescription = null,
+                            contentScale = ContentScale.FillWidth,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(gestureModifier)
+                                .then(zoomModifier),
+                        )
+                    }
                 }
             }
         } else {
