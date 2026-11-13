@@ -105,7 +105,6 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     var streamText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var showSessions by remember { mutableStateOf(false) }
-    var showLife by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
     val imeVisible = WindowInsets.isImeVisible
@@ -151,19 +150,6 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             )
             takePicture.launch(uri)
         }.onFailure { error = "无法打开相机：${it.message}" }
-    }
-
-    // 虚拟人生自动运行：当天没有安排就静默生成，不需要手动点
-    LaunchedEffect(personaId, personaVersion) {
-        val current = ai.persona(personaId) ?: return@LaunchedEffect
-        if (!current.vlife.enabled) return@LaunchedEffect
-        // 设定太少（比如乱填的 111/411）就不硬套模板日程
-        if ((current.systemPrompt.trim().length + current.tagline.trim().length) < 12) return@LaunchedEffect
-        val today = java.time.LocalDate.now().toString()
-        if (current.vlife.day != today || current.vlife.schedule.isBlank()) {
-            runCatching { ai.generateDailyLife(personaId) }
-            personaVersion++
-        }
     }
 
     LaunchedEffect(personaId, reloadKey) {
@@ -324,26 +310,6 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             }
         }
 
-        if (persona?.vlife?.enabled == true) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    persona.vlife.schedule.lines().firstOrNull()?.take(42)?.ifBlank { "今天的安排还没生成" }
-                        ?: "今天的安排还没生成",
-                    color = palette.textTertiary,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = { showLife = true }) {
-                    Text("查看日程", color = palette.accent, fontSize = 11.sp)
-                }
-            }
-        }
-
         if (error != null) {
             Text(
                 error ?: "",
@@ -458,29 +424,6 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 )
             }
         }
-        }
-    }
-
-    if (showLife) {
-        val life = persona?.vlife
-        BottomSheet(onDismiss = { showLife = false }) {
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                Text("今天的安排", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    life?.schedule?.ifBlank { "还没生成" } ?: "还没生成",
-                    color = palette.textPrimary,
-                    fontSize = 14.sp,
-                )
-                Spacer(Modifier.height(14.dp))
-                if (!life?.mood.isNullOrBlank()) {
-                    Text("心情：${life?.mood}", color = palette.textSecondary, fontSize = 13.sp)
-                }
-                if (!life?.outfit.isNullOrBlank()) {
-                    Text("穿搭：${life?.outfit}", color = palette.textSecondary, fontSize = 13.sp)
-                }
-                Spacer(Modifier.height(26.dp))
-            }
         }
     }
 

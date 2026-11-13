@@ -202,11 +202,6 @@ fun AiPersonaScreen(state: AppState, personaId: String?, nav: NavHostController)
 
             Spacer(Modifier.height(16.dp))
             Text("插件", color = palette.textSecondary, fontSize = 12.sp)
-            Text(
-                "「虚拟人生」会自动生成每天的生活安排、心情、穿搭，并在聊天时带上，不需要手动填。",
-                color = palette.textTertiary,
-                fontSize = 11.sp,
-            )
             Spacer(Modifier.height(6.dp))
             AiPluginRegistry.all.forEach { plugin ->
                 Row(

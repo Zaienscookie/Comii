@@ -73,7 +73,7 @@ object VirtualLifePlugin : AiPlugin {
 }
 
 object AiPluginRegistry {
-    val all: List<AiPlugin> = listOf(TimePlugin, AmbientPlugin, VirtualLifePlugin)
+    val all: List<AiPlugin> = listOf(TimePlugin, AmbientPlugin)
 
     fun find(id: String): AiPlugin? = all.firstOrNull { it.id == id }
 }
