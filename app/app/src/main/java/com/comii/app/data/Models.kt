@@ -180,6 +180,9 @@ data class ImportResult(
     val pages: Int = 0,
     val images: Int = 0,
     val videos: Int = 0,
+    val total_entries: Int = 0,
+    val skipped: Int = 0,
+    val skipped_types: List<String> = emptyList(),
 )
 
 @Serializable

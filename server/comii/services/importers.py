@@ -112,15 +112,42 @@ def _is_ignored_archive_entry(name: str) -> bool:
     return False
 
 
-def _extract_images(archive_bytes: bytes, staging: Path, suffix: str = ".zip") -> tuple[int, int, list[str], int]:
-    """Returns (written, total_entries, skipped_type_summary, failed)."""
+def _unique_destination(staging: Path, safe: str, extension: str, used: set[str]) -> Path:
+    """Fast name de-duplication (the old while-exists loop was O(n²) for big packs)."""
+    candidate = staging / safe
+    if safe not in used:
+        used.add(safe)
+        return candidate
+    stem = Path(safe).stem
+    counter = 1
+    while True:
+        name = f"{stem}_{counter}{extension}"
+        if name not in used:
+            used.add(name)
+            return staging / name
+        counter += 1
+
+
+def _extract_media(
+    source, staging: Path, suffix: str = ".zip"
+) -> tuple[int, int, int, list[str], int]:
+    """Extract images *and* videos from an archive.
+
+    Returns (images, videos, total_entries, skipped_type_summary, failed).
+    ``source`` may be raw bytes or a Path (large uploads are spooled to disk).
+    """
     if suffix == ".7z":
-        return _extract_7z_images(archive_bytes, staging)
-    written = 0
+        return _extract_7z_media(source, staging)
+
+    images = 0
+    videos = 0
     total = 0
     failed = 0
     skipped: dict[str, int] = {}
-    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as bundle:
+    used: set[str] = set()
+
+    handle = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else source
+    with zipfile.ZipFile(handle) as bundle:
         for info in bundle.infolist():
             if info.is_dir():
                 continue
@@ -130,31 +157,32 @@ def _extract_images(archive_bytes: bytes, staging: Path, suffix: str = ".zip") -
                 skipped["隐藏文件"] = skipped.get("隐藏文件", 0) + 1
                 continue
             extension = Path(entry_name).suffix.lower()
-            if extension not in library.IMAGE_EXTENSIONS:
+            is_image = extension in library.IMAGE_EXTENSIONS
+            is_video = extension in library.VIDEO_EXTENSIONS
+            if not is_image and not is_video:
                 key = extension or "无扩展名"
                 skipped[key] = skipped.get(key, 0) + 1
                 continue
-            safe = Path(entry_name).name
-            destination = staging / safe
-            counter = 1
-            while destination.exists():
-                destination = staging / f"{Path(safe).stem}_{counter}{extension}"
-                counter += 1
+            destination = _unique_destination(staging, Path(entry_name).name, extension, used)
             try:
-                with bundle.open(info) as source, destination.open("wb") as handle:
-                    shutil.copyfileobj(source, handle)
-                written += 1
+                with bundle.open(info) as src, destination.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                if is_image:
+                    images += 1
+                else:
+                    videos += 1
             except Exception:
                 failed += 1
                 destination.unlink(missing_ok=True)
+
     summary = [f"{name}×{count}" for name, count in
                sorted(skipped.items(), key=lambda item: -item[1])[:6]]
     if failed:
         summary.append(f"读取失败×{failed}")
-    return written, total, summary, failed
+    return images, videos, total, summary, failed
 
 
-def _extract_7z_images(archive_bytes: bytes, staging: Path) -> tuple[int, int, list[str], int]:
+def _extract_7z_media(source, staging: Path) -> tuple[int, int, int, list[str], int]:
     try:
         import py7zr
     except ImportError as exc:  # pragma: no cover - optional dependency
@@ -162,34 +190,38 @@ def _extract_7z_images(archive_bytes: bytes, staging: Path) -> tuple[int, int, l
 
     temporary = staging / ".comii_7z"
     temporary.mkdir(parents=True, exist_ok=True)
-    written = 0
+    images = 0
+    videos = 0
     total = 0
     failed = 0
     skipped: dict[str, int] = {}
+    used: set[str] = set()
     try:
-        with py7zr.SevenZipFile(io.BytesIO(archive_bytes), mode="r") as archive:
+        handle = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else source
+        with py7zr.SevenZipFile(handle, mode="r") as archive:
             archive.extractall(path=temporary)
-        for source in sorted(temporary.rglob("*")):
-            if not source.is_file():
+        for item in sorted(temporary.rglob("*")):
+            if not item.is_file():
                 continue
             total += 1
-            relative = source.relative_to(temporary).as_posix()
+            relative = item.relative_to(temporary).as_posix()
             if _is_ignored_archive_entry(relative):
                 skipped["隐藏文件"] = skipped.get("隐藏文件", 0) + 1
                 continue
-            extension = source.suffix.lower()
-            if extension not in library.IMAGE_EXTENSIONS:
+            extension = item.suffix.lower()
+            is_image = extension in library.IMAGE_EXTENSIONS
+            is_video = extension in library.VIDEO_EXTENSIONS
+            if not is_image and not is_video:
                 key = extension or "无扩展名"
                 skipped[key] = skipped.get(key, 0) + 1
                 continue
-            destination = staging / source.name
-            counter = 1
-            while destination.exists():
-                destination = staging / f"{source.stem}_{counter}{extension}"
-                counter += 1
+            destination = _unique_destination(staging, item.name, extension, used)
             try:
-                shutil.move(str(source), str(destination))
-                written += 1
+                shutil.move(str(item), str(destination))
+                if is_image:
+                    images += 1
+                else:
+                    videos += 1
             except Exception:
                 failed += 1
     finally:
@@ -198,7 +230,7 @@ def _extract_7z_images(archive_bytes: bytes, staging: Path) -> tuple[int, int, l
                sorted(skipped.items(), key=lambda item: -item[1])[:6]]
     if failed:
         summary.append(f"读取失败×{failed}")
-    return written, total, summary, failed
+    return images, videos, total, summary, failed
 
 
 def _flatten_single_directory(staging: Path) -> None:
@@ -211,35 +243,41 @@ def _flatten_single_directory(staging: Path) -> None:
         inner.rmdir()
 
 
-def import_archive(raw: bytes, folder: str, name: str = "", suffix: str = ".zip") -> ImportResult:
+def import_archive(raw, folder: str, name: str = "", suffix: str = ".zip") -> ImportResult:
+    """Import a zip/cbz/7z archive (bytes or a spooled file path)."""
     staging = Path(tempfile.mkdtemp(prefix="comii_cbz_"))
     try:
-        written, total, skipped_summary, _failed = _extract_images(raw, staging, suffix)
-        if not written:
-            detail = "压缩包中没有图片"
+        images, videos, total, skipped_summary, _failed = _extract_media(raw, staging, suffix)
+        if not images and not videos:
+            detail = "压缩包中没有图片或视频"
             if skipped_summary:
                 detail += "（跳过了 " + "、".join(skipped_summary) + "）"
             raise HTTPException(status_code=400, detail=detail)
         _flatten_single_directory(staging)
         target, clean_name = _target_directory(folder, name)
         target.mkdir(parents=True, exist_ok=True)
-        index = 1
+        image_index = 1
+        video_index = 1
         for child in sorted(staging.iterdir(), key=lambda item: library.natural_sort_key(item.name)):
             if not child.is_file():
                 continue
-            suffix = child.suffix.lower()
-            destination = target / f"{index:04d}{suffix}"
+            extension = child.suffix.lower()
+            if extension in library.VIDEO_EXTENSIONS:
+                destination = target / f"{video_index:04d}{extension}"
+                video_index += 1
+            else:
+                destination = target / f"{image_index:04d}{extension}"
+                image_index += 1
             shutil.move(str(child), str(destination))
-            index += 1
-        images, videos = _count(target)
+        image_count, video_count = _count(target)
         return ImportResult(
             name=clean_name,
             path=_relative(target),
-            pages=images,
-            images=images,
-            videos=videos,
+            pages=image_count,
+            images=image_count,
+            videos=video_count,
             total_entries=total,
-            skipped=max(0, total - written),
+            skipped=max(0, total - images - videos),
             skipped_types=skipped_summary,
         )
     finally:
@@ -259,6 +297,22 @@ def _copy_upload(upload: UploadFile, destination: Path) -> int:
     return written
 
 
+def _spool(upload: UploadFile, suffix: str) -> Path:
+    """Copy an UploadFile to a temp file on disk (avoids loading GBs into RAM)."""
+    handle = tempfile.NamedTemporaryFile(prefix="comii_upload_", suffix=suffix, delete=False)
+    path = Path(handle.name)
+    try:
+        upload.file.seek(0)
+        while True:
+            chunk = upload.file.read(4 * 1024 * 1024)
+            if not chunk:
+                break
+            handle.write(chunk)
+    finally:
+        handle.close()
+    return path
+
+
 def import_uploads(files: Iterable[UploadFile], folder: str, name: str = "") -> ImportResult:
     uploads = [item for item in files if getattr(item, "filename", None)]
     if not uploads:
@@ -267,12 +321,16 @@ def import_uploads(files: Iterable[UploadFile], folder: str, name: str = "") -> 
     first_suffix = Path(uploads[0].filename).suffix.lower()
     fallback_name = Path(uploads[0].filename).stem
     series_name = sanitize_name(name or fallback_name)
-    payload = uploads[0].file.read()
-    uploads[0].file.seek(0)
 
     if len(uploads) == 1 and first_suffix in ARCHIVE_EXTENSIONS:
-        return import_archive(payload, folder, name or fallback_name, first_suffix)
+        spooled = _spool(uploads[0], first_suffix)
+        try:
+            return import_archive(spooled, folder, name or fallback_name, first_suffix)
+        finally:
+            spooled.unlink(missing_ok=True)
     if len(uploads) == 1 and first_suffix in PDF_EXTENSIONS:
+        payload = uploads[0].file.read()
+        uploads[0].file.seek(0)
         return import_pdf(payload, folder, name or fallback_name, dpi=200)
 
     target, clean_name = _target_directory(folder, series_name)

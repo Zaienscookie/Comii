@@ -84,7 +84,15 @@ fun UploadScreen(state: AppState, initialFolder: String, nav: NavHostController)
                     uploadedBytes += bytes
                 }
             }.onSuccess { import ->
-                result = "已导入「${import.name}」：${import.images} 页 / ${import.videos} 个视频"
+                result = buildString {
+                    append("已导入「${import.name}」：${import.images} 页 / ${import.videos} 个视频")
+                    if (import.skipped > 0) {
+                        val types = import.skipped_types.joinToString("、")
+                        append("（压缩包共 ${import.total_entries} 项，跳过 ${import.skipped}")
+                        if (types.isNotEmpty()) append("：$types")
+                        append("）")
+                    }
+                }
                 state.showToast("上传完成")
                 uris = emptyList()
                 names = emptyList()
