@@ -119,7 +119,8 @@ class AiRepository(context: Context) {
         val config = config()
         val messages = mutableListOf<ChatMessage>()
         messages += ChatMessage("system", persona.systemPrompt.ifBlank {
-            "你是${persona.name}。${persona.tagline} 保持角色设定，用自然、简短、有人情味的方式聊天。"
+            "你是${persona.name}。${persona.tagline} 你有自己独立的生活，可以出门、见朋友、做自己的事；" +
+                "保持角色设定，用自然、简短、有人情味的方式聊天。"
         })
         if (persona.memory.isNotBlank()) {
             messages += ChatMessage("system", "你记得这些事：\n${persona.memory.trim()}")
@@ -201,18 +202,22 @@ class AiRepository(context: Context) {
         personaId: String,
         conversationId: String,
         text: String,
+        imagePath: String? = null,
         onDelta: (String) -> Unit = {},
     ): ChatMessage = withContext(Dispatchers.IO) {
-        val persona = persona(personaId) ?: throw AiException("角色不存在")
+        val persona = persona(personaId)?.let {
+            it.copy(affection = (it.affection + 1).coerceAtMost(100))
+        } ?: throw AiException("角色不存在")
         val conversation = conversation(conversationId) ?: throw AiException("会话不存在")
         val config = config()
-        val userMessage = ChatMessage("user", text.trim(), now())
+        val userMessage = ChatMessage("user", text.trim(), now(), imagePath)
         var current = conversation.copy(
             messages = conversation.messages + userMessage,
             updatedAt = now(),
             title = if (conversation.title == "新对话") text.trim().take(18) else conversation.title,
         )
         replaceConversation(current)
+        if (persona.affection != persona(personaId)?.affection) savePersona(persona)
 
         val context = buildMessages(persona, current)
         val temperature = persona.temperature ?: config.temperature

@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -38,15 +39,37 @@ class AiClient {
     }
 
     private fun request(config: AiConfig, messages: List<ChatMessage>, temperature: Double): Request {
+        val lastUserIndex = messages.indexOfLast { it.role == "user" }
         val payload = buildJsonObject {
             put("model", config.model.trim())
             put("temperature", temperature)
             put("stream", config.stream)
             putJsonArray("messages") {
-                messages.forEach { message ->
+                messages.forEachIndexed { index, message ->
                     addJsonObject {
                         put("role", message.role)
-                        put("content", message.content)
+                        val image = message.imagePath
+                            ?.takeIf { index == lastUserIndex }
+                            ?.let { imageDataUrl(it) }
+                        if (image != null) {
+                            putJsonArray("content") {
+                                addJsonObject {
+                                    put("type", "text")
+                                    put("text", message.content.ifBlank { "看看这张图" })
+                                }
+                                addJsonObject {
+                                    put("type", "image_url")
+                                    putJsonObject("image_url") { put("url", image) }
+                                }
+                            }
+                        } else {
+                            val text = if (message.imagePath != null) {
+                                (message.content + "（附图）").trim()
+                            } else {
+                                message.content
+                            }
+                            put("content", text)
+                        }
                     }
                 }
             }
@@ -127,5 +150,30 @@ class AiClient {
             root["message"]?.jsonPrimitive?.contentOrNull?.let { return it }
         }
         return "请求失败（HTTP $code）"
+    }
+
+    /** 把本地图片压到最长边 1024，转成 data URL 发给多模态模型。 */
+    private fun imageDataUrl(path: String): String? {
+        val file = java.io.File(path)
+        if (!file.isFile) return null
+        val original = android.graphics.BitmapFactory.decodeFile(path) ?: return null
+        val maxSide = 1024
+        val bitmap = if (original.width <= maxSide && original.height <= maxSide) {
+            original
+        } else {
+            val ratio = minOf(maxSide.toFloat() / original.width, maxSide.toFloat() / original.height)
+            android.graphics.Bitmap.createScaledBitmap(
+                original,
+                (original.width * ratio).toInt().coerceAtLeast(1),
+                (original.height * ratio).toInt().coerceAtLeast(1),
+                true,
+            )
+        }
+        val buffer = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 82, buffer)
+        if (bitmap !== original) bitmap.recycle()
+        original.recycle()
+        val encoded = android.util.Base64.encodeToString(buffer.toByteArray(), android.util.Base64.NO_WRAP)
+        return "data:image/jpeg;base64,$encoded"
     }
 }

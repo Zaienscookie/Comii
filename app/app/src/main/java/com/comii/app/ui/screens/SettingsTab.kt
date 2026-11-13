@@ -75,7 +75,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.10.0")
+        LargeTitle("设置", "Comii 2.11.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -84,11 +84,6 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
                 subtitle = state.serverUrl.ifBlank { "未配置" },
                 showChevron = true,
                 onClick = { nav.navigate("settings/server") },
-            )
-            Separator()
-            SettingsRow(
-                title = "资料库路径",
-                subtitle = repository.settings.serverName.ifBlank { "由服务器决定" },
             )
         }
 
@@ -331,6 +326,7 @@ private fun ToggleRow(
         )
     }
 }
+
 
 
 

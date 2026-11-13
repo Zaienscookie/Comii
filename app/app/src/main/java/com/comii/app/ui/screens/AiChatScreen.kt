@@ -2,6 +2,8 @@ package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,9 +13,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,8 +28,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Send
@@ -48,6 +54,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,24 +68,59 @@ import com.comii.app.ui.AppState
 import com.comii.app.ui.components.BottomSheet
 import com.comii.app.ui.components.EmptyState
 import com.comii.app.ui.theme.ComiiTheme
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import coil.compose.AsyncImage
 
 @Composable
 fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     val palette = ComiiTheme.palette
     val ai = state.ai
     val scope = rememberCoroutineScope()
-    val persona = remember(personaId) { ai.persona(personaId) }
+    val context = LocalContext.current
+    var personaVersion by remember { mutableIntStateOf(0) }
+    val persona = remember(personaId, personaVersion) { ai.persona(personaId) }
+    val config = ai.config()
 
     var conversation by remember { mutableStateOf<Conversation?>(null) }
     var messages by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var draft by remember { mutableStateOf("") }
+    var attachPath by remember { mutableStateOf<String?>(null) }
+    var pendingText by remember { mutableStateOf("") }
+    var debounceJob by remember { mutableStateOf<Job?>(null) }
     var streaming by remember { mutableStateOf(false) }
     var streamText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var showSessions by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
+
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        runCatching {
+            val directory = java.io.File(context.filesDir, "ai_media").apply { mkdirs() }
+            val target = java.io.File(directory, "img-${System.currentTimeMillis()}.jpg")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+            target
+        }.onSuccess { attachPath = it.absolutePath }
+            .onFailure { error = "图片读取失败：${it.message}" }
+    }
+
+    // 虚拟人生自动运行：当天没有安排就静默生成，不需要手动点
+    LaunchedEffect(personaId, personaVersion) {
+        val current = ai.persona(personaId) ?: return@LaunchedEffect
+        if (!current.vlife.enabled) return@LaunchedEffect
+        val today = java.time.LocalDate.now().toString()
+        if (current.vlife.day != today || current.vlife.schedule.isBlank()) {
+            runCatching { ai.generateDailyLife(personaId) }
+            personaVersion++
+        }
+    }
 
     LaunchedEffect(personaId, reloadKey) {
         val conversations = ai.conversations(personaId)
@@ -91,19 +134,18 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         if (total > 0) runCatching { listState.animateScrollToItem(total - 1) }
     }
 
-    fun send() {
-        val text = draft.trim()
+    fun doSend(text: String, imagePath: String?) {
+        if (text.isBlank() && imagePath == null) return
         val current = conversation ?: return
-        if (text.isEmpty() || streaming) return
-        draft = ""
         error = null
         streaming = true
         streamText = ""
-        messages = messages + ChatMessage("user", text, System.currentTimeMillis())
+        messages = messages + ChatMessage("user", text, System.currentTimeMillis(), imagePath)
         scope.launch {
             try {
-                ai.send(personaId, current.id, text) { delta -> streamText += delta }
+                ai.send(personaId, current.id, text, imagePath) { delta -> streamText += delta }
                 messages = ai.conversation(current.id)?.messages ?: messages
+                personaVersion++
             } catch (failure: Exception) {
                 error = failure.message ?: "请求失败"
                 messages = ai.conversation(current.id)?.messages ?: messages
@@ -114,7 +156,31 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(palette.background).imePadding()) {
+    fun submit() {
+        if (streaming) return
+        val text = draft.trim()
+        val image = attachPath
+        if (text.isEmpty() && image == null) return
+        draft = ""
+        attachPath = null
+        if (image != null || !config.aggregate) {
+            pendingText = ""
+            debounceJob?.cancel()
+            doSend(text, image)
+        } else {
+            // 连续发多条时先等 1.4s，合并成一轮再回复
+            pendingText = if (pendingText.isBlank()) text else pendingText + "\n" + text
+            debounceJob?.cancel()
+            debounceJob = scope.launch {
+                delay(1400)
+                val combined = pendingText
+                pendingText = ""
+                doSend(combined, null)
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding().imePadding()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -129,13 +195,23 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                     .background(Color((persona?.color ?: 0xFF0A84FF).toInt()).copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(persona?.name?.take(1) ?: "?", color = Color((persona?.color ?: 0xFF0A84FF).toInt()), fontWeight = FontWeight.Bold)
+                val avatar = persona?.avatarPath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+                if (avatar != null && avatar.isFile) {
+                    AsyncImage(
+                        model = avatar,
+                        contentDescription = "头像",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text(persona?.name?.take(1) ?: "?", color = Color((persona?.color ?: 0xFF0A84FF).toInt()), fontWeight = FontWeight.Bold)
+                }
             }
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(persona?.name ?: "角色", color = palette.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    "上下文 ${ai.config().maxContextMessages} 条 · 本机存储",
+                    "好感 ${persona?.affection ?: 0} · 上下文 ${config.maxContextMessages} 条 · 本机存储",
                     color = palette.textSecondary,
                     fontSize = 10.sp,
                 )
@@ -194,17 +270,40 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             }
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(palette.elevated)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextField(
-                value = draft,
-                onValueChange = { draft = it },
-                modifier = Modifier.weight(1f),
+        Column(Modifier.fillMaxWidth().background(palette.elevated)) {
+            attachPath?.let { path ->
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp, top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AsyncImage(
+                        model = java.io.File(path),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(54.dp).clip(RoundedCornerShape(10.dp)),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("将随下一条消息发送", color = palette.textSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    IconButton(onClick = { attachPath = null }) {
+                        Icon(Icons.Rounded.Close, contentDescription = "移除图片", tint = palette.textTertiary)
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (config.multimodal) {
+                    IconButton(onClick = { pickImage.launch("image/*") }) {
+                        Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = "发送图片", tint = palette.accent)
+                    }
+                }
+                TextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    modifier = Modifier.weight(1f),
                 placeholder = { Text("说点什么…", color = palette.textTertiary) },
                 maxLines = 4,
                 shape = RoundedCornerShape(18.dp),
@@ -227,16 +326,17 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 )
             } else {
                 IconButton(
-                    onClick = { send() },
-                    enabled = draft.isNotBlank(),
+                    onClick = { submit() },
+                    enabled = draft.isNotBlank() || attachPath != null,
                 ) {
                     Icon(
                         Icons.Rounded.Send,
                         contentDescription = "发送",
-                        tint = if (draft.isNotBlank()) palette.accent else palette.textTertiary,
+                        tint = if (draft.isNotBlank() || attachPath != null) palette.accent else palette.textTertiary,
                     )
                 }
             }
+        }
         }
     }
 
@@ -319,12 +419,27 @@ private fun MessageBubble(message: ChatMessage, streaming: Boolean = false) {
                 .background(if (isUser) palette.accent else palette.card)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
-            Text(
-                message.content + if (streaming) "▍" else "",
-                color = if (isUser) Color.White else palette.textPrimary,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-            )
+            Column {
+                val image = message.imagePath?.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+                if (image != null && image.isFile) {
+                    AsyncImage(
+                        model = image,
+                        contentDescription = "图片",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 220.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
+                Text(
+                    message.content + if (streaming) "▍" else "",
+                    color = if (isUser) Color.White else palette.textPrimary,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+            }
         }
     }
 }

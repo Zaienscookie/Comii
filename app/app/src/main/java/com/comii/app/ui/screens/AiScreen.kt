@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,7 +71,7 @@ fun AiScreen(state: AppState, nav: NavHostController) {
         }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -146,12 +147,22 @@ private fun PersonaCard(persona: Persona, preview: String?, onClick: () -> Unit)
             Modifier.size(48.dp).clip(CircleShape).background(color.copy(alpha = 0.18f)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                persona.name.take(1),
-                color = color,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            val avatar = persona.avatarPath.takeIf { it.isNotBlank() }?.let { java.io.File(it) }
+            if (avatar != null && avatar.isFile) {
+                coil.compose.AsyncImage(
+                    model = avatar,
+                    contentDescription = persona.name,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    persona.name.take(1),
+                    color = color,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -165,6 +176,11 @@ private fun PersonaCard(persona: Persona, preview: String?, onClick: () -> Unit)
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            Text(
+                "好感 ${persona.affection}",
+                color = palette.textTertiary,
+                fontSize = 11.sp,
+            )
             if (!preview.isNullOrBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(

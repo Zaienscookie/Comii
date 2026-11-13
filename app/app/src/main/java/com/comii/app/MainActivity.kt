@@ -112,17 +112,17 @@ class MainActivity : ComponentActivity() {
                             Lifecycle.Event.ON_PAUSE -> {
                                 if (settings.privacyBlur) {
                                     paused = true
-                                    window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                    if (android.os.Build.VERSION.SDK_INT < 33) {
+                                        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                    }
                                 }
                             }
                             Lifecycle.Event.ON_RESUME -> {
                                 paused = false
-                                // 打开「后台隐藏」时始终禁止截图/最近任务预览，
-                                // 否则系统会在切后台的瞬间先截一张图，遮罩来不及画。
-                                if (settings.privacyBlur) {
-                                    window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-                                } else {
-                                    window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                // 前台允许正常截图；最近任务用系统 API 隐藏缩略图
+                                window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                    (view.context as? Activity)?.setRecentsScreenshotEnabled(!settings.privacyBlur)
                                 }
                             }
                             else -> Unit
@@ -138,10 +138,8 @@ class MainActivity : ComponentActivity() {
                         val controller = WindowCompat.getInsetsController(window, view)
                         controller.isAppearanceLightStatusBars = !dark
                         controller.isAppearanceLightNavigationBars = !dark
-                        if (settings.privacyBlur) {
-                            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-                        } else {
-                            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            (view.context as? Activity)?.setRecentsScreenshotEnabled(!settings.privacyBlur)
                         }
                     }
                 }

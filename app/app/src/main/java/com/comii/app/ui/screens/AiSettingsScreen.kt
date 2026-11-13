@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -92,6 +93,8 @@ fun AiSettingsScreen(state: AppState, nav: NavHostController) {
     var temperature by remember { mutableFloatStateOf(current.temperature.toFloat()) }
     var maxContext by remember { mutableFloatStateOf(current.maxContextMessages.toFloat()) }
     var stream by remember { mutableStateOf(current.stream) }
+    var multimodal by remember { mutableStateOf(current.multimodal) }
+    var aggregate by remember { mutableStateOf(current.aggregate) }
     var showKey by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
@@ -105,6 +108,8 @@ fun AiSettingsScreen(state: AppState, nav: NavHostController) {
         maxContextMessages = maxContext.toInt(),
         stream = stream,
         showReasoning = current.showReasoning,
+        multimodal = multimodal,
+        aggregate = aggregate,
     )
 
     fun save() {
@@ -112,7 +117,7 @@ fun AiSettingsScreen(state: AppState, nav: NavHostController) {
         nav.popBackStack()
     }
 
-    Column(Modifier.fillMaxSize().background(palette.background)) {
+    Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -190,6 +195,22 @@ fun AiSettingsScreen(state: AppState, nav: NavHostController) {
                     Text("逐字显示回复；关闭则等整段返回", color = palette.textSecondary, fontSize = 11.sp)
                 }
                 Switch(checked = stream, onCheckedChange = { stream = it })
+            }
+
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("多模态（发送图片）", color = palette.textPrimary, fontSize = 14.sp)
+                    Text("开启后聊天框可发相册图片给支持视觉的模型", color = palette.textSecondary, fontSize = 11.sp)
+                }
+                Switch(checked = multimodal, onCheckedChange = { multimodal = it })
+            }
+
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("合并连续消息", color = palette.textPrimary, fontSize = 14.sp)
+                    Text("短时间发多条时先等 1.4 秒，合成一轮再回复", color = palette.textSecondary, fontSize = 11.sp)
+                }
+                Switch(checked = aggregate, onCheckedChange = { aggregate = it })
             }
 
             Spacer(Modifier.height(16.dp))

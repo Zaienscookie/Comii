@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -29,7 +30,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.DriveFileMove
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
@@ -157,13 +160,23 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             }
     }
 
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
                 LargeTitle("下载", "${allSeries.size} 个系列 · ${formatBytes(state.repository.offline.totalBytes())}")
+            }
+            IconButton(onClick = { version++ }) {
+                Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent)
+            }
+            IconButton(onClick = {
+                sheetSeries = null
+                startInCreate = true
+                showCategorySheet = true
+            }) {
+                Icon(Icons.Rounded.CreateNewFolder, contentDescription = "新建文件夹", tint = palette.accent)
             }
             if (allSeries.isNotEmpty()) {
                 TextButton(onClick = {
@@ -214,22 +227,6 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             )
             if (!flatMode) {
                 Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CategoryChip("全部", activeCategory.isBlank()) { activeCategory = "" }
-                    validCategories.forEach { name ->
-                        CategoryChip(name, activeCategory == name) { activeCategory = name }
-                    }
-                    AddCategoryChip {
-                        sheetSeries = null
-                        startInCreate = true
-                        showCategorySheet = true
-                    }
-                }
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -363,7 +360,7 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                 }
             }
 
-            if (editing && selected.isNotEmpty()) {
+            if (editing) {
                 DownloadsEditBar(
                     count = selected.size,
                     allSelected = allSeries.isNotEmpty() && selected.containsAll(allSeries.map { it.path }),

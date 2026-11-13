@@ -13,6 +13,10 @@ data class AiConfig(
     val stream: Boolean = true,
     /** 为 false 时不显示模型的思维链（reasoning 字段）。 */
     val showReasoning: Boolean = false,
+    /** 多模态：允许发送图片。 */
+    val multimodal: Boolean = false,
+    /** 连续发多条时先等一下，合并成一轮再回复。 */
+    val aggregate: Boolean = true,
 )
 
 /** 虚拟人生：每天生成一份生活安排，聊天时注入当前状态（参考 astrbot_plugin_virtual_life）。 */
@@ -48,6 +52,10 @@ data class Persona(
     val proactive: Boolean = false,
     val proactiveIntervalHours: Int = 6,
     val lastProactiveAt: Long = 0L,
+    /** 头像文件路径（App 私有目录）。 */
+    val avatarPath: String = "",
+    /** 好感度，随聊天自动增长。 */
+    val affection: Int = 0,
 )
 
 @Serializable
@@ -55,6 +63,8 @@ data class ChatMessage(
     val role: String,
     val content: String,
     val timestamp: Long = 0L,
+    /** 多模态图片路径（仅保存在本机）。 */
+    val imagePath: String? = null,
 )
 
 /** 一个会话 = 某个人格下的一段连续对话（相当于 AstrBot 的 session）。 */

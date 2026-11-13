@@ -36,7 +36,15 @@ def sanitize_name(raw: str, fallback: str = "untitled") -> str:
 def _target_directory(folder: str, name: str) -> tuple[Path, str]:
     root = library.library_root()
     folder_rel = library.normalize_path(folder)
-    base = root if not folder_rel else library.resolve_directory(folder_rel)
+    if not folder_rel:
+        base = root
+    else:
+        try:
+            base = library.resolve_directory(folder_rel)
+        except HTTPException:
+            # 上传时允许直接填一个新文件夹，自动创建
+            base = root / folder_rel
+            base.mkdir(parents=True, exist_ok=True)
     clean_name = sanitize_name(name)
     target = base / clean_name
     if target.exists():

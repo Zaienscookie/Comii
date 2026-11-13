@@ -1341,6 +1341,10 @@ async function downloadSeries(item) {
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   bindSegments();
+  const layoutBoxInit = document.getElementById("layoutSegments");
+  if (layoutBoxInit) layoutBoxInit.classList.toggle("hidden", filter === "all");
+  const flatBtnInit = document.getElementById("layoutFlatBtn");
+  if (flatBtnInit) flatBtnInit.textContent = filter === "video" ? "全部视频" : "全部图片";
   bindServerSheet();
   bindEditToggle();
   bindEditBar();

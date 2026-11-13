@@ -210,7 +210,7 @@ fun ReaderScreen(
     }
 
     LaunchedEffect(mode, names.size) {
-        if (names.isEmpty()) return@LaunchedEffect
+        if (names.isEmpty() || all) return@LaunchedEffect
         delay(40)
         val target = current
         if (current > 0) {
@@ -233,6 +233,19 @@ fun ReaderScreen(
 
     LaunchedEffect(current, names.size, allItems) {
         if (names.isEmpty()) return@LaunchedEffect
+        // 预取前后图片，翻页时不再黑一下
+        val loader = coil.Coil.imageLoader(context)
+        listOf(current - 1, current + 1, current + 2).forEach { index ->
+            if (index in names.indices) {
+                runCatching {
+                    loader.enqueue(
+                        coil.request.ImageRequest.Builder(context)
+                            .data(pageModel(index))
+                            .build()
+                    )
+                }
+            }
+        }
         delay(500)
         if (all) {
             val item = allItems.getOrNull(current) ?: return@LaunchedEffect
