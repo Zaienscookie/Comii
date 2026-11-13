@@ -55,9 +55,6 @@ import com.comii.app.data.CrashLog
 import com.comii.app.ui.AppState
 import com.comii.app.ui.Routes
 import com.comii.app.ui.components.PrimaryButton
-import com.comii.app.ui.screens.AiChatScreen
-import com.comii.app.ui.screens.AiPersonaScreen
-import com.comii.app.ui.screens.AiSettingsScreen
 import com.comii.app.ui.screens.HomeScreen
 import com.comii.app.ui.screens.PlayerScreen
 import com.comii.app.ui.screens.ReaderScreen
@@ -70,14 +67,11 @@ import com.comii.app.ui.theme.ComiiTheme
 class ComiiApplication : Application() {
     lateinit var repository: ComiiRepository
         private set
-    lateinit var aiRepository: com.comii.app.data.ai.AiRepository
-        private set
 
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
         repository = ComiiRepository(this)
-        aiRepository = com.comii.app.data.ai.AiRepository(this)
     }
 }
 
@@ -87,7 +81,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val app = application as ComiiApplication
-            val state = remember { AppState(app.repository, app.aiRepository) }
+            val state = remember { AppState(app.repository) }
             val settings = app.repository.settings
             val dark = when (state.themeMode) {
                 "light" -> false
@@ -238,29 +232,6 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
                 onCancel = { nav.popBackStack() },
             )
         }
-        composable("ai/chat/{personaId}") { entry ->
-            val personaId = entry.arguments?.getString("personaId").orEmpty()
-            AiChatScreen(state = state, personaId = personaId, nav = nav)
-        }
-        composable(
-            "ai/persona?personaId={personaId}",
-            arguments = listOf(
-                navArgument("personaId") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                }
-            ),
-        ) { entry ->
-            AiPersonaScreen(
-                state = state,
-                personaId = entry.arguments?.getString("personaId"),
-                nav = nav,
-            )
-        }
-        composable("ai/settings") {
-            AiSettingsScreen(state = state, nav = nav)
-        }
     }
 }
 
@@ -279,16 +250,16 @@ private fun EntryGate(onConfirm: () -> Unit, onQuit: () -> Unit) {
     ) {
         Text("Comii.", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = palette.accent)
         Spacer(Modifier.height(28.dp))
-        Text("内容提示", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = palette.textPrimary)
+        Text("私人收藏", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = palette.textPrimary)
         Spacer(Modifier.height(10.dp))
         Text(
-            "本应用用于个人漫画与视频仓库，内容可能包含成人向或敏感素材。\n继续进入即表示你已年满 18 岁，并自行承担浏览责任。",
+            "这里只保存你自己的收藏，内容仅对你可见。\n继续即表示你了解这一点，并会自行保管好设备与账号。",
             fontSize = 14.sp,
             color = palette.textSecondary,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(32.dp))
-        PrimaryButton(text = "我已年满 18 岁，继续", onClick = onConfirm)
+        PrimaryButton(text = "进入 Comii", onClick = onConfirm)
         Spacer(Modifier.height(10.dp))
         TextButton(onClick = {
             onQuit()
@@ -298,7 +269,7 @@ private fun EntryGate(onConfirm: () -> Unit, onQuit: () -> Unit) {
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            "可在「设置 → 内容提示」里关闭每次启动提醒",
+            "可在「设置 → 隐私」里关闭此提示",
             fontSize = 11.sp,
             color = palette.textTertiary,
             textAlign = TextAlign.Center,

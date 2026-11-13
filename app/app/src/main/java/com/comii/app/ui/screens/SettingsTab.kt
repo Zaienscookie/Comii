@@ -75,7 +75,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.8.0")
+        LargeTitle("设置", "Comii 2.9.1")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -146,16 +146,6 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
         }
 
         Spacer(Modifier.height(18.dp))
-        SettingsGroup("AI") {
-            SettingsRow(
-                title = "AI 服务设置",
-                subtitle = "OpenAI 兼容接口、Key、模型、上下文",
-                showChevron = true,
-                onClick = { nav.navigate("ai/settings") },
-            )
-        }
-
-        Spacer(Modifier.height(18.dp))
         SettingsGroup("视频") {
             ToggleRow(
                 title = "默认静音",
@@ -182,8 +172,8 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             )
             Separator()
             ToggleRow(
-                title = "启动内容提示",
-                subtitle = "每次打开 App 先确认是否继续进入",
+                title = "启动提示",
+                subtitle = "每次打开 App 先显示一句提示",
                 checked = entryPrompt,
                 onChange = { entryPrompt = it; repository.settings.entryPrompt = it },
             )
@@ -331,6 +321,8 @@ private fun ToggleRow(
         )
     }
 }
+
+
 
 
 

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0b0f">
+<title>Comii AI</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="stylesheet" href="/static/ai.css">
+</head>
+<body>
+<header class="ai-nav">
+  <button class="nav-btn hidden" id="backBtn" aria-label="返回">‹</button>
+  <div class="nav-title">
+    <h1 id="pageTitle">AI</h1>
+    <p id="pageSub">人格对话 · 本地保存</p>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-btn hidden" id="newChatBtn" aria-label="新对话">＋</button>
+    <button class="nav-btn hidden" id="sessionsBtn" aria-label="会话">☰</button>
+    <button class="nav-btn hidden" id="editPersonaBtn" aria-label="编辑角色">✎</button>
+    <button class="nav-btn" id="newPersonaBtn" aria-label="新建角色">＋</button>
+    <button class="nav-btn" id="settingsBtn" aria-label="设置">⚙</button>
+  </div>
+</header>
+
+<main id="app" class="app"></main>
+
+<!-- 设置 -->
+<div class="modal hidden" id="settingsModal">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2>AI 服务设置</h2>
+      <button class="text-btn" data-close="settingsModal">关闭</button>
+    </div>
+    <div class="sheet-body">
+      <label class="field">Base URL
+        <input id="cfgBaseUrl" type="url" placeholder="https://example.com/v1" autocomplete="off">
+      </label>
+      <label class="field">API Key
+        <input id="cfgApiKey" type="password" placeholder="sk-..." autocomplete="off">
+      </label>
+      <label class="field">模型名
+        <input id="cfgModel" type="text" placeholder="模型名称" autocomplete="off">
+      </label>
+      <label class="field">温度 <span id="cfgTempLabel">0.80</span>
+        <input id="cfgTemp" type="range" min="0" max="1.5" step="0.05">
+      </label>
+      <label class="field">上下文条数 <span id="cfgCtxLabel">20</span>
+        <input id="cfgCtx" type="range" min="4" max="60" step="1">
+      </label>
+      <label class="row-toggle">流式输出
+        <input id="cfgStream" type="checkbox">
+      </label>
+      <p class="hint">Key 只保存在本机浏览器 / WebView，不会上传服务器。</p>
+      <div class="sheet-actions">
+        <button class="btn ghost" id="testBtn">测试连接</button>
+        <button class="btn primary" id="saveSettingsBtn">保存</button>
+      </div>
+      <p class="result" id="testResult"></p>
+    </div>
+  </div>
+</div>
+
+<!-- 人格编辑 -->
+<div class="modal hidden" id="personaModal">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="personaModalTitle">新建角色</h2>
+      <button class="text-btn" data-close="personaModal">关闭</button>
+    </div>
+    <div class="sheet-body">
+      <label class="field">名字
+        <input id="pName" type="text" placeholder="例如：小满" autocomplete="off">
+      </label>
+      <label class="field">一句话简介
+        <input id="pTagline" type="text" placeholder="例如：旧书店的店员，温柔、慢热" autocomplete="off">
+      </label>
+      <label class="field">人格设定（system prompt）
+        <textarea id="pPrompt" rows="5" placeholder="你叫……说话方式是……会记得对方说过的事。"></textarea>
+      </label>
+      <label class="field">开场白
+        <textarea id="pGreeting" rows="2" placeholder="打开对话时角色说的第一句话"></textarea>
+      </label>
+      <label class="field">长期记忆 / 用户档案
+        <textarea id="pMemory" rows="3" placeholder="对方叫什么、偏好、正在发生的事……"></textarea>
+      </label>
+      <div class="field">主题色
+        <div class="colors" id="pColors"></div>
+      </div>
+      <label class="field">温度 <span id="pTempLabel">0.80</span>
+        <input id="pTemp" type="range" min="0" max="1.5" step="0.05">
+      </label>
+      <div class="field">插件
+        <div id="pPlugins" class="plugins"></div>
+      </div>
+      <div class="sheet-actions">
+        <button class="btn ghost danger hidden" id="deletePersonaBtn">删除角色</button>
+        <button class="btn primary" id="savePersonaBtn">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 会话列表 -->
+<div class="modal hidden" id="sessionsModal">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2>会话</h2>
+      <button class="text-btn" data-close="sessionsModal">关闭</button>
+    </div>
+    <div class="sheet-body" id="sessionsBody"></div>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+
+<script src="/static/ai.js"></script>
+</body>
+</html>

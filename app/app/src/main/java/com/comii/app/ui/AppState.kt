@@ -7,10 +7,7 @@ import androidx.compose.runtime.setValue
 import com.comii.app.data.ComiiRepository
 
 /** App-wide UI state: theme choice, server address and transient toast text. */
-class AppState(
-    val repository: ComiiRepository,
-    val ai: com.comii.app.data.ai.AiRepository,
-) {
+class AppState(val repository: ComiiRepository) {
 
     var themeMode by mutableStateOf(repository.settings.themeMode)
         private set

@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .api.ai import router as ai_router
 from .api.legacy import router as legacy_router
 from .api.v1 import router
 from .config import settings
@@ -144,6 +145,16 @@ def create_api_app() -> FastAPI:
     )
     _add_middleware(api)
     api.include_router(router)
+    api.include_router(ai_router)
+    if STATIC_ROOT.is_dir():
+        api.mount("/static", StaticFiles(directory=str(STATIC_ROOT)), name="static")
+
+    @api.get("/ai.html", include_in_schema=False, response_model=None)
+    def api_ai_page():
+        page = STATIC_ROOT / "ai.html"
+        if not page.is_file():
+            return HTMLResponse("<h3>ai.html missing</h3>", status_code=404)
+        return HTMLResponse(page.read_text(encoding="utf-8"))
 
     @api.get("/health", include_in_schema=False)
     def health() -> dict[str, str]:
@@ -184,6 +195,13 @@ def _add_web_pages(app: FastAPI) -> None:
             return HTMLResponse("<h3>video.html missing</h3>", status_code=404)
         return HTMLResponse(page.read_text(encoding="utf-8"))
 
+    @app.get("/ai.html", include_in_schema=False, response_model=None)
+    def ai_page():
+        page = STATIC_ROOT / "ai.html"
+        if not page.is_file():
+            return HTMLResponse("<h3>ai.html missing</h3>", status_code=404)
+        return HTMLResponse(page.read_text(encoding="utf-8"))
+
 
 def create_web_app() -> FastAPI:
     web = FastAPI(
@@ -196,6 +214,7 @@ def create_web_app() -> FastAPI:
     )
     _add_middleware(web)
     web.include_router(legacy_router)
+    web.include_router(ai_router)
     _add_web_pages(web)
 
     @web.get("/health", include_in_schema=False)
@@ -219,6 +238,7 @@ def create_app() -> FastAPI:
     )
     _add_middleware(combined)
     combined.include_router(router)
+    combined.include_router(ai_router)
     combined.include_router(legacy_router)
     _add_web_pages(combined)
 

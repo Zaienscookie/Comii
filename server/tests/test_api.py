@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -237,6 +238,92 @@ def test_app_update_channel(client: TestClient) -> None:
     assert download.status_code == 200
     assert download.content.startswith(b"PK")
     assert download.headers["content-type"] == "application/vnd.android.package-archive"
+
+
+class _FakeUpstream:
+    def __init__(self, lines: list[bytes]) -> None:
+        self.lines = lines
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args) -> bool:
+        return False
+
+    def __iter__(self):
+        return iter(self.lines)
+
+    def read(self) -> bytes:
+        return b"".join(self.lines)
+
+
+def test_ai_proxy_rejects_bad_scheme(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/ai/chat",
+        json={
+            "baseUrl": "ftp://example.com",
+            "model": "m",
+            "messages": [{"role": "user", "content": "hi"}],
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_ai_proxy_forwards_stream(client: TestClient, monkeypatch) -> None:
+    from comii.api import ai as ai_module
+
+    def fake_urlopen(request, timeout=0):
+        body = json.loads(request.data)
+        assert body["stream"] is True
+        assert body["messages"][0]["content"] == "hi"
+        return _FakeUpstream([
+            b'data: {"choices":[{"delta":{"content":"he"}}]}\n',
+            b'data: {"choices":[{"delta":{"content":"llo"}}]}\n',
+            b"data: [DONE]\n",
+        ])
+
+    monkeypatch.setattr(ai_module.urllib.request, "urlopen", fake_urlopen)
+    response = client.post(
+        "/api/v1/ai/chat",
+        json={
+            "baseUrl": "https://example.com/v1",
+            "model": "m",
+            "stream": True,
+            "messages": [{"role": "user", "content": "hi"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert "text/event-stream" in response.headers["content-type"]
+    assert "he" in response.text and "llo" in response.text
+
+
+def test_ai_proxy_forwards_json(client: TestClient, monkeypatch) -> None:
+    from comii.api import ai as ai_module
+
+    captured = {}
+
+    def fake_urlopen(request, timeout=0):
+        captured["url"] = request.full_url
+        captured["auth"] = request.get_header("Authorization")
+        return _FakeUpstream([
+            b'{"choices":[{"message":{"role":"assistant","content":"ok"}}]}'
+        ])
+
+    monkeypatch.setattr(ai_module.urllib.request, "urlopen", fake_urlopen)
+    response = client.post(
+        "/api/v1/ai/chat",
+        json={
+            "baseUrl": "https://example.com",
+            "apiKey": "sk-test",
+            "model": "m",
+            "stream": False,
+            "messages": [{"role": "user", "content": "hi"}],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["choices"][0]["message"]["content"] == "ok"
+    assert captured["url"] == "https://example.com/v1/chat/completions"
+    assert captured["auth"] == "Bearer sk-test"
 
 
 def test_stats(client: TestClient) -> None:
