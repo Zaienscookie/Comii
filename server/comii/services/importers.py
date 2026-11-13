@@ -99,6 +99,7 @@ def import_pdf(raw: bytes, folder: str, name: str, dpi: int = 200) -> ImportResu
         pages=len(pages),
         images=images,
         videos=videos,
+        total_entries=len(pages),
     )
 
 
@@ -111,33 +112,49 @@ def _is_ignored_archive_entry(name: str) -> bool:
     return False
 
 
-def _extract_images(archive_bytes: bytes, staging: Path, suffix: str = ".zip") -> int:
+def _extract_images(archive_bytes: bytes, staging: Path, suffix: str = ".zip") -> tuple[int, int, list[str], int]:
+    """Returns (written, total_entries, skipped_type_summary, failed)."""
     if suffix == ".7z":
         return _extract_7z_images(archive_bytes, staging)
     written = 0
+    total = 0
+    failed = 0
+    skipped: dict[str, int] = {}
     with zipfile.ZipFile(io.BytesIO(archive_bytes)) as bundle:
         for info in bundle.infolist():
             if info.is_dir():
                 continue
-            entry_name = info.filename
+            total += 1
+            entry_name = info.filename.replace("\\", "/")
             if _is_ignored_archive_entry(entry_name):
+                skipped["隐藏文件"] = skipped.get("隐藏文件", 0) + 1
                 continue
-            suffix = Path(entry_name).suffix.lower()
-            if suffix not in library.IMAGE_EXTENSIONS:
+            extension = Path(entry_name).suffix.lower()
+            if extension not in library.IMAGE_EXTENSIONS:
+                key = extension or "无扩展名"
+                skipped[key] = skipped.get(key, 0) + 1
                 continue
             safe = Path(entry_name).name
             destination = staging / safe
             counter = 1
             while destination.exists():
-                destination = staging / f"{Path(safe).stem}_{counter}{suffix}"
+                destination = staging / f"{Path(safe).stem}_{counter}{extension}"
                 counter += 1
-            with bundle.open(info) as source, destination.open("wb") as handle:
-                shutil.copyfileobj(source, handle)
-            written += 1
-    return written
+            try:
+                with bundle.open(info) as source, destination.open("wb") as handle:
+                    shutil.copyfileobj(source, handle)
+                written += 1
+            except Exception:
+                failed += 1
+                destination.unlink(missing_ok=True)
+    summary = [f"{name}×{count}" for name, count in
+               sorted(skipped.items(), key=lambda item: -item[1])[:6]]
+    if failed:
+        summary.append(f"读取失败×{failed}")
+    return written, total, summary, failed
 
 
-def _extract_7z_images(archive_bytes: bytes, staging: Path) -> int:
+def _extract_7z_images(archive_bytes: bytes, staging: Path) -> tuple[int, int, list[str], int]:
     try:
         import py7zr
     except ImportError as exc:  # pragma: no cover - optional dependency
@@ -145,29 +162,43 @@ def _extract_7z_images(archive_bytes: bytes, staging: Path) -> int:
 
     temporary = staging / ".comii_7z"
     temporary.mkdir(parents=True, exist_ok=True)
+    written = 0
+    total = 0
+    failed = 0
+    skipped: dict[str, int] = {}
     try:
         with py7zr.SevenZipFile(io.BytesIO(archive_bytes), mode="r") as archive:
             archive.extractall(path=temporary)
-        written = 0
         for source in sorted(temporary.rglob("*")):
             if not source.is_file():
                 continue
-            relative = str(source.relative_to(temporary))
+            total += 1
+            relative = source.relative_to(temporary).as_posix()
             if _is_ignored_archive_entry(relative):
+                skipped["隐藏文件"] = skipped.get("隐藏文件", 0) + 1
                 continue
-            suffix = source.suffix.lower()
-            if suffix not in library.IMAGE_EXTENSIONS:
+            extension = source.suffix.lower()
+            if extension not in library.IMAGE_EXTENSIONS:
+                key = extension or "无扩展名"
+                skipped[key] = skipped.get(key, 0) + 1
                 continue
             destination = staging / source.name
             counter = 1
             while destination.exists():
-                destination = staging / f"{source.stem}_{counter}{suffix}"
+                destination = staging / f"{source.stem}_{counter}{extension}"
                 counter += 1
-            shutil.move(str(source), str(destination))
-            written += 1
-        return written
+            try:
+                shutil.move(str(source), str(destination))
+                written += 1
+            except Exception:
+                failed += 1
     finally:
         shutil.rmtree(temporary, ignore_errors=True)
+    summary = [f"{name}×{count}" for name, count in
+               sorted(skipped.items(), key=lambda item: -item[1])[:6]]
+    if failed:
+        summary.append(f"读取失败×{failed}")
+    return written, total, summary, failed
 
 
 def _flatten_single_directory(staging: Path) -> None:
@@ -183,9 +214,12 @@ def _flatten_single_directory(staging: Path) -> None:
 def import_archive(raw: bytes, folder: str, name: str = "", suffix: str = ".zip") -> ImportResult:
     staging = Path(tempfile.mkdtemp(prefix="comii_cbz_"))
     try:
-        written = _extract_images(raw, staging, suffix)
+        written, total, skipped_summary, _failed = _extract_images(raw, staging, suffix)
         if not written:
-            raise HTTPException(status_code=400, detail="压缩包中没有图片")
+            detail = "压缩包中没有图片"
+            if skipped_summary:
+                detail += "（跳过了 " + "、".join(skipped_summary) + "）"
+            raise HTTPException(status_code=400, detail=detail)
         _flatten_single_directory(staging)
         target, clean_name = _target_directory(folder, name)
         target.mkdir(parents=True, exist_ok=True)
@@ -198,7 +232,16 @@ def import_archive(raw: bytes, folder: str, name: str = "", suffix: str = ".zip"
             shutil.move(str(child), str(destination))
             index += 1
         images, videos = _count(target)
-        return ImportResult(name=clean_name, path=_relative(target), pages=images, images=images, videos=videos)
+        return ImportResult(
+            name=clean_name,
+            path=_relative(target),
+            pages=images,
+            images=images,
+            videos=videos,
+            total_entries=total,
+            skipped=max(0, total - written),
+            skipped_types=skipped_summary,
+        )
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
@@ -258,4 +301,5 @@ def import_uploads(files: Iterable[UploadFile], folder: str, name: str = "") -> 
         pages=images,
         images=images,
         videos=videos,
+        total_entries=len(uploads),
     )

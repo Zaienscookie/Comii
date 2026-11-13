@@ -1187,7 +1187,12 @@ function bindPdfImport() {
         const parts = [];
         if (data.images) parts.push(`${data.images} 张图片`);
         if (data.videos) parts.push(`${data.videos} 个视频`);
-        toast(`已导入「${data.series || "内容"}」${parts.length ? " · " + parts.join(" / ") : ""}`);
+        let extra = "";
+        if (data.skipped) {
+          const types = (data.skipped_types || []).join("、");
+          extra = `（压缩包共 ${data.total_entries} 项，跳过 ${data.skipped}${types ? "：" + types : ""}）`;
+        }
+        toast(`已导入「${data.series || "内容"}」${parts.length ? " · " + parts.join(" / ") : ""}${extra}`);
         close();
         loadLibrary();
       } else {

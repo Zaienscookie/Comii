@@ -355,6 +355,9 @@ async def import_upload(
         "pages": result.pages,
         "images": result.images,
         "videos": result.videos,
+        "total_entries": result.total_entries,
+        "skipped": result.skipped,
+        "skipped_types": result.skipped_types,
     }
 
 

@@ -179,6 +179,10 @@ class ImportResult(BaseModel):
     pages: int = 0
     images: int = 0
     videos: int = 0
+    # 压缩包导入诊断：总条目、被跳过的数量与类型分布
+    total_entries: int = 0
+    skipped: int = 0
+    skipped_types: list[str] = Field(default_factory=list)
 
 
 class StatsResponse(BaseModel):
