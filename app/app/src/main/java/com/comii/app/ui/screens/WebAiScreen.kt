@@ -44,8 +44,14 @@ fun WebAiScreen(state: AppState, nav: NavHostController) {
         return
     }
 
-    val pageUrl = remember(state.serverUrl) {
-        state.serverUrl.trim().trimEnd('/') + "/ai.html"
+    val dark = when (state.themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
+    val pageUrl = remember(state.serverUrl, dark) {
+        val base = state.serverUrl.trim().trimEnd('/')
+        "$base/ai.html?theme=${if (dark) "dark" else "light"}"
     }
     val background = palette.background.toArgb()
 
@@ -62,8 +68,11 @@ fun WebAiScreen(state: AppState, nav: NavHostController) {
                 settings.databaseEnabled = true
                 settings.mediaPlaybackRequiresUserGesture = false
                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
-                settings.loadWithOverviewMode = true
-                settings.useWideViewPort = true
+                settings.textZoom = 100
+                settings.setSupportZoom(false)
+                settings.builtInZoomControls = false
+                settings.displayZoomControls = false
+                settings.javaScriptCanOpenWindowsAutomatically = false
                 webViewClient = WebViewClient()
                 loadUrl(pageUrl)
             }

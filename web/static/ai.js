@@ -7,6 +7,7 @@
  */
 (function () {
   const STORAGE_KEY = "comii-ai-v1";
+  const THEME_KEY = "comii-ai-theme";
   const API_URL = "/api/v1/ai/chat";
   const COLORS = ["#0A84FF", "#34C759", "#FF9F0A", "#FF375F", "#AF52DE", "#5AC8FA"];
 
@@ -83,6 +84,15 @@
       els[id] = document.getElementById(id);
     });
 
+    applyTheme();
+    const themeBtn = document.getElementById("themeBtn");
+    if (themeBtn) themeBtn.addEventListener("click", toggleTheme);
+    window.addEventListener("error", function (event) {
+      try {
+        toast("页面出错：" + (event.message || "未知错误"));
+      } catch (error) { /* ignore */ }
+    });
+
     els.backBtn.addEventListener("click", showList);
     els.newPersonaBtn.addEventListener("click", function () { openPersonaEditor(null); });
     els.settingsBtn.addEventListener("click", openSettings);
@@ -97,6 +107,28 @@
     bindPersonaModal();
     bindModalClosers();
     renderList();
+  }
+
+  // ---------------------------------------------------------------- theme
+  function applyTheme() {
+    const param = new URLSearchParams(location.search).get("theme");
+    let theme = null;
+    try { theme = localStorage.getItem(THEME_KEY); } catch (error) { /* ignore */ }
+    if (param === "dark" || param === "light") theme = param;
+    if (theme !== "dark" && theme !== "light") {
+      theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem(THEME_KEY, theme); } catch (error) { /* ignore */ }
+  }
+
+  function toggleTheme() {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (error) { /* ignore */ }
+    const url = new URL(location.href);
+    url.searchParams.delete("theme");
+    history.replaceState(null, "", url.toString());
   }
 
   // ---------------------------------------------------------------- state

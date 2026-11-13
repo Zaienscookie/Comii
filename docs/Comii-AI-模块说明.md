@@ -33,6 +33,12 @@ Persona 人格 → Conversation 会话 → Context 组装（人格 + 记忆 + �
 
 所有数据都在 WebView / 浏览器的 `localStorage`（key `comii-ai-v1`），不上传服务器。
 
+### 主题与布局
+
+- App 打开时带 `?theme=dark|light`，页面直接跟随 App 的深浅色；右上角也有手动切换按钮。
+- 页面布局用 `body{display:flex}` + `.app{flex:1;min-height:0}`，不依赖 `calc(100% - 固定高度)`，避免 WebView 高度计算出问题时内容被裁掉。
+- 如果页面显示异常，右下角会弹出 JS 错误提示，方便定位。
+
 ## 3. 请求链路
 
 ```
