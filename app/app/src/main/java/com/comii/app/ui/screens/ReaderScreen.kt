@@ -380,11 +380,12 @@ fun ReaderScreen(
                     Icon(Icons.Rounded.GridView, contentDescription = "页码", tint = Color.White)
                 }
                 IconButton(onClick = {
-                    manualLandscape = !manualLandscape
-                    activity?.requestedOrientation = if (manualLandscape) {
-                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    } else {
+                    val next = !manualLandscape
+                    manualLandscape = next
+                    activity?.requestedOrientation = if (next) {
                         android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    } else {
+                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     }
                 }) {
                     Icon(Icons.Rounded.ScreenRotation, contentDescription = "横竖屏切换", tint = Color.White)

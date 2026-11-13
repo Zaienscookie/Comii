@@ -9,14 +9,17 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -77,6 +80,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     val palette = ComiiTheme.palette
@@ -93,7 +97,9 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     var attachPath by remember { mutableStateOf<String?>(null) }
     var cameraPath by remember { mutableStateOf<String?>(null) }
     var pendingText by remember { mutableStateOf("") }
-    var pendingBatch by remember { mutableStateOf<List<Pair<String, String?>>>(emptyList()) }
+    var pendingBatch by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
+    var pendingConversationId by remember { mutableStateOf<String?>(null) }
+    var activeConversationId by remember { mutableStateOf<String?>(null) }
     var batchJob by remember { mutableStateOf<Job?>(null) }
     var streaming by remember { mutableStateOf(false) }
     var streamText by remember { mutableStateOf("") }
@@ -102,6 +108,15 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     var showLife by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
+    val imeVisible = WindowInsets.isImeVisible
+
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) {
+            delay(420)
+            val total = messages.size + if (streaming) 1 else 0
+            if (total > 0) runCatching { listState.scrollToItem(total - 1) }
+        }
+    }
 
     val pickImage = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
@@ -155,6 +170,7 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         val conversations = ai.conversations(personaId)
         val current = conversations.firstOrNull() ?: ai.createConversation(personaId)
         conversation = current
+        activeConversationId = current.id
         messages = current.messages
     }
 
@@ -164,23 +180,23 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         runCatching { listState.scrollToItem(total - 1) }
     }
 
-    var doSendBatchRef: ((List<Pair<String, String?>>) -> Unit)? = null
+    var doSendBatchRef: ((String, List<ChatMessage>) -> Unit)? = null
 
     fun scheduleBatch(delayMs: Long = 550) {
         if (pendingBatch.isEmpty()) return
+        val targetId = pendingConversationId ?: return
         batchJob?.cancel()
         batchJob = scope.launch {
             delay(delayMs)
-            if (streaming) return@launch
+            if (streaming && activeConversationId == targetId) return@launch
             val batch = pendingBatch
             pendingBatch = emptyList()
-            doSendBatchRef?.invoke(batch)
+            doSendBatchRef?.invoke(targetId, batch)
         }
     }
 
-    fun doSendBatch(batch: List<Pair<String, String?>>) {
+    fun doSendBatch(conversationId: String, batch: List<ChatMessage>) {
         if (batch.isEmpty()) return
-        val current = conversation ?: return
         error = null
         streaming = true
         streamText = ""
@@ -188,39 +204,75 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
             try {
                 ai.sendBatch(
                     personaId = personaId,
-                    conversationId = current.id,
-                    outgoing = batch.map { (text, image) ->
-                        ChatMessage("user", text, System.currentTimeMillis(), image)
-                    },
+                    conversationId = conversationId,
+                    outgoing = batch,
                     onMessage = { message ->
-                        messages = messages + message
-                        streamText = ""
+                        if (activeConversationId == conversationId) {
+                            messages = messages + message
+                            streamText = ""
+                        }
                     },
-                ) { delta -> streamText += delta }
-                messages = ai.conversation(current.id)?.messages ?: messages
+                ) { delta -> if (activeConversationId == conversationId) streamText += delta }
+                if (activeConversationId == conversationId) {
+                    messages = ai.conversation(conversationId)?.messages ?: messages
+                }
                 personaVersion++
             } catch (failure: Exception) {
-                error = failure.message ?: "请求失败"
-                messages = ai.conversation(current.id)?.messages ?: messages
+                if (activeConversationId == conversationId) {
+                    error = failure.message ?: "请求失败"
+                    messages = ai.conversation(conversationId)?.messages ?: messages
+                }
             } finally {
                 streaming = false
                 streamText = ""
-                if (pendingBatch.isNotEmpty()) scheduleBatch(200)
+                if (activeConversationId == conversationId && pendingBatch.isNotEmpty()) {
+                    scheduleBatch(200)
+                }
             }
         }
     }
-    doSendBatchRef = { batch -> doSendBatch(batch) }
+    doSendBatchRef = { id, batch -> doSendBatch(id, batch) }
 
     fun submit() {
         val text = draft.trim()
         val image = attachPath
         if (text.isEmpty() && image == null) return
+        val current = conversation ?: return
+        if (text.lowercase() in setOf("/reset", "reset", "/zreset", "zreset")) {
+            draft = ""
+            attachPath = null
+            batchJob?.cancel()
+            pendingBatch = emptyList()
+            pendingConversationId = null
+            ai.resetContext(personaId, current.id)
+            val refreshed = ai.conversation(current.id)
+            conversation = refreshed
+            messages = refreshed?.messages ?: emptyList()
+            state.showToast("已忘记上下文")
+            return
+        }
         draft = ""
         attachPath = null
-        // 消息立即上屏；同一小段时间内发的多条会合成一次请求
-        messages = messages + ChatMessage("user", text, System.currentTimeMillis(), image)
-        pendingBatch = pendingBatch + (text to image)
+        val message = ChatMessage("user", text, System.currentTimeMillis(), image)
+        // 先上屏 + 立刻写入会话，保证发出去就一直在
+        messages = messages + message
+        scope.launch {
+            runCatching { ai.appendMessage(current.id, message) }
+        }
+        if (pendingBatch.isEmpty()) pendingConversationId = current.id
+        pendingBatch = pendingBatch + message
         if (!streaming) scheduleBatch()
+    }
+
+    fun switchConversation(target: Conversation) {
+        batchJob?.cancel()
+        pendingBatch = emptyList()
+        pendingConversationId = null
+        streaming = false
+        streamText = ""
+        conversation = target
+        activeConversationId = target.id
+        messages = target.messages
     }
 
     Column(Modifier.fillMaxSize().background(palette.background).statusBarsPadding().imePadding()) {
@@ -260,12 +312,7 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                 )
             }
             IconButton(onClick = {
-                conversation?.let { current ->
-                    val fresh = ai.createConversation(personaId)
-                    conversation = fresh
-                    messages = fresh.messages
-                    reloadKey++
-                }
+                switchConversation(ai.createConversation(personaId))
             }) {
                 Icon(Icons.Rounded.Add, contentDescription = "新对话", tint = palette.accent)
             }
@@ -445,9 +492,7 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                     Text("会话", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = {
-                        val fresh = ai.createConversation(personaId)
-                        conversation = fresh
-                        messages = fresh.messages
+                        switchConversation(ai.createConversation(personaId))
                         showSessions = false
                     }) { Text("新对话", color = palette.accent) }
                 }
@@ -459,8 +504,7 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (session.id == conversation?.id) palette.accent.copy(alpha = 0.12f) else palette.card)
                             .clickable {
-                                conversation = session
-                                messages = session.messages
+                                switchConversation(session)
                                 showSessions = false
                             }
                             .padding(start = 14.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
@@ -479,8 +523,7 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
                             if (session.id == conversation?.id) {
                                 val remaining = ai.conversations(personaId)
                                 val next = remaining.firstOrNull() ?: ai.createConversation(personaId)
-                                conversation = next
-                                messages = next.messages
+                                switchConversation(next)
                             }
                             reloadKey++
                         }) {

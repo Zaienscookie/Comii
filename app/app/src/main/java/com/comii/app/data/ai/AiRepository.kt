@@ -261,11 +261,7 @@ class AiRepository(context: Context) {
 
         val parts = if (config.segmentReplies) {
             val byDelimiter = answer.split("|||").map { it.trim() }.filter { it.isNotEmpty() }
-            if (byDelimiter.size > 1) {
-                byDelimiter
-            } else {
-                answer.split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
-            }
+            if (byDelimiter.size > 1) byDelimiter.take(3) else emptyList()
         } else {
             emptyList()
         }
@@ -300,8 +296,16 @@ class AiRepository(context: Context) {
         savePersona(withHeart)
         val conversation = conversation(conversationId) ?: throw AiException("会话不存在")
         val config = config()
+        // 用户消息在提交时已经写入；这里只补齐漏掉的，避免重复
+        val missing = outgoing.filterNot { candidate ->
+            conversation.messages.any {
+                it.role == candidate.role &&
+                    it.timestamp == candidate.timestamp &&
+                    it.content == candidate.content
+            }
+        }
         var current = conversation.copy(
-            messages = conversation.messages + outgoing,
+            messages = conversation.messages + missing,
             updatedAt = now(),
             title = if (conversation.title == "新对话") joined.take(18) else conversation.title,
         )
@@ -316,7 +320,7 @@ class AiRepository(context: Context) {
         }
         val parts = if (config.segmentReplies) {
             val byDelimiter = answer.split("|||").map { it.trim() }.filter { it.isNotEmpty() }
-            if (byDelimiter.size > 1) byDelimiter else answer.split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
+            if (byDelimiter.size > 1) byDelimiter.take(3) else emptyList()
         } else {
             emptyList()
         }
@@ -351,6 +355,28 @@ class AiRepository(context: Context) {
             )
         )
         message
+    }
+
+    /** 把一条用户消息立刻写进指定会话（保证发出去就一直在）。 */
+    suspend fun appendMessage(
+        conversationId: String,
+        message: ChatMessage,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val conversation = conversation(conversationId) ?: return@withContext false
+        if (conversation.messages.any {
+                it.role == message.role && it.timestamp == message.timestamp && it.content == message.content
+            }
+        ) {
+            return@withContext true
+        }
+        replaceConversation(
+            conversation.copy(
+                messages = conversation.messages + message,
+                updatedAt = now(),
+                title = if (conversation.title == "新对话") message.content.take(18) else conversation.title,
+            )
+        )
+        true
     }
 
     /** 九维情绪/状态/念头：简化版「鱼的心」。 */
@@ -642,6 +668,13 @@ class AiRepository(context: Context) {
             savePersona(persona.copy(heart = persona.heart.copy(plan = text)))
         }
         text
+    }
+
+    /** /reset：清空当前会话上下文与长期记忆。 */
+    fun resetContext(personaId: String, conversationId: String) {
+        val conversation = conversation(conversationId) ?: return
+        replaceConversation(conversation.copy(messages = emptyList(), updatedAt = now()))
+        persona(personaId)?.let { savePersona(it.copy(memory = "")) }
     }
 
     private fun now() = System.currentTimeMillis()
