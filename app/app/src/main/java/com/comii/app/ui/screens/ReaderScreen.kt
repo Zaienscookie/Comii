@@ -94,6 +94,10 @@ fun ReaderScreen(
     val portrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
     val repository = state.repository
     val settings = repository.settings
+    val launch = remember { com.comii.app.ui.ReaderLaunch.consume(path) }
+    val allMode = launch?.all ?: all
+    val initialPage = launch?.index ?: startPage
+    val initialName = launch?.name ?: startName
 
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -112,7 +116,7 @@ fun ReaderScreen(
     var showGrid by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var current by remember { mutableIntStateOf(0) }
-    var initializing by remember { mutableStateOf(all) }
+    var initializing by remember { mutableStateOf(allMode) }
 
     val listState = rememberLazyListState()
     val pagerState = rememberPagerState(pageCount = { names.size })
@@ -129,7 +133,7 @@ fun ReaderScreen(
 
     /** 「全部」模式下按全局位置取图。 */
     fun pageModel(index: Int): Any? {
-        if (!all) return model(names.getOrNull(index) ?: return null)
+        if (!allMode) return model(names.getOrNull(index) ?: return null)
         val item = allItems.getOrNull(index) ?: return null
         return serverBase?.imageUrl(item.series_path, item.name)
     }
@@ -142,8 +146,8 @@ fun ReaderScreen(
         current = target
     }
 
-    LaunchedEffect(all, path, startName) {
-        if (!all) return@LaunchedEffect
+    LaunchedEffect(allMode, path, initialName) {
+        if (!allMode) return@LaunchedEffect
         initializing = true
         val api = repository.apiOrNull()
         if (api == null) {
@@ -163,10 +167,10 @@ fun ReaderScreen(
         allItems = items
         names = items.map { it.name }
         val found = items.indexOfFirst {
-            it.series_path == path && (startName.isEmpty() || it.name == startName)
+            it.series_path == path && (initialName.isEmpty() || it.name == initialName)
         }
-        current = if (startPage >= 0) {
-            startPage.coerceIn(0, items.lastIndex)
+        current = if (initialPage >= 0) {
+            initialPage.coerceIn(0, items.lastIndex)
         } else if (found >= 0) {
             found
         } else {
@@ -180,14 +184,14 @@ fun ReaderScreen(
         initializing = false
     }
 
-    LaunchedEffect(path, startPage) {
-        if (all) return@LaunchedEffect
+    LaunchedEffect(path, initialPage) {
+        if (allMode) return@LaunchedEffect
         val offline = repository.offline.find(path)
         if (offline != null && offline.images.isNotEmpty()) {
             names = offline.images
             localDir = repository.offline.imagesDir(path)
             title = offline.name
-            val page = if (startPage >= 0) startPage else settings.localPage(path)
+            val page = if (initialPage >= 0) initialPage else settings.localPage(path)
             current = page.coerceIn(0, (offline.images.size - 1).coerceAtLeast(0))
             loading = false
         } else {
@@ -202,8 +206,8 @@ fun ReaderScreen(
                     names = detail.images
                     title = detail.name
                     val serverPage = detail.progress?.page ?: 0
-                    val saved = if (startPage >= 0) {
-                        startPage
+                    val saved = if (initialPage >= 0) {
+                        initialPage
                     } else {
                         maxOf(settings.localPage(path), serverPage)
                     }
@@ -223,7 +227,7 @@ fun ReaderScreen(
     }
 
     LaunchedEffect(mode, names.size) {
-        if (names.isEmpty() || all) return@LaunchedEffect
+        if (names.isEmpty() || allMode) return@LaunchedEffect
         delay(40)
         val target = current
         if (current > 0) {
@@ -235,14 +239,14 @@ fun ReaderScreen(
         snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
             if (initializing) return@collect
             if (index != current) current = index
-            if (all) title = allItems.getOrNull(index)?.series_name ?: title
+            if (allMode) title = allItems.getOrNull(index)?.series_name ?: title
         }
     }
     LaunchedEffect(pagerState, names.size) {
         snapshotFlow { pagerState.currentPage }.collect { page ->
             if (initializing) return@collect
             if (page != current) current = page
-            if (all) title = allItems.getOrNull(page)?.series_name ?: title
+            if (allMode) title = allItems.getOrNull(page)?.series_name ?: title
         }
     }
 
@@ -262,7 +266,7 @@ fun ReaderScreen(
             }
         }
         delay(500)
-        if (all) {
+        if (allMode) {
             val item = allItems.getOrNull(current) ?: return@LaunchedEffect
             val series = allItems.filter { it.series_path == item.series_path }
             val local = series.indexOfFirst { it.name == item.name }.coerceAtLeast(0)

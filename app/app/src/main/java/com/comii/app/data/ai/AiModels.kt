@@ -49,6 +49,7 @@ data class Heart(
     val joy: Double = 50.0,
     val blame: Double = 0.0,
     val thought: String = "",
+    val plan: String = "",
     val updatedAt: Long = 0L,
     val nextProactiveAt: Long = 0L,
 )
@@ -79,6 +80,10 @@ data class Persona(
     /** 好感度，随聊天自动增长。 */
     val affection: Int = 0,
     val heart: Heart = Heart(),
+    /** 情绪灵敏度，越大越容易被带动。 */
+    val heartSensitivity: Double = 1.0,
+    /** 主动消息基础概率 0~1。 */
+    val proactiveChance: Double = 0.6,
 )
 
 @Serializable

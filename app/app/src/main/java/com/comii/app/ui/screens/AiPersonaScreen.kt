@@ -77,6 +77,10 @@ fun AiPersonaScreen(state: AppState, personaId: String?, nav: NavHostController)
     var pluginIds by remember { mutableStateOf(existing?.pluginIds.orEmpty()) }
     var temperature by remember { mutableFloatStateOf((existing?.temperature ?: 0.8).toFloat()) }
     var proactive by remember { mutableStateOf(existing?.proactive ?: false) }
+    var sensitivity by remember { mutableFloatStateOf((existing?.heartSensitivity ?: 1.0).toFloat()) }
+    var proactiveChance by remember { mutableFloatStateOf((existing?.proactiveChance ?: 0.6).toFloat()) }
+    var planText by remember { mutableStateOf(existing?.heart?.plan.orEmpty()) }
+    var showPlan by remember { mutableStateOf(false) }
     var avatarPath by remember { mutableStateOf(existing?.avatarPath.orEmpty()) }
     var cropSource by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -115,8 +119,17 @@ fun AiPersonaScreen(state: AppState, personaId: String?, nav: NavHostController)
             lastProactiveAt = existing?.lastProactiveAt ?: 0L,
             avatarPath = avatarPath,
             affection = existing?.affection ?: 0,
+            heart = (existing?.heart ?: com.comii.app.data.ai.Heart()).copy(plan = planText),
+            heartSensitivity = sensitivity.toDouble(),
+            proactiveChance = proactiveChance.toDouble(),
         )
         ai.savePersona(persona)
+        if (proactive) {
+            scope.launch {
+                val plan = ai.ensureProactivePlan(persona.id)
+                if (plan.isNotBlank()) planText = plan
+            }
+        }
         nav.popBackStack()
     }
 
@@ -236,6 +249,28 @@ fun AiPersonaScreen(state: AppState, personaId: String?, nav: NavHostController)
                 }
                 Switch(checked = proactive, onCheckedChange = { proactive = it })
             }
+            if (proactive) {
+                Text(
+                    if (showPlan) "收起主动时刻表" else "查看主动时刻表",
+                    color = palette.accent,
+                    fontSize = 12.sp,
+                    modifier = Modifier.clickable { showPlan = !showPlan },
+                )
+                if (showPlan) {
+                    Text(
+                        planText.ifBlank { "还没有生成，保存后会由 AI 生成" },
+                        color = palette.textSecondary,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            Text("情绪灵敏度 ${String.format("%.2f", sensitivity)}", color = palette.textSecondary, fontSize = 12.sp)
+            Slider(value = sensitivity, onValueChange = { sensitivity = it }, valueRange = 0.3f..2f)
+            Text("主动概率 ${String.format("%.2f", proactiveChance)}", color = palette.textSecondary, fontSize = 12.sp)
+            Slider(value = proactiveChance, onValueChange = { proactiveChance = it }, valueRange = 0.05f..0.95f)
 
             Spacer(Modifier.height(20.dp))
             PrimaryButton(text = "保存角色", onClick = { save() })

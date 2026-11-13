@@ -92,7 +92,7 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     var attachPath by remember { mutableStateOf<String?>(null) }
     var cameraPath by remember { mutableStateOf<String?>(null) }
     var pendingText by remember { mutableStateOf("") }
-    var queuedTexts by remember { mutableStateOf<List<String>>(emptyList()) }
+    var queuedTexts by remember { mutableStateOf<List<Pair<String, String?>>>(emptyList()) }
     var debounceJob by remember { mutableStateOf<Job?>(null) }
     var streaming by remember { mutableStateOf(false) }
     var streamText by remember { mutableStateOf("") }
@@ -162,19 +162,28 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         if (total > 0) runCatching { listState.animateScrollToItem(total - 1) }
     }
 
-    fun doSend(text: String, imagePath: String?) {
+    fun doSend(text: String, imagePath: String?, appendLocal: Boolean = true, appendUser: Boolean = true) {
         if (text.isBlank() && imagePath == null) return
         val current = conversation ?: return
         error = null
         streaming = true
         streamText = ""
-        messages = messages + ChatMessage("user", text, System.currentTimeMillis(), imagePath)
+        if (appendLocal) {
+            messages = messages + ChatMessage("user", text, System.currentTimeMillis(), imagePath)
+        }
         scope.launch {
             try {
-                ai.send(personaId, current.id, text, imagePath, onMessage = { message ->
-                    messages = messages + message
-                    streamText = ""
-                }) { delta -> streamText += delta }
+                ai.send(
+                    personaId = personaId,
+                    conversationId = current.id,
+                    text = text,
+                    imagePath = imagePath,
+                    appendUser = appendUser,
+                    onMessage = { message ->
+                        messages = messages + message
+                        streamText = ""
+                    },
+                ) { delta -> streamText += delta }
                 messages = ai.conversation(current.id)?.messages ?: messages
                 personaVersion++
             } catch (failure: Exception) {
@@ -193,8 +202,10 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         if (text.isEmpty() && image == null) return
         draft = ""
         if (streaming) {
-            // 正在回复时也能继续发，等这一轮结束后排队发出
-            if (text.isNotEmpty()) queuedTexts = queuedTexts + text
+            // 回复中也能继续发：消息立即上屏并写入会话，等这一轮结束后逐条发送
+            attachPath = null
+            messages = messages + ChatMessage("user", text, System.currentTimeMillis(), image)
+            queuedTexts = queuedTexts + (text to image)
             return
         }
         attachPath = null
@@ -205,9 +216,9 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
 
     LaunchedEffect(streaming, queuedTexts) {
         if (!streaming && queuedTexts.isNotEmpty()) {
-            val next = queuedTexts.joinToString("\n")
-            queuedTexts = emptyList()
-            doSend(next, null)
+            val (next, image) = queuedTexts.first()
+            queuedTexts = queuedTexts.drop(1)
+            doSend(next, image, appendLocal = false, appendUser = true)
         }
     }
 

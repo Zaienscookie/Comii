@@ -64,6 +64,7 @@ fun AiScreen(state: AppState, nav: NavHostController) {
     // 打开 AI 页时检查主动消息：超过间隔就让角色发一条并通知
     LaunchedEffect(Unit) {
         ai.personas().filter { it.proactive }.forEach { persona ->
+            runCatching { ai.ensureProactivePlan(persona.id) }
             runCatching { ai.proactive(persona.id) }.getOrNull()?.let { message ->
                 com.comii.app.data.ai.AiNotifier.notify(context, persona, message)
                 version++

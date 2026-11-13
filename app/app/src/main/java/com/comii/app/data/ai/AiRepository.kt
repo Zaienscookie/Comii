@@ -145,6 +145,9 @@ class AiRepository(context: Context) {
             messages += ChatMessage("system", "对方刚发来一张图片，请先理解图片内容再回答，不要忽略这张图。")
         }
         val limit = config.maxContextMessages.coerceIn(2, 200)
+        if (config.segmentReplies) {
+            messages += ChatMessage("system", "这一轮请把回复拆成 2-4 条短消息，用 ||| 分隔。")
+        }
         val history = conversation.messages.takeLast(limit)
         messages += history
         return messages
@@ -217,6 +220,7 @@ class AiRepository(context: Context) {
         conversationId: String,
         text: String,
         imagePath: String? = null,
+        appendUser: Boolean = true,
         onMessage: (ChatMessage) -> Unit = {},
         onDelta: (String) -> Unit = {},
     ): ChatMessage = withContext(Dispatchers.IO + NonCancellable) {
@@ -228,11 +232,15 @@ class AiRepository(context: Context) {
         val conversation = conversation(conversationId) ?: throw AiException("会话不存在")
         val config = config()
         val userMessage = ChatMessage("user", text.trim(), now(), imagePath)
-        var current = conversation.copy(
-            messages = conversation.messages + userMessage,
-            updatedAt = now(),
-            title = if (conversation.title == "新对话") text.trim().take(18) else conversation.title,
-        )
+        var current = if (appendUser) {
+            conversation.copy(
+                messages = conversation.messages + userMessage,
+                updatedAt = now(),
+                title = if (conversation.title == "新对话") text.trim().take(18) else conversation.title,
+            )
+        } else {
+            conversation
+        }
         replaceConversation(current)
 
         val context = buildMessages(withHeart, current)
@@ -248,7 +256,12 @@ class AiRepository(context: Context) {
         }
 
         val parts = if (config.segmentReplies) {
-            answer.split("|||").map { it.trim() }.filter { it.isNotEmpty() }
+            val byDelimiter = answer.split("|||").map { it.trim() }.filter { it.isNotEmpty() }
+            if (byDelimiter.size > 1) {
+                byDelimiter
+            } else {
+                answer.split("\n\n").map { it.trim() }.filter { it.isNotEmpty() }
+            }
         } else {
             emptyList()
         }
@@ -264,6 +277,25 @@ class AiRepository(context: Context) {
         }
         runCatching { maybeSummarize(withHeart, current) }
         last
+    }
+
+    /** 先把用户消息写进会话（用于回复中继续发消息时立即上屏）。 */
+    suspend fun appendUserMessage(
+        personaId: String,
+        conversationId: String,
+        text: String,
+        imagePath: String? = null,
+    ): ChatMessage = withContext(Dispatchers.IO) {
+        val conversation = conversation(conversationId) ?: throw AiException("会话不存在")
+        val message = ChatMessage("user", text.trim(), now(), imagePath)
+        replaceConversation(
+            conversation.copy(
+                messages = conversation.messages + message,
+                updatedAt = now(),
+                title = if (conversation.title == "新对话") text.trim().take(18) else conversation.title,
+            )
+        )
+        message
     }
 
     /** 九维情绪/状态/念头：简化版「鱼的心」。 */
@@ -291,31 +323,32 @@ class AiRepository(context: Context) {
         var blame = (heart.blame - 3.0 * hours).coerceIn(0.0, 100.0)
 
         val lowered = text.lowercase()
+        val sens = persona.heartSensitivity.coerceIn(0.3, 2.0)
         val praise = listOf("厉害", "真棒", "喜欢", "谢谢", "可爱", "贴心", "乖", "好看")
         val apology = listOf("对不起", "抱歉", "我错了", "别生气", "原谅")
         val blameWords = listOf("烦", "滚", "闭嘴", "讨厌", "别烦", "不用你")
         val question = listOf("？", "?", "吗", "怎么", "为什么", "帮我")
 
         if (praise.any { lowered.contains(it) }) {
-            joy += 4.0
-            attachment += 2.0
-            intimacy += 2.0
-            stress -= 2.0
+            joy += 4.0 * sens
+            attachment += 2.0 * sens
+            intimacy += 2.0 * sens
+            stress -= 2.0 * sens
         }
         if (apology.any { lowered.contains(it) }) {
-            blame -= 12.0
-            stress -= 5.0
+            blame -= 12.0 * sens
+            stress -= 5.0 * sens
         }
         if (blameWords.any { lowered.contains(it) }) {
-            blame += 18.0
-            stress += 8.0
-            joy -= 5.0
-            attachment -= 2.0
+            blame += 18.0 * sens
+            stress += 8.0 * sens
+            joy -= 5.0 * sens
+            attachment -= 2.0 * sens
         }
-        if (question.any { lowered.contains(it) }) curiosity += 1.5
-        social += 1.2
-        intimacy += 0.1
-        fatigue += 0.4
+        if (question.any { lowered.contains(it) }) curiosity += 1.5 * sens
+        social += 1.2 * sens
+        intimacy += 0.1 * sens
+        fatigue += 0.4 * sens
 
         val state = heartState(blame)
         val thoughts = when (state) {
@@ -478,12 +511,13 @@ class AiRepository(context: Context) {
             savePersona(persona.copy(heart = heart.copy(nextProactiveAt = now + 2 * 3_600_000L)))
             return@withContext null
         }
-        val chance = when {
-            heart.blame >= 55 -> 0.25
-            heart.fatigue >= 75 -> 0.35
-            heart.intimacy >= 65 -> 0.85
-            else -> 0.6
+        val modifier = when {
+            heart.blame >= 55 -> 0.4
+            heart.fatigue >= 75 -> 0.6
+            heart.intimacy >= 65 -> 1.4
+            else -> 1.0
         }
+        val chance = (persona.proactiveChance.coerceIn(0.05, 0.95) * modifier).coerceIn(0.05, 0.95)
         if (kotlin.random.Random.nextDouble() > chance) {
             savePersona(
                 persona.copy(
@@ -530,6 +564,29 @@ class AiRepository(context: Context) {
             )
         )
         message
+    }
+
+    /** 让模型生成一份「主动消息时刻表」，默认只在设置里展开查看。 */
+    suspend fun ensureProactivePlan(personaId: String): String = withContext(Dispatchers.IO) {
+        val persona = persona(personaId) ?: return@withContext ""
+        if (!persona.proactive || persona.heart.plan.isNotBlank()) return@withContext persona.heart.plan
+        val prompt = ChatMessage(
+            "system",
+            "根据角色的生活节奏，为今天列 3-5 个可能主动发消息的时间点。" +
+                "要像真人：分布在上午/下午/晚上，避开睡觉时间，不要均匀间隔；" +
+                "每行格式「HH:mm 可能因为什么开口」。只输出列表，不要解释。",
+        )
+        val text = runCatching {
+            client.complete(
+                config = config().copy(stream = false),
+                messages = listOf(prompt),
+                temperature = 0.9,
+            )
+        }.getOrNull()?.trim().orEmpty()
+        if (text.isNotEmpty()) {
+            savePersona(persona.copy(heart = persona.heart.copy(plan = text)))
+        }
+        text
     }
 
     private fun now() = System.currentTimeMillis()

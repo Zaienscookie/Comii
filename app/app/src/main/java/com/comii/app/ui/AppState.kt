@@ -53,6 +53,31 @@ class AppState(
     }
 }
 
+/** 从「全部」打开阅读器时，用内存传递全局索引，避免导航参数被忽略。 */
+object ReaderLaunch {
+    private var path: String = ""
+    private var index: Int = -1
+    private var all: Boolean = false
+    private var name: String = ""
+    private var valid: Boolean = false
+
+    fun prepare(path: String, index: Int, all: Boolean, name: String) {
+        this.path = path
+        this.index = index
+        this.all = all
+        this.name = name
+        this.valid = true
+    }
+
+    data class Info(val index: Int, val all: Boolean, val name: String)
+
+    fun consume(path: String): Info? {
+        if (!valid || this.path != path) return null
+        valid = false
+        return Info(index, all, name)
+    }
+}
+
 /** Navigation arguments are base64url encoded so paths with slashes stay safe. */
 object Routes {
     private const val FLAGS = Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING

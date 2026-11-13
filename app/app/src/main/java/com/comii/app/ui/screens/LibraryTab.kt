@@ -584,14 +584,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                             val imageIndex = flatItems
                                 .takeWhile { !(it.series_path == item.series_path && it.name == item.name) }
                                 .count { it.kind != "video" }
-                            nav.navigate(
-                                Routes.reader(
-                                    path = item.series_path,
-                                    page = imageIndex,
-                                    all = true,
-                                    name = item.name,
-                                )
+                            com.comii.app.ui.ReaderLaunch.prepare(
+                                path = item.series_path,
+                                index = imageIndex,
+                                all = true,
+                                name = item.name,
                             )
+                            nav.navigate(Routes.reader(item.series_path))
                         }
                     },
                 )
