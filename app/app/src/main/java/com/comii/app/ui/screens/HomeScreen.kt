@@ -61,13 +61,9 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
     val snackbar = remember { SnackbarHostState() }
     var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
 
-    // 启动时静默检查更新：没有新版本就不显示任何东西
+    // 每次启动都检查更新；有新版本直接弹窗，用户点更新即可
     LaunchedEffect(Unit) {
         if (!state.hasServer) return@LaunchedEffect
-        val settings = state.repository.settings
-        val now = System.currentTimeMillis()
-        if (now - settings.lastUpdateCheck < 6L * 60 * 60 * 1000) return@LaunchedEffect
-        settings.lastUpdateCheck = now
         updateInfo = runCatching { AppUpdater.check(state.serverUrl) }.getOrNull()
     }
 

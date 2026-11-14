@@ -84,6 +84,7 @@ import androidx.navigation.NavHostController
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.comii.app.data.AppLog
 import com.comii.app.data.Http
 import com.comii.app.ui.AppState
 import com.comii.app.ui.components.BottomSheet
@@ -382,8 +383,19 @@ fun ReaderScreen(
         }
         delay(500)
         if (allMode) {
+            val item = allItems.getOrNull(current)
+            if (item != null) {
+                settings.lastViewedPath = item.series_path
+                settings.lastViewedName = item.name
+                AppLog.add("reader", "all current=${current + 1}/${allItems.size} ${item.series_path}/${item.name}")
+            }
             repository.saveProgress(ALL_PROGRESS_KEY, current, allItems.size)
         } else {
+            names.getOrNull(current)?.let { name ->
+                settings.lastViewedPath = path
+                settings.lastViewedName = name
+                AppLog.add("reader", "series current=${current + 1}/${names.size} $path/$name")
+            }
             repository.saveProgress(path, current, names.size)
         }
     }
@@ -748,14 +760,9 @@ private fun ReaderPageImage(
     val context = LocalContext.current
     var zoom by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
-    val gestureModifier = Modifier.pointerInput(fullHeight) {
-        if (fullHeight) {
-            detectTransformGestures { _, pan, scaleChange, _ ->
-                zoom = (zoom * scaleChange).coerceIn(1f, 4f)
-                panOffset = if (zoom > 1f) panOffset + pan else Offset.Zero
-            }
-        }
-    }
+    // 图片区域不要拦截单指拖动，否则 HorizontalPager 收不到左右滑手势。
+    // 全屏照片查看暂时不接管手势，把翻页交给外层 Pager。
+    val gestureModifier = Modifier
     val zoomModifier = Modifier.graphicsLayer {
         scaleX = zoom
         scaleY = zoom

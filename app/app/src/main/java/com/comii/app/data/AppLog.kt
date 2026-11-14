@@ -1,0 +1,52 @@
+package com.comii.app.data
+
+import android.content.Context
+import android.os.Build
+import com.comii.app.BuildConfig
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+/**
+ * 轻量运行日志：只保留最近 800 行，导出到手机缓存后通过系统分享发给开发者。
+ * 不记录图片内容，只记录页面、数量、路径、错误和设置。
+ */
+object AppLog {
+    private const val MAX_LINES = 800
+    private val buffer = ArrayDeque<String>()
+    private val stamp = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.getDefault())
+
+    @Synchronized
+    fun add(tag: String, message: String) {
+        while (buffer.size >= MAX_LINES) buffer.removeFirst()
+        buffer.addLast("${stamp.format(Date())} [$tag] $message")
+    }
+
+    @Synchronized
+    fun snapshot(): String = buffer.joinToString("\n")
+
+    fun export(context: Context, serverUrl: String, settings: SettingsStore): File {
+        val directory = File(context.cacheDir, "share").apply { mkdirs() }
+        val target = File(directory, "comii-log.txt")
+        val body = buildString {
+            appendLine("Comii diagnostic log")
+            appendLine("time: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
+            appendLine("app: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL} / Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+            appendLine("server: $serverUrl")
+            appendLine("imageQuality: ${settings.imageQuality}, prefetch: ${settings.prefetchPages}, readerMode: ${settings.readerMode}")
+            appendLine("lastViewed: ${settings.lastViewedPath} / ${settings.lastViewedName}")
+            appendLine("localAllPage: ${settings.localPage("__comii_all__")}")
+            appendLine("--- runtime ---")
+            appendLine(snapshot())
+            val crash = CrashLog.read(context)
+            if (!crash.isNullOrBlank()) {
+                appendLine("--- last crash ---")
+                appendLine(crash)
+            }
+        }
+        target.writeText(body)
+        return target
+    }
+}

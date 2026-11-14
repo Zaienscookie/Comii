@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
+import com.comii.app.data.AppLog
 import com.comii.app.data.GalleryItem
 import com.comii.app.ui.AppState
 import com.comii.app.ui.Routes
@@ -58,20 +60,44 @@ private const val PHOTO_PAGE = 300
 @Composable
 fun PhotosTab(state: AppState, nav: NavHostController) {
     val palette = ComiiTheme.palette
-    var items by remember { mutableStateOf<List<GalleryItem>>(emptyList()) }
-    var total by remember { mutableIntStateOf(0) }
-    var loading by remember { mutableStateOf(true) }
+    var items by remember { mutableStateOf(state.photosItems) }
+    var total by remember { mutableIntStateOf(state.photosTotal) }
+    var loading by remember { mutableStateOf(items.isEmpty()) }
     var loadingMore by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
-    val gridState = rememberLazyGridState()
+    val gridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = state.photosScrollIndex,
+        initialFirstVisibleItemScrollOffset = state.photosScrollOffset,
+    )
 
-    suspend fun loadFirst() {
-        loading = true
+    LaunchedEffect(gridState) {
+        snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
+            .distinctUntilChanged()
+            .collect { (index, offset) ->
+                state.photosScrollIndex = index
+                state.photosScrollOffset = offset
+            }
+    }
+
+    suspend fun loadFirst(force: Boolean = false) {
+        if (!force && state.photosLoaded) {
+            items = state.photosItems
+            total = state.photosTotal
+            loading = false
+            return
+        }
+        if (items.isEmpty()) loading = true
+        AppLog.add("photos", "loadFirst force=$force")
         runCatching { state.repository.gallery(limit = PHOTO_PAGE, offset = 0, sort = "recent") }
             .onSuccess {
                 items = it.items
                 total = it.total
+                state.photosItems = it.items
+                state.photosTotal = it.total
+                state.photosLoaded = true
+                AppLog.add("photos", "loadFirst ok items=${it.items.size} total=${it.total}")
             }
+            .onFailure { AppLog.add("photos", "loadFirst failed: ${it.message}") }
         loading = false
     }
 
@@ -83,16 +109,46 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         }.onSuccess {
             items = items + it.items
             total = it.total
+            state.photosItems = items
+            state.photosTotal = it.total
+            AppLog.add("photos", "loadMore ok size=${items.size}")
         }
         loadingMore = false
     }
 
-    LaunchedEffect(refreshKey) { loadFirst() }
+    LaunchedEffect(refreshKey) { loadFirst(force = refreshKey > 0) }
 
     LaunchedEffect(gridState, items.size, total) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
             .collect { last -> if (last >= items.size - 12) loadMore() }
+    }
+
+    LaunchedEffect(items.size) {
+        if (items.isNotEmpty() && state.photosScrollIndex in items.indices) {
+            runCatching {
+                gridState.scrollToItem(state.photosScrollIndex, state.photosScrollOffset)
+            }
+        }
+    }
+
+    fun openHistory() {
+        val path = state.repository.settings.lastViewedPath
+        val name = state.repository.settings.lastViewedName
+        if (path.isBlank() || name.isBlank()) {
+            state.showToast("还没有观看记录")
+            return
+        }
+        val index = items
+            .takeWhile { !(it.series_path == path && it.name == name) }
+            .count { it.kind != "video" }
+        val found = items.any { it.series_path == path && it.name == name }
+        if (!found) {
+            state.showToast("历史图片不在当前列表，请刷新")
+            return
+        }
+        AppLog.add("photos", "open history $path/$name index=$index")
+        nav.navigate(Routes.reader(path, index, all = true, name = name))
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -112,6 +168,11 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     fontSize = 12.5.sp,
                     color = palette.textSecondary,
                 )
+            }
+            if (state.repository.settings.lastViewedPath.isNotBlank()) {
+                IconButton(onClick = { openHistory() }) {
+                    Icon(Icons.Rounded.History, contentDescription = "观看历史", tint = palette.accent)
+                }
             }
             IconButton(onClick = { refreshKey++ }) {
                 Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent)
@@ -200,6 +261,4 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
             }
         }
     }
-    // 切回照片页时不要重新拉整库，除非用户点刷新
-    LaunchedEffect(Unit) { if (items.isEmpty()) delay(0) }
 }

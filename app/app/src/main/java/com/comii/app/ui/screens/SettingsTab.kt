@@ -70,18 +70,8 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
                 "original" -> 0
                 "high" -> 1
                 "smooth" -> 3
-                "low" -> 4
+                "low" -> 2
                 else -> 2
-            }
-        )
-    }
-    var prefetchIndex by remember {
-        mutableIntStateOf(
-            when {
-                repository.settings.prefetchPages <= 0 -> 0
-                repository.settings.prefetchPages <= 3 -> 1
-                repository.settings.prefetchPages <= 5 -> 2
-                else -> 3
             }
         )
     }
@@ -97,7 +87,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.29.0")
+        LargeTitle("设置", "Comii 2.30.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -155,25 +145,6 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
                 Spacer(Modifier.height(6.dp))
                 Text(
                     "服务端按宽度缩放后再传输（1440 / 1080 / 720 / 480），Tailscale 或流量下更流畅；原图不缩放。",
-                    fontSize = 11.5.sp,
-                    color = palette.textSecondary,
-                )
-            }
-            Separator()
-            Column(Modifier.padding(14.dp)) {
-                Text("预加载页数", fontSize = 14.sp, color = palette.textPrimary)
-                Spacer(Modifier.height(10.dp))
-                SegmentControl(
-                    options = listOf("关闭", "3 页", "5 页", "8 页"),
-                    selectedIndex = prefetchIndex,
-                    onSelect = {
-                        prefetchIndex = it
-                        repository.settings.prefetchPages = listOf(0, 3, 5, 8)[it]
-                    },
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "阅读时提前把后面几页下载到手机缓存，快速翻页不容易卡；弱网可调大。",
                     fontSize = 11.5.sp,
                     color = palette.textSecondary,
                 )
@@ -253,6 +224,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
         Spacer(Modifier.height(18.dp))
         SettingsGroup("诊断") {
             CrashLogRow()
+            ExportLogRow(state)
         }
 
         Spacer(Modifier.height(18.dp))
@@ -302,6 +274,43 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             onDismiss = { manualUpdate = null },
         )
     }
+}
+
+@Composable
+private fun ExportLogRow(state: AppState) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    SettingsRow(
+        title = "导出运行日志",
+        subtitle = "生成 log 文件并分享，方便排查",
+        showChevron = true,
+        onClick = {
+            scope.launch {
+                runCatching {
+                    val file = com.comii.app.data.AppLog.export(
+                        context,
+                        state.serverUrl,
+                        state.repository.settings,
+                    )
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
+                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(
+                        android.content.Intent.createChooser(intent, "导出 Comii 日志")
+                    )
+                }.onFailure {
+                    state.showToast("导出失败：${it.message}")
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -377,6 +386,8 @@ private fun ToggleRow(
         )
     }
 }
+
+
 
 
 

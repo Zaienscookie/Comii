@@ -115,6 +115,14 @@ class SettingsStore(context: Context) {
     fun setLocalPage(path: String, page: Int) =
         prefs.edit().putInt("page_$path", page).apply()
 
+    var lastViewedPath: String
+        get() = prefs.getString("last_viewed_path", "").orEmpty()
+        set(value) = prefs.edit().putString("last_viewed_path", value).apply()
+
+    var lastViewedName: String
+        get() = prefs.getString("last_viewed_name", "").orEmpty()
+        set(value) = prefs.edit().putString("last_viewed_name", value).apply()
+
     fun lastReadAt(path: String): Long = prefs.getLong("read_at_$path", 0L)
 
     fun markRead(path: String) = prefs.edit().putLong("read_at_$path", System.currentTimeMillis()).apply()

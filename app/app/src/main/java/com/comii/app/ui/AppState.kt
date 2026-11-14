@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.comii.app.data.ComiiRepository
+import com.comii.app.data.GalleryItem
 
 /** App-wide UI state: theme choice, server address and transient toast text. */
 class AppState(
@@ -29,6 +30,13 @@ class AppState(
     var galleryScrollIndex by mutableIntStateOf(0)
     var galleryScrollOffset by mutableIntStateOf(0)
     var galleryScrollRestored by mutableStateOf(false)
+
+    /** 照片 Tab 的内存缓存：切回照片时直接显示，不重新转圈。 */
+    var photosItems by mutableStateOf<List<GalleryItem>>(emptyList())
+    var photosTotal by mutableIntStateOf(0)
+    var photosLoaded by mutableStateOf(false)
+    var photosScrollIndex by mutableIntStateOf(0)
+    var photosScrollOffset by mutableIntStateOf(0)
 
     val hasServer: Boolean get() = serverUrl.isNotBlank()
 
