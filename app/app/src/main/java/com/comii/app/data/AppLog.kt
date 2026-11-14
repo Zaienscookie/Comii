@@ -9,22 +9,34 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 轻量运行日志：只保留最近 800 行，导出到手机缓存后通过系统分享发给开发者。
- * 不记录图片内容，只记录页面、数量、路径、错误和设置。
+ * 全量运行日志（只保留本次启动）。
+ * 启动时清空 logs/comii-session.log，之后所有事件追加写入，避免内存占用。
  */
 object AppLog {
-    private const val MAX_LINES = 800
-    private val buffer = ArrayDeque<String>()
+    private var sessionFile: File? = null
     private val stamp = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
-    @Synchronized
-    fun add(tag: String, message: String) {
-        while (buffer.size >= MAX_LINES) buffer.removeFirst()
-        buffer.addLast("${stamp.format(Date())} [$tag] $message")
+    fun install(context: Context) {
+        val directory = File(context.filesDir, "logs").apply { mkdirs() }
+        val file = File(directory, "comii-session.log")
+        file.writeText("")
+        sessionFile = file
+        add(
+            "app",
+            "start ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) / " +
+                "${Build.MANUFACTURER} ${Build.MODEL} / Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})",
+        )
     }
 
     @Synchronized
-    fun snapshot(): String = buffer.joinToString("\n")
+    fun add(tag: String, message: String) {
+        val line = "${stamp.format(Date())} [$tag] $message"
+        runCatching {
+            sessionFile?.appendText(line + "\n")
+        }
+    }
+
+    fun snapshot(): String = sessionFile?.takeIf { it.isFile }?.readText().orEmpty()
 
     fun export(context: Context, serverUrl: String, settings: SettingsStore): File {
         val directory = File(context.cacheDir, "share").apply { mkdirs() }
@@ -38,7 +50,7 @@ object AppLog {
             appendLine("imageQuality: ${settings.imageQuality}, prefetch: ${settings.prefetchPages}, readerMode: ${settings.readerMode}")
             appendLine("lastViewed: ${settings.lastViewedPath} / ${settings.lastViewedName}")
             appendLine("localAllPage: ${settings.localPage("__comii_all__")}")
-            appendLine("--- runtime ---")
+            appendLine("--- session ---")
             appendLine(snapshot())
             val crash = CrashLog.read(context)
             if (!crash.isNullOrBlank()) {

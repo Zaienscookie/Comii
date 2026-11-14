@@ -1,4 +1,4 @@
-﻿package com.comii.app
+package com.comii.app
 
 import android.app.Activity
 import android.app.Application
@@ -83,6 +83,7 @@ class ComiiApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        com.comii.app.data.AppLog.install(this)
         repository = ComiiRepository(this)
         aiRepository = com.comii.app.data.ai.AiRepository(this)
     }

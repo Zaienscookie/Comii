@@ -1,4 +1,4 @@
-package com.comii.app.ui.screens
+﻿package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -54,7 +54,7 @@ import com.comii.app.ui.theme.ComiiTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-private const val PHOTO_PAGE = 300
+private const val PHOTO_PAGE = 500
 
 /** 「照片」：整库所有图片 + 视频，vivo 相册那种 4 列方格。 */
 @Composable
@@ -84,6 +84,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
             items = state.photosItems
             total = state.photosTotal
             loading = false
+            AppLog.add("photos", "use cache items=${items.size} total=$total")
             return
         }
         if (items.isEmpty()) loading = true
@@ -213,6 +214,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                             val imageIndex = items
                                                 .takeWhile { !(it.series_path == item.series_path && it.name == item.name) }
                                                 .count { it.kind != "video" }
+                                            AppLog.add("photos", "open index=$imageIndex ${item.series_path}/${item.name} total=${items.size}")
                                             nav.navigate(
                                                 Routes.reader(
                                                     path = item.series_path,
@@ -262,3 +264,4 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         }
     }
 }
+

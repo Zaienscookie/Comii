@@ -34,7 +34,9 @@ import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.DriveFileMove
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -97,6 +99,8 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
     var layout by rememberSaveable { mutableStateOf(state.repository.settings.downloadsLayout) }
     var mainFilter by rememberSaveable { mutableStateOf("all") }
     var editing by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var pendingDelete by remember { mutableStateOf<List<OfflineSeries>>(emptyList()) }
     var showCategorySheet by remember { mutableStateOf(false) }
@@ -168,31 +172,30 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             Column(Modifier.weight(1f)) {
                 LargeTitle("下载", "${allSeries.size} 个系列 · ${formatBytes(state.repository.offline.totalBytes())}")
             }
-            IconButton(onClick = { version++ }) {
-                Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent)
+            IconButton(onClick = { showSearch = !showSearch }) {
+                Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = palette.accent)
             }
             IconButton(onClick = {
                 sheetSeries = null
                 startInCreate = true
                 showCategorySheet = true
             }) {
-                Icon(Icons.Rounded.CreateNewFolder, contentDescription = "新建文件夹", tint = palette.accent)
+                Icon(Icons.Rounded.Add, contentDescription = "新建文件夹", tint = palette.accent)
             }
-            if (allSeries.isNotEmpty()) {
-                TextButton(onClick = {
-                    editing = !editing
-                    if (!editing) selected = emptySet()
-                }) { Text(if (editing) "完成" else "编辑", color = palette.accent, fontWeight = FontWeight.Medium) }
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Rounded.MoreVert, contentDescription = "更多", tint = palette.accent)
             }
         }
 
-        Spacer(Modifier.height(6.dp))
-        Column(Modifier.padding(horizontal = 20.dp)) {
-            com.comii.app.ui.components.SearchField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = "搜索离线内容",
-            )
+        if (showSearch || query.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                com.comii.app.ui.components.SearchField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = "搜索离线内容",
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
         Column(Modifier.padding(horizontal = 20.dp)) {
@@ -231,7 +234,7 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                     },
                 )
                 flatMode -> LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+                    columns = GridCells.Fixed(4),
                     contentPadding = PaddingValues(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 108.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -296,10 +299,10 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                     }
                 }
                 else -> LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 108.dp),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    columns = GridCells.Fixed(4),
+                    contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 4.dp, bottom = 108.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     items(
@@ -353,6 +356,36 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
                     },
                     modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 20.dp, vertical = 16.dp),
                 )
+            }
+        }
+    }
+
+    if (menuOpen) {
+        BottomSheet(onDismiss = { menuOpen = false }) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                Text("下载", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { menuOpen = false; version++ }) {
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, tint = palette.accent, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("刷新", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = { menuOpen = false; editing = !editing; if (!editing) selected = emptySet() }) {
+                    Icon(Icons.Rounded.Check, contentDescription = null, tint = palette.accent, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (editing) "完成编辑" else "编辑", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = {
+                    menuOpen = false
+                    sheetSeries = null
+                    startInCreate = true
+                    showCategorySheet = true
+                }) {
+                    Icon(Icons.Rounded.CreateNewFolder, contentDescription = null, tint = palette.accent, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("新建文件夹", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -745,3 +778,4 @@ private fun CategorySheet(
         }
     }
 }
+

@@ -155,6 +155,9 @@ fun ReaderScreen(
     var showEditMenu by remember { mutableStateOf(false) }
     var current by remember { mutableIntStateOf(0) }
     var initializing by remember { mutableStateOf(allMode) }
+    var allOffset by remember { mutableIntStateOf(0) }
+    var allHasMore by remember { mutableStateOf(false) }
+    var allLoadingMore by remember { mutableStateOf(false) }
     val viewMode = if (allMode) "horizontal" else mode
 
     val listState = rememberLazyListState()
@@ -270,33 +273,74 @@ fun ReaderScreen(
             loading = false
             return@LaunchedEffect
         }
-        val response = runCatching {
-            repository.gallery(limit = 5000, offset = 0, path = "", sort = "recent")
-        }.getOrNull()
-        val items = response?.items?.filter { it.kind != "video" }.orEmpty()
-        if (items.isEmpty()) {
+        val savedAll = settings.localPage(ALL_PROGRESS_KEY)
+        val target = when {
+            initialPage >= 0 -> initialPage
+            savedAll > 0 -> savedAll
+            else -> 0
+        }
+        val loaded = mutableListOf<com.comii.app.data.GalleryItem>()
+        var offset = 0
+        var rowsTotal = 0
+        var hasMore = true
+        // 服务端单次最多 500 行；按页取到目标位置，避免「最多 455 张」的旧上限
+        while (hasMore && loaded.size <= target && offset < 100_000) {
+            val response = runCatching {
+                repository.gallery(limit = 500, offset = offset, path = "", sort = "recent")
+            }.getOrNull() ?: break
+            val raw = response.items
+            if (raw.isEmpty()) break
+            loaded += raw.filter { it.kind != "video" }
+            offset += raw.size
+            rowsTotal = response.total
+            hasMore = offset < rowsTotal
+            AppLog.add(
+                "reader",
+                "all page offset=${offset - raw.size} raw=${raw.size} images=${loaded.size} total=${response.total}",
+            )
+        }
+        if (loaded.isEmpty()) {
             error = "没有可阅读的图片"
             loading = false
             return@LaunchedEffect
         }
-        allItems = items
-        names = items.map { it.name }
-        val found = items.indexOfFirst {
-            it.series_path == path && (initialName.isEmpty() || it.name == initialName)
-        }
-        val savedAll = settings.localPage(ALL_PROGRESS_KEY)
-        current = when {
-            initialPage >= 0 -> initialPage.coerceIn(0, items.lastIndex)
-            savedAll > 0 -> savedAll.coerceIn(0, items.lastIndex)
-            found >= 0 -> found
-            else -> 0
-        }
-        title = items.getOrNull(current)?.series_name ?: "全部"
+        allItems = loaded
+        names = loaded.map { it.name }
+        allOffset = offset
+        allHasMore = hasMore
+        current = target.coerceIn(0, loaded.lastIndex)
+        title = loaded.getOrNull(current)?.series_name ?: "全部"
         loading = false
         delay(60)
         if (viewMode == "horizontal") pagerState.scrollToPage(current) else listState.scrollToItem(current)
         delay(80)
         initializing = false
+    }
+
+    suspend fun loadMoreAll() {
+        if (!allMode || allLoadingMore || !allHasMore) return
+        allLoadingMore = true
+        val response = runCatching {
+            repository.gallery(limit = 500, offset = allOffset, path = "", sort = "recent")
+        }.getOrNull()
+        if (response != null) {
+            val images = response.items.filter { it.kind != "video" }
+            allItems = allItems + images
+            names = names + images.map { it.name }
+            allOffset += response.items.size
+            allHasMore = allOffset < response.total
+            AppLog.add(
+                "reader",
+                "loadMore all raw=${response.items.size} images=${allItems.size} offset=$allOffset total=${response.total}",
+            )
+        }
+        allLoadingMore = false
+    }
+
+    LaunchedEffect(current, names.size, allMode) {
+        if (allMode && names.isNotEmpty() && current >= names.size - 10) {
+            loadMoreAll()
+        }
     }
 
     LaunchedEffect(path, initialPage) {

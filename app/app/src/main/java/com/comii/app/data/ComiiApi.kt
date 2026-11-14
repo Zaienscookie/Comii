@@ -55,14 +55,27 @@ class ComiiApi(val baseUrl: String) {
 
     private suspend fun execute(request: Request, client: OkHttpClient = Http.client): String =
         withContext(Dispatchers.IO) {
-            client.newCall(request).execute().use { response ->
-                val text = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    val detail = runCatching { ComiiJson.decodeFromString<ApiError>(text).detail }
-                        .getOrNull()
-                    throw ApiException(response.code, detail ?: "请求失败 (${response.code})")
+            val started = System.nanoTime()
+            try {
+                client.newCall(request).execute().use { response ->
+                    val text = response.body?.string().orEmpty()
+                    val elapsed = (System.nanoTime() - started) / 1_000_000
+                    AppLog.add(
+                        "http",
+                        "${request.method} ${request.url.encodedPath}${request.url.query?.let { "?$it" } ?: ""} " +
+                            "-> ${response.code} ${elapsed}ms ${text.length}B",
+                    )
+                    if (!response.isSuccessful) {
+                        val detail = runCatching { ComiiJson.decodeFromString<ApiError>(text).detail }
+                            .getOrNull()
+                        throw ApiException(response.code, detail ?: "请求失败 (${response.code})")
+                    }
+                    text
                 }
-                text
+            } catch (error: Exception) {
+                val elapsed = (System.nanoTime() - started) / 1_000_000
+                AppLog.add("http", "${request.method} ${request.url.encodedPath} -> ERROR ${elapsed}ms ${error.message}")
+                throw error
             }
         }
 
