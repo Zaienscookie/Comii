@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,8 @@ import com.comii.app.ui.components.ConfirmDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -417,7 +420,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                             AsyncImage(
                                 model = state.repository.mediaUrl(item.thumb),
                                 contentDescription = item.name,
-                                contentScale = ContentScale.FillWidth,
+                                contentScale = ContentScale.Fit,
                                 onSuccess = { result ->
                                     val w = result.result.drawable.intrinsicWidth
                                     val h = result.result.drawable.intrinsicHeight
@@ -556,6 +559,59 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     }
                 }
             }
+            // 右侧快速滚动条：上下拖动按比例定位
+            var scrubbing by remember { mutableStateOf(false) }
+            var scrubProgress by remember { mutableFloatStateOf(0f) }
+            if (items.size > 60 && !editing) {
+                Box(
+                    Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight(0.62f)
+                        .width(26.dp)
+                        .padding(end = 2.dp)
+                        .pointerInput(items.size) {
+                            detectVerticalDragGestures(
+                                onDragStart = { scrubbing = true },
+                                onDragEnd = { scrubbing = false },
+                                onDragCancel = { scrubbing = false },
+                            ) { change, _ ->
+                                val ratio = (change.position.y / size.height.toFloat()).coerceIn(0f, 1f)
+                                scrubProgress = ratio
+                                val index = (ratio * (items.size - 1)).toInt().coerceIn(0, items.size - 1)
+                                scope.launch {
+                                    if (galleryMode) staggerState.scrollToItem(index) else gridState.scrollToItem(index)
+                                }
+                            }
+                        },
+                ) {
+                    Box(
+                        Modifier
+                            .align(Alignment.Center)
+                            .width(4.dp)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(palette.textTertiary.copy(alpha = 0.25f))
+                    )
+                    Box(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth(0.55f)
+                            .height((if (scrubbing) 44.dp else 18.dp))
+                            .offset(y = (0.dp))
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(palette.accent.copy(alpha = if (scrubbing) 0.9f else 0.5f))
+                    )
+                    if (scrubbing) {
+                        Text(
+                            "${(scrubProgress * (items.size - 1)).toInt() + 1} / ${items.size}",
+                            color = palette.accent,
+                            fontSize = 10.sp,
+                            modifier = Modifier.align(Alignment.TopCenter).offset(y = (-18).dp),
+                        )
+                    }
+                }
+            }
+
             androidx.compose.animation.AnimatedVisibility(
                 visible = editing,
                 enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it },
