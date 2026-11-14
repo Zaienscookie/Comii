@@ -23,6 +23,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
+import com.comii.app.ui.components.BottomSheet
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.rounded.Upload
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -79,8 +83,10 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
     var askDownload by remember { mutableStateOf(false) }
     var tags by remember { mutableStateOf<List<String>>(emptyList()) }
     var editingTags by remember { mutableStateOf(false) }
+    var showMore by remember { mutableStateOf(false) }
+    var refreshKey by remember { androidx.compose.runtime.mutableIntStateOf(0) }
 
-    LaunchedEffect(path, state.serverGeneration) {
+    LaunchedEffect(path, state.serverGeneration, refreshKey) {
         loading = true
         runCatching { state.repository.series(path) }
             .onSuccess { detail = it; tags = it.tags; error = null }
@@ -93,8 +99,14 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
             title = detail?.name ?: "系列",
             onBack = { nav.popBackStack() },
             actions = {
+                IconButton(onClick = { nav.navigate(Routes.upload(path)) }) {
+                    Icon(Icons.Rounded.Upload, contentDescription = "导入内容", tint = palette.accent)
+                }
                 IconButton(onClick = { askDownload = true }) {
                     Icon(Icons.Rounded.Download, contentDescription = "下载", tint = palette.accent)
+                }
+                IconButton(onClick = { showMore = true }) {
+                    Icon(Icons.Rounded.MoreVert, contentDescription = "更多", tint = palette.accent)
                 }
             },
         )
@@ -132,6 +144,28 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
             onDismiss = { editingTags = false },
             onSaved = { tags = it },
         )
+    }
+
+    if (showMore) {
+        BottomSheet(onDismiss = { showMore = false }) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                Text("更多", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { showMore = false; nav.navigate(Routes.upload(path)) }) {
+                    Text("导入内容（上传到当前文件夹）", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = { showMore = false; editingTags = true }) {
+                    Text("标签", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = { showMore = false; refreshKey++ }) {
+                    Text("刷新", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = { showMore = false; askDownload = true }) {
+                    Text("下载到本机", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
     }
 
     if (askDownload) {

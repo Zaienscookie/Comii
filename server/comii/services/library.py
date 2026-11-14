@@ -573,6 +573,36 @@ def list_gallery(
     normalized = "/".join(parts)
     base = library_root() if not parts else resolve_directory(normalized)
 
+    # 如果 scope 本身就是一个媒体目录（例如「收藏夹/默认」），先收录它自己的文件；
+    # _iter_series 只遍历子目录，会漏掉这种最后一层目录。
+    own_images, own_videos = list_media(base)
+    if wanted in ("all", "image"):
+        for index, item in enumerate(own_images):
+            rows.append(
+                {
+                    "series_path": normalized,
+                    "series_name": base.name,
+                    "name": item.name,
+                    "kind": "image",
+                    "thumb": media_url("thumb", normalized, item.name),
+                    "index": index,
+                    "mtime": safe_mtime(item),
+                }
+            )
+    if wanted in ("all", "video"):
+        for index, item in enumerate(own_videos):
+            rows.append(
+                {
+                    "series_path": normalized,
+                    "series_name": base.name,
+                    "name": item.name,
+                    "kind": "video",
+                    "thumb": media_url("video_thumb", normalized, item.name),
+                    "index": index,
+                    "mtime": safe_mtime(item),
+                }
+            )
+
     for directory, rel in _iter_series(base, normalized):
         # 收藏夹只是原图的软链接，不参与「全部」照片流，避免重复和位置错乱
         if not normalized.startswith("收藏夹") and (rel == "收藏夹" or rel.startswith("收藏夹/")):

@@ -173,6 +173,7 @@ fun ReaderScreen(
     var infoLoading by remember { mutableStateOf(false) }
     var mediaInfo by remember { mutableStateOf<MediaInfo?>(null) }
     var favoriteMark by remember { mutableStateOf(false) }
+    val favCache = remember { mutableMapOf<String, Boolean>() }
     var favoriteCollections by remember { mutableStateOf(listOf("默认")) }
     var newCollection by remember { mutableStateOf("") }
     var current by remember { mutableIntStateOf(0) }
@@ -240,6 +241,7 @@ fun ReaderScreen(
             runCatching { repository.addFavorite(series, name, collection.ifBlank { "默认" }) }
                 .onSuccess {
                     favoriteMark = true
+                    currentPair()?.let { (s, n) -> favCache["$s/$n"] = true }
                     showFavoritePicker = false
                     state.showToast("已收藏到「${collection.ifBlank { "默认" }}」")
                 }
@@ -248,9 +250,17 @@ fun ReaderScreen(
     }
 
     LaunchedEffect(current, allMode, path, names.size, allItems.size) {
+        delay(280)
         val (series, name) = currentPair() ?: return@LaunchedEffect
+        val key = "$series/$name"
+        val cached = favCache[key]
+        if (cached != null) {
+            favoriteMark = cached
+            return@LaunchedEffect
+        }
         runCatching { repository.favoriteStatus(series, name) }
             .onSuccess { (marked, collections) ->
+                favCache[key] = marked
                 favoriteMark = marked
                 if (collections.isNotEmpty()) favoriteCollections = collections
             }
@@ -338,8 +348,23 @@ fun ReaderScreen(
         var offset = 0
         var rowsTotal = 0
         var hasMore = true
+        // 优先复用「照片」页已经加载的列表，打开阅读器不再重复请求第一页。
+        if (wantedName.isNotBlank() && state.photosItems.isNotEmpty()) {
+            val cachedImages = state.photosItems.filter { it.kind != "video" }
+            val cachedIndex = cachedImages.indexOfFirst {
+                it.name == wantedName && (wantedSeries.isBlank() || it.series_path == wantedSeries)
+            }
+            if (cachedIndex >= 0) {
+                loaded.addAll(cachedImages)
+                offset = state.photosItems.size
+                rowsTotal = state.photosTotal
+                hasMore = offset < rowsTotal
+                exactTarget = cachedIndex
+                target = cachedIndex
+            }
+        }
         // 服务端单次最多 500 行；按页取到目标位置，避免「最多 455 张」的旧上限
-        while (hasMore && loaded.size <= target && offset < 100_000) {
+        while (exactTarget < 0 && hasMore && loaded.size <= target && offset < 100_000) {
             val response = runCatching {
                 repository.gallery(limit = 500, offset = offset, path = "", sort = "recent")
             }.getOrNull() ?: break
@@ -481,19 +506,15 @@ fun ReaderScreen(
         if (names.isEmpty()) return@LaunchedEffect
         // 向后预加载 N 页（可配置），向前 1 页，翻页时不再黑一下
         val loader = coil.Coil.imageLoader(context)
-        val indices = (current - 1)..(current + prefetchAhead.coerceIn(0, 12))
+        val indices = (current - 1)..(current + prefetchAhead.coerceIn(0, 3))
         indices.forEach { index ->
             if (index in names.indices) {
-                val model = pageModel(index)
                 runCatching {
-                    val result = loader.execute(
+                    loader.enqueue(
                         coil.request.ImageRequest.Builder(context)
-                            .data(model)
+                            .data(pageModel(index))
                             .build()
                     )
-                    if (result is coil.request.SuccessResult) {
-                        ImageMemoryCache.putDrawable(model?.toString(), result.drawable)
-                    }
                 }
             }
         }
