@@ -80,7 +80,7 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
     var tags by remember { mutableStateOf<List<String>>(emptyList()) }
     var editingTags by remember { mutableStateOf(false) }
 
-    LaunchedEffect(path) {
+    LaunchedEffect(path, state.serverGeneration) {
         loading = true
         runCatching { state.repository.series(path) }
             .onSuccess { detail = it; tags = it.tags; error = null }
@@ -306,4 +306,5 @@ private fun SeriesContent(
         }
     }
 }
+
 

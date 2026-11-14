@@ -1,4 +1,4 @@
-package com.comii.app.ui
+﻿package com.comii.app.ui
 
 import android.util.Base64
 import androidx.compose.runtime.getValue
@@ -21,6 +21,10 @@ class AppState(
         private set
 
     var serverName by mutableStateOf(repository.settings.serverName)
+        private set
+
+    /** 切换服务器时递增，让照片/相册/系列界面强制丢弃旧服务器的数据与图片地址。 */
+    var serverGeneration by mutableIntStateOf(0)
         private set
 
     var toastMessage by mutableStateOf<String?>(null)
@@ -50,6 +54,12 @@ class AppState(
         repository.settings.serverName = name
         serverUrl = url
         serverName = name
+        serverGeneration++
+        photosItems = emptyList()
+        photosTotal = 0
+        photosLoaded = false
+        photosScrollIndex = 0
+        photosScrollOffset = 0
     }
 
     fun showToast(message: String) {
@@ -110,3 +120,4 @@ object Routes {
     fun player(path: String, name: String) = "player/${encode(path)}/${encode(name)}"
     fun upload(folder: String) = "upload/${encode(folder)}"
 }
+

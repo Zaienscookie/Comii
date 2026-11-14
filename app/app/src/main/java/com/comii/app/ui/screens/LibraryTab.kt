@@ -194,7 +194,15 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         loading = false
     }
 
-    LaunchedEffect(path, refreshKey) { reload() }
+    LaunchedEffect(path, refreshKey, state.serverGeneration) { reload() }
+    LaunchedEffect(state.serverGeneration) {
+        if (state.serverGeneration > 0) {
+            history.clear()
+            path = ""
+            selected = emptySet()
+            editing = false
+        }
+    }
     LaunchedEffect(path) { runCatching { gridState.scrollToItem(0) } }
 
     LaunchedEffect(query) {
@@ -1347,6 +1355,8 @@ private suspend fun shareMedia(
     }
     context.startActivity(android.content.Intent.createChooser(intent, "分享"))
 }
+
+
 
 
 

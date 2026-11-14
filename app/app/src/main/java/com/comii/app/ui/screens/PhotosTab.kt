@@ -117,7 +117,14 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         loadingMore = false
     }
 
-    LaunchedEffect(refreshKey) { loadFirst(force = refreshKey > 0) }
+    LaunchedEffect(refreshKey, state.serverGeneration) {
+        if (state.serverGeneration > 0) {
+            items = emptyList()
+            total = 0
+            loading = true
+        }
+        loadFirst(force = refreshKey > 0 || state.serverGeneration > 0)
+    }
 
     LaunchedEffect(gridState, items.size, total) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
@@ -264,4 +271,5 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         }
     }
 }
+
 
