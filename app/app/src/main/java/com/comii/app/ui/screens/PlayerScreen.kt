@@ -488,24 +488,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     tint = if (favorited) Color(0xFFFFC107) else Color.White,
                 )
             }
-            IconButton(onClick = {
-                val ms = player.currentPosition
-                if (ms > 0) {
-                    scope.launch {
-                        runCatching { state.repository.addHighlight(path, currentName, ms) }
-                            .onSuccess {
-                                marks = state.repository.highlights(path, currentName)
-                                state.showToast("已标记 ${formatClock(ms)}")
-                            }
-                            .onFailure { state.showToast("标记失败：${it.message}") }
-                    }
-                }
-            }) {
-                Icon(Icons.Rounded.BookmarkAdd, contentDescription = "标记高潮", tint = Color.White)
-            }
-            IconButton(onClick = { showHighlights = true }) {
-                Icon(Icons.Rounded.Bookmarks, contentDescription = "高潮列表", tint = Color.White)
-            }
+
         }
         }
     }
@@ -646,6 +629,27 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     Text("偏高 2.00", color = palette.textTertiary, fontSize = 10.sp)
                 }
                 Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TextButton(
+                        onClick = {
+                            val ms = player.currentPosition
+                            if (ms > 0) {
+                                scope.launch {
+                                    runCatching { state.repository.addHighlight(path, currentName, ms) }
+                                        .onSuccess {
+                                            marks = state.repository.highlights(path, currentName)
+                                            state.showToast("已标记 ${formatClock(ms)}")
+                                        }
+                                        .onFailure { state.showToast("标记失败：${it.message}") }
+                                }
+                            }
+                        },
+                    ) { Text("标记高潮", color = palette.accent) }
+                    TextButton(onClick = { showTuning = false; showHighlights = true }) {
+                        Text("高潮列表", color = palette.accent)
+                    }
+                }
                 Text("低音增强", color = palette.textPrimary, fontSize = 15.sp)
                 Text("选择音效，不是手动调三段", color = palette.textSecondary, fontSize = 11.sp)
                 Spacer(Modifier.height(10.dp))

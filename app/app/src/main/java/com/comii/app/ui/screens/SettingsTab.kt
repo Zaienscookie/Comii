@@ -87,7 +87,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 3.3.7-beta")
+        LargeTitle("设置", "Comii 3.3.8-beta")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
