@@ -30,6 +30,8 @@ import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Bookmarks
+import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.VolumeOff
@@ -109,6 +111,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     var favorited by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var currentName by remember { mutableStateOf(startName) }
+    var showHighlights by remember { mutableStateOf(false) }
     val activity = context as? android.app.Activity
     val autoRotate = settings.autoRotate
     DisposableEffect(autoRotate) {
@@ -466,11 +469,13 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                 Icon(Icons.Rounded.ScreenRotation, contentDescription = "横竖屏切换", tint = Color.White)
             }
             IconButton(onClick = {
-                if (favorited) {
-                    state.showToast("已经在收藏夹里了")
-                } else {
-                    scope.launch {
-                        runCatching { state.repository.addFavorite(path, startName) }
+                scope.launch {
+                    if (favorited) {
+                        runCatching { state.repository.removeFavorite(path, currentName) }
+                            .onSuccess { favorited = false; state.showToast("已取消收藏") }
+                            .onFailure { state.showToast("取消失败：${it.message}") }
+                    } else {
+                        runCatching { state.repository.addFavorite(path, currentName) }
                             .onSuccess { favorited = true; state.showToast("已收藏") }
                             .onFailure { state.showToast("收藏失败：${it.message}") }
                     }
@@ -482,10 +487,59 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     tint = if (favorited) Color(0xFFFFC107) else Color.White,
                 )
             }
+            IconButton(onClick = {
+                val ms = player.currentPosition
+                if (ms > 0) {
+                    state.repository.settings.addHighlight(path, currentName, ms)
+                    state.showToast("已标记 ${formatClock(ms)}")
+                }
+            }) {
+                Icon(Icons.Rounded.BookmarkAdd, contentDescription = "标记高潮", tint = Color.White)
+            }
+            IconButton(onClick = { showHighlights = true }) {
+                Icon(Icons.Rounded.Bookmarks, contentDescription = "高潮列表", tint = Color.White)
+            }
         }
         }
     }
 
+    if (showHighlights) {
+        val marks = state.repository.settings.highlights(path, currentName)
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showHighlights = false },
+            containerColor = palette.card,
+            title = { Text("高潮标记", color = palette.textPrimary) },
+            text = {
+                Column(Modifier.heightIn(max = 320.dp)) {
+                    if (marks.isEmpty()) {
+                        Text("还没有标记，播放时点书签按钮添加", color = palette.textSecondary, fontSize = 13.sp)
+                    } else {
+                        androidx.compose.foundation.lazy.LazyColumn {
+                            items(marks.size) { i ->
+                                val (ms, label) = marks[i]
+                                Row(
+                                    Modifier.fillMaxWidth().pointerInput(ms) {
+                                        detectTapGestures {
+                                            player.seekTo(ms)
+                                            showHighlights = false
+                                        }
+                                    }.padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(formatClock(ms), color = palette.accent, fontSize = 14.sp)
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(label.ifBlank { "跳转到这里" }, color = palette.textSecondary, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHighlights = false }) { Text("关闭", color = palette.accent) }
+            },
+        )
+    }
     if (showTuning) {
         BottomSheet(onDismiss = { showTuning = false }) {
             Column(

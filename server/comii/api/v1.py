@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from pathlib import Path
@@ -223,6 +224,84 @@ def delete_favorite_collection(request: Request, name: str) -> ActionResult:
     import shutil
     shutil.rmtree(root, ignore_errors=True)
     return ActionResult(status="ok", message=f"已删除收藏夹「{collection}」")
+
+
+@router.post("/favorites/remove", response_model=ActionResult)
+def remove_favorite_post(request: Request, payload: dict) -> ActionResult:
+    return remove_favorite(request, str(payload.get("path") or ""), str(payload.get("name") or ""))
+
+
+@router.delete("/favorites", response_model=ActionResult)
+def remove_favorite(request: Request, path: str, name: str = "") -> ActionResult:
+    """取消收藏：删掉 收藏夹 里指向这个文件/目录的链接。"""
+    auth.require_path(request, path, "manage")
+    root = library.library_root() / "收藏夹"
+    source = library.resolve_file(path, name) if name else library.resolve_directory(path)
+    target = os.path.realpath(source)
+    removed = 0
+    if root.is_dir():
+        for collection in root.iterdir():
+            if not collection.is_dir() or collection.name.startswith("."):
+                continue
+            for entry in collection.iterdir():
+                try:
+                    if os.path.realpath(entry) == target:
+                        entry.unlink()
+                        removed += 1
+                except OSError:
+                    continue
+    if removed == 0:
+        raise HTTPException(status_code=404, detail="没有找到对应的收藏")
+    return ActionResult(status="ok", message=f"已取消收藏（{removed} 处）")
+
+
+# ---------------------------------------------------------------- highlights
+def _highlights_file():
+    return settings.data_root / "highlights.json"
+
+
+def _load_highlights() -> dict:
+    try:
+        return json.loads(_highlights_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_highlights(data: dict) -> None:
+    settings.data_root.mkdir(parents=True, exist_ok=True)
+    _highlights_file().write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+@router.get("/highlights")
+def list_highlights(request: Request, path: str, name: str) -> dict:
+    auth.require_user(request)
+    key = f"{path}|{name}"
+    return {"items": _load_highlights().get(key, [])}
+
+
+@router.post("/highlights")
+def add_highlight(request: Request, payload: dict) -> dict:
+    auth.require_path(request, str(payload.get("path") or ""), "manage")
+    key = f"{payload.get('path')}|{payload.get('name')}"
+    time_ms = int(payload.get("time_ms") or 0)
+    label = str(payload.get("label") or "").strip()[:40]
+    data = _load_highlights()
+    items = [item for item in data.get(key, []) if abs(int(item.get("time_ms", 0)) - time_ms) > 1500]
+    items.append({"time_ms": time_ms, "label": label})
+    items.sort(key=lambda item: item["time_ms"])
+    data[key] = items
+    _save_highlights(data)
+    return {"items": items}
+
+
+@router.delete("/highlights")
+def delete_highlight(request: Request, path: str, name: str, time_ms: int) -> dict:
+    auth.require_path(request, path, "manage")
+    key = f"{path}|{name}"
+    data = _load_highlights()
+    data[key] = [item for item in data.get(key, []) if int(item.get("time_ms", 0)) != time_ms]
+    _save_highlights(data)
+    return {"items": data[key]}
 
 
 @router.get("/favorites/status")

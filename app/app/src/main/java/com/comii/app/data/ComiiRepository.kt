@@ -128,6 +128,9 @@ class ComiiRepository(private val context: Context) {
         collection: String = "默认",
     ): ActionResult = requireApi().addFavorite(path, name, collection)
 
+    suspend fun removeFavorite(path: String, name: String = ""): ActionResult =
+        requireApi().removeFavorite(path, name)
+
     suspend fun authStatus(base: String = settings.serverUrl): AuthStatus =
         ComiiApi(base.trim().trimEnd('/')).authStatus()
 

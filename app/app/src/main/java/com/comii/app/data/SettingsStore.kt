@@ -68,6 +68,37 @@ class SettingsStore(context: Context) {
         videoPositions = (kept + "$key|$positionMs").joinToString("\n")
     }
 
+    var highlightsRaw: String
+        get() = prefs.getString("video_highlights", "").orEmpty()
+        set(value) = prefs.edit().putString("video_highlights", value).apply()
+
+    fun highlights(path: String, name: String): List<Pair<Long, String>> =
+        highlightsRaw.lineSequence()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                val parts = line.split("|")
+                if (parts.size >= 4 && parts[0] == path && parts[1] == name) {
+                    parts[2].toLongOrNull()?.let { it to parts[3] }
+                } else null
+            }
+            .sortedBy { it.first }
+            .toList()
+
+    fun addHighlight(path: String, name: String, timeMs: Long, label: String = "") {
+        val kept = highlightsRaw.lineSequence()
+            .filter { it.isNotBlank() }
+            .filterNot { it.startsWith("$path|$name|") && kotlin.math.abs((it.split("|").getOrNull(2)?.toLongOrNull() ?: -99999) - timeMs) < 1500 }
+            .toList()
+        highlightsRaw = (kept + "$path|$name|$timeMs|${label.replace("|", " ")}").joinToString("\n")
+    }
+
+    fun removeHighlight(path: String, name: String, timeMs: Long) {
+        highlightsRaw = highlightsRaw.lineSequence()
+            .filter { it.isNotBlank() }
+            .filterNot { it.startsWith("$path|$name|$timeMs|") }
+            .joinToString("\n")
+    }
+
     var themeMode: String
         get() = prefs.getString("theme", "auto").orEmpty()
         set(value) = prefs.edit().putString("theme", value).apply()

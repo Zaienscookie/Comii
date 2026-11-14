@@ -152,6 +152,11 @@ class ComiiApi(val baseUrl: String) {
         return decode(post("/favorites", body))
     }
 
+    suspend fun removeFavorite(path: String, name: String): ActionResult {
+        val body = JSONObject().put("path", path).put("name", name).toString()
+        return decode(post("/favorites/remove", body))
+    }
+
     suspend fun authStatus(): AuthStatus = decode(get("/auth/status"))
 
     suspend fun authLogin(username: String, password: String, remember: Boolean = true): AuthResponse {
