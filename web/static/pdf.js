@@ -15,6 +15,11 @@
   }
   title.textContent = decodeURIComponent(path.split("/").pop() || "PDF").replace(/\.pdf$/i, "");
 
+  const grid = document.getElementById("pdfGrid");
+  document.getElementById("gridBtn").addEventListener("click", () => {
+    grid.classList.toggle("hidden");
+  });
+
   async function load() {
     try {
       const res = await KomiConfig.fetch("/api/pdf/info?path=" + encodeURIComponent(path));
@@ -22,6 +27,18 @@
       if (!res.ok) throw new Error(info.detail || res.status);
       const total = info.pages || 0;
       count.textContent = total + " 页";
+      grid.innerHTML = "";
+      for (let i = 0; i < total; i++) {
+        const cell = document.createElement("div");
+        cell.className = "g";
+        cell.innerHTML = `<img loading="lazy" src="/api/pdf/page?path=${encodeURIComponent(path)}&page=${i}&w=200" alt=""><span>${i + 1}</span>`;
+        cell.addEventListener("click", () => {
+          grid.classList.add("hidden");
+          const el = pages.children[i];
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        grid.appendChild(cell);
+      }
       for (let i = 0; i < total; i++) {
         const img = document.createElement("img");
         img.className = "pdf-page";

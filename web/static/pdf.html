@@ -16,7 +16,12 @@
   .pdf-pages { padding: 64px 0 40px; display: flex; flex-direction: column; gap: 4px; }
   .pdf-page { width: 100%; display: block; background: #111; }
   .pdf-page.failed { height: 120px; }
-  .pdf-hit { position: fixed; inset: 0; z-index: 5; }
+  .pdf-grid { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.94); overflow-y: auto;
+    padding: 64px 10px 30px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .pdf-grid.hidden { display: none; }
+  .pdf-grid .g { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .pdf-grid img { width: 100%; border-radius: 5px; background: #1a1a1c; aspect-ratio: .72; object-fit: cover; }
+  .pdf-grid span { font-size: 10px; color: #9aa0a6; }
 </style>
 </head>
 <body>
@@ -26,7 +31,11 @@
   </button>
   <div class="t" id="pdfTitle">PDF</div>
   <div class="n" id="pdfCount">…</div>
+  <button id="gridBtn" aria-label="全部页面" title="全部页面">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+  </button>
 </div>
+<div class="pdf-grid hidden" id="pdfGrid"></div>
 <div class="pdf-pages" id="pdfPages"></div>
 <script src="/static/config.js"></script>
 <script src="/static/pdf.js"></script>
