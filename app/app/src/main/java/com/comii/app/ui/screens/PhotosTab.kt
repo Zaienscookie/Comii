@@ -1,5 +1,11 @@
 ﻿package com.comii.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +13,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.comii.app.data.Http
+import com.comii.app.ui.components.ConfirmDialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -52,6 +69,7 @@ import com.comii.app.ui.Routes
 import com.comii.app.ui.components.EmptyState
 import com.comii.app.ui.theme.ComiiTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private const val PHOTO_PAGE = 500
@@ -65,6 +83,12 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     var loading by remember { mutableStateOf(items.isEmpty()) }
     var loadingMore by remember { mutableStateOf(false) }
     var refreshKey by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var editing by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var sharing by remember { mutableStateOf(false) }
     val gridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = state.photosScrollIndex,
         initialFirstVisibleItemScrollOffset = state.photosScrollOffset,
@@ -140,6 +164,81 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         }
     }
 
+    fun itemKey(item: GalleryItem): String = "${item.series_path}/${item.name}"
+
+    fun toggleSelected(item: GalleryItem) {
+        val key = itemKey(item)
+        selected = if (key in selected) selected - key else selected + key
+    }
+
+    fun selectedItems(): List<GalleryItem> = items.filter { itemKey(it) in selected }
+
+    fun shareSelected() {
+        val picked = selectedItems()
+        if (picked.isEmpty() || sharing) return
+        sharing = true
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val api = state.repository.apiOrNull() ?: return@runCatching false
+                    val directory = java.io.File(context.cacheDir, "share").apply { mkdirs() }
+                    val uris = picked.mapNotNull { item ->
+                        runCatching {
+                            val url = if (item.kind == "video") api.videoUrl(item.series_path, item.name)
+                            else api.imageUrl(item.series_path, item.name)
+                            val safe = (item.series_path.replace('/', '_') + "_" + item.name)
+                                .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                            val target = java.io.File(directory, safe)
+                            Http.client.newCall(okhttp3.Request.Builder().url(url).get().build()).execute().use { response ->
+                                if (!response.isSuccessful) return@use false
+                                response.body?.byteStream()?.use { input ->
+                                    target.outputStream().use { output -> input.copyTo(output) }
+                                }
+                                true
+                            }
+                            if (!target.isFile) return@runCatching null
+                            androidx.core.content.FileProvider.getUriForFile(
+                                context, "${context.packageName}.fileprovider", target
+                            )
+                        }.getOrNull()
+                    }
+                    if (uris.isEmpty()) return@runCatching false
+                    val intent = android.content.Intent(
+                        if (uris.size == 1) android.content.Intent.ACTION_SEND
+                        else android.content.Intent.ACTION_SEND_MULTIPLE
+                    ).apply {
+                        type = if (picked.any { it.kind == "video" }) "video/*" else "image/*"
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        if (uris.size == 1) putExtra(android.content.Intent.EXTRA_STREAM, uris.first())
+                        else putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, ArrayList(uris))
+                    }
+                    context.startActivity(android.content.Intent.createChooser(intent, "分享"))
+                    true
+                }.getOrDefault(false)
+            }
+            sharing = false
+            if (!ok) state.showToast("分享失败")
+        }
+    }
+
+    fun deleteSelected() {
+        val groups = selectedItems().groupBy { it.series_path }
+        if (groups.isEmpty()) return
+        confirmDelete = false
+        scope.launch {
+            var deleted = 0
+            groups.forEach { (series, entries) ->
+                runCatching { state.repository.deleteMedia(series, entries.map { it.name }) }
+                    .onSuccess { deleted += entries.size }
+                    .onFailure { state.showToast("删除失败：${it.message}") }
+            }
+            selected = emptySet()
+            editing = false
+            state.showToast("已删除 $deleted 项")
+            refreshKey++
+        }
+    }
+
     fun openHistory() {
         val path = state.repository.settings.lastViewedPath
         val name = state.repository.settings.lastViewedName
@@ -177,6 +276,14 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     color = palette.textSecondary,
                 )
             }
+            if (items.isNotEmpty()) {
+                TextButton(onClick = {
+                    editing = !editing
+                    if (!editing) selected = emptySet()
+                }) {
+                    Text(if (editing) "完成" else "编辑", color = palette.accent, fontWeight = FontWeight.Medium)
+                }
+            }
             if (state.repository.settings.lastViewedPath.isNotBlank()) {
                 IconButton(onClick = { openHistory() }) {
                     Icon(Icons.Rounded.History, contentDescription = "观看历史", tint = palette.accent)
@@ -212,9 +319,11 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
-                                .pointerInput(item.series_path, item.name) {
+                                .pointerInput(item.series_path, item.name, editing) {
                                     detectTapGestures {
-                                        if (item.kind == "video") {
+                                        if (editing) {
+                                            toggleSelected(item)
+                                        } else if (item.kind == "video") {
                                             nav.navigate(Routes.player(item.series_path, item.name))
                                         } else {
                                             // 「照片」是整库相册：按全局图片序号打开，不能退回单系列
@@ -240,6 +349,22 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
                             )
+                            if (editing) {
+                                val isSelected = itemKey(item) in selected
+                                Box(
+                                    Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(5.dp)
+                                        .size(22.dp)
+                                        .clip(RoundedCornerShape(11.dp))
+                                        .background(if (isSelected) palette.accent else Color.Black.copy(alpha = 0.4f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (isSelected) {
+                                        Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            }
                             if (item.kind == "video") {
                                 Box(
                                     Modifier
@@ -268,7 +393,52 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     }
                 }
             }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = editing,
+                enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it },
+                exit = fadeOut(tween(150)) + slideOutVertically(tween(180)) { it },
+            ) {
+                Column(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .background(palette.elevated)
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("已选 ${selected.size} 项", color = palette.textSecondary, fontSize = 12.sp)
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = {
+                            selected = if (selected.size == items.size) emptySet()
+                            else items.map { itemKey(it) }.toSet()
+                        }) { Text(if (selected.size == items.size) "取消全选" else "全选", color = palette.accent) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { shareSelected() }, enabled = selected.isNotEmpty() && !sharing) {
+                            Text(if (sharing) "分享中…" else "分享原图", color = palette.accent)
+                        }
+                        TextButton(onClick = { confirmDelete = true }, enabled = selected.isNotEmpty()) {
+                            Text("删除", color = palette.danger)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = { editing = false; selected = emptySet() }) {
+                            Text("取消", color = palette.textSecondary)
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = "删除 ${selected.size} 项？",
+            message = "会将这些图片/视频移到服务器回收站，3 天内可恢复。",
+            confirmText = "删除",
+            destructive = true,
+            onConfirm = { deleteSelected() },
+            onDismiss = { confirmDelete = false },
+        )
     }
 }
 

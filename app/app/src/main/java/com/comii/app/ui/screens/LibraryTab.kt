@@ -273,6 +273,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         }
     }
 
+    if (path == "收藏夹") {
+        FavoritesFlatScreen(state, nav, onBack = {
+            if (history.isNotEmpty()) path = history.removeAt(history.lastIndex) else path = ""
+        })
+        return
+    }
+
     Column(Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 6.dp, top = 12.dp),
@@ -1355,6 +1362,7 @@ private suspend fun shareMedia(
     }
     context.startActivity(android.content.Intent.createChooser(intent, "分享"))
 }
+
 
 
 

@@ -1,4 +1,4 @@
-"""Library scanning, path safety and node construction."""
+﻿"""Library scanning, path safety and node construction."""
 
 from __future__ import annotations
 
@@ -544,7 +544,7 @@ def list_gallery(
 
     for directory, rel in _iter_series(base, normalized):
         # 收藏夹只是原图的软链接，不参与「全部」照片流，避免重复和位置错乱
-        if rel == "收藏夹" or rel.startswith("收藏夹/"):
+        if not normalized.startswith("收藏夹") and (rel == "收藏夹" or rel.startswith("收藏夹/")):
             continue
         images, videos = list_media(directory)
         series_name = directory.name
@@ -589,5 +589,6 @@ def list_gallery(
     start = max(0, offset)
     end = start + max(1, min(limit, 500))
     return rows[start:end], total
+
 
 
