@@ -2,6 +2,14 @@
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -239,6 +247,15 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         path = node.path
     }
 
+    fun selectAt(position: Offset) {
+        val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
+            position.x >= item.offset.x && position.x <= item.offset.x + item.size.width &&
+                position.y >= item.offset.y && position.y <= item.offset.y + item.size.height
+        } ?: return
+        val node = gridItems.getOrNull(info.index) ?: return
+        selected = selected + node.path
+    }
+
     fun openNode(node: LibraryNode) {
         // 任何自己含媒体的文件夹都先进平铺页，点图片后才进入阅读。
         val leaf = node.child_count == null || node.child_count == 0
@@ -332,6 +349,12 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             }) {
                 Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = palette.accent, modifier = Modifier.size(22.dp))
             }
+            TextButton(onClick = {
+                editing = !editing
+                if (!editing) selected = emptySet()
+            }) {
+                Text(if (editing) "完成" else "编辑", color = palette.accent, fontWeight = FontWeight.Medium)
+            }
             IconButton(onClick = { dialog = LibraryDialog.NewAlbum }) {
                 Icon(Icons.Rounded.Add, contentDescription = "新建相册", tint = palette.accent, modifier = Modifier.size(24.dp))
             }
@@ -380,6 +403,17 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         }
 
         Box(Modifier.weight(1f)) {
+            AnimatedContent(
+                targetState = path,
+                transitionSpec = {
+                    val forward = targetState.length >= initialState.length
+                    (slideInHorizontally(tween(220)) { if (forward) it / 5 else -it / 5 } +
+                        fadeIn(tween(180))) togetherWith
+                        (slideOutHorizontally(tween(200)) { if (forward) -it / 8 else it / 8 } +
+                            fadeOut(tween(150)))
+                },
+                label = "album-nav",
+            ) { _ ->
             when {
                 !state.hasServer -> EmptyState(
                     icon = Icons.Rounded.Folder,
@@ -416,7 +450,20 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 4.dp, bottom = 120.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = !editing,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(editing, gridItems) {
+                            if (editing) {
+                                detectDragGestures(
+                                    onDragStart = { selectAt(it) },
+                                    onDrag = { change, _ ->
+                                        selectAt(change.position)
+                                        change.consume()
+                                    },
+                                )
+                            }
+                        },
                 ) {
                     items(gridItems, key = { it.path }) { node ->
                         AlbumCard(
@@ -467,6 +514,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                         }
                     }
                 }
+            }
             }
 
             if (editing && !showingSearch && selected.isNotEmpty()) {
@@ -520,11 +568,6 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 MenuRow("导入内容", Icons.Rounded.Upload) { menuOpen = false; nav.navigate(Routes.upload(path)) }
                 MenuRow("标签", Icons.Rounded.Sell) { menuOpen = false; nav.navigate("tags") }
                 MenuRow("回收站", Icons.Rounded.Delete) { menuOpen = false; nav.navigate("trash") }
-                MenuRow(if (editing) "完成编辑" else "编辑", Icons.Rounded.Edit) {
-                    menuOpen = false
-                    editing = !editing
-                    if (!editing) selected = emptySet()
-                }
                 MenuRow("刷新", Icons.Rounded.Refresh) { menuOpen = false; refreshKey++ }
                 Spacer(Modifier.height(14.dp))
             }

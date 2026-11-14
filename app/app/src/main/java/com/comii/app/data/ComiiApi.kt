@@ -144,6 +144,8 @@ class ComiiApi(val baseUrl: String) {
         return decode(post("/favorites", body))
     }
 
+    suspend fun folders(): FolderResponse = decode(get("/folders"))
+
     suspend fun mediaInfo(path: String, name: String): MediaInfo =
         decode(get("/media/info?path=${encode(path)}&name=${encode(name)}"))
 

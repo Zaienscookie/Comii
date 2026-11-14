@@ -501,6 +501,21 @@ def node_for_path(raw_path: str) -> Optional[LibraryNode]:
     )
 
 
+def folder_tree() -> list[dict]:
+    """All directories below the library root, in one pass (move picker)."""
+    items: list[dict] = []
+
+    def walk(directory: Path, prefix: str, depth: int) -> None:
+        for child in visible_directories(directory):
+            rel = f"{prefix}/{child.name}".lstrip("/")
+            items.append({"path": rel, "name": child.name, "depth": depth + 1})
+            if len(items) < 5000:
+                walk(child, rel, depth + 1)
+
+    walk(library_root(), "", 0)
+    return items
+
+
 def collect_series(raw_path: str = "") -> list[LibraryNode]:
     """Every series below a folder (recursive), used for whole-folder downloads."""
     parts = split_relative_path(raw_path)

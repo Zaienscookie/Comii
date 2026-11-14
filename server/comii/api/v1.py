@@ -118,6 +118,11 @@ def collection(path: str = "") -> CollectionResponse:
     return CollectionResponse(path=normalized, items=items, total=len(items))
 
 
+@router.get("/folders")
+def folders() -> dict:
+    return {"items": library.folder_tree()}
+
+
 @router.get("/gallery", response_model=GalleryResponse)
 def gallery(
     kind: str = "all",

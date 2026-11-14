@@ -1,4 +1,4 @@
-package com.comii.app.ui.screens
+﻿package com.comii.app.ui.screens
 
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -55,6 +55,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavHostController
+import com.comii.app.data.BassEffectController
 import com.comii.app.ui.AppState
 import com.comii.app.ui.components.BottomSheet
 import com.comii.app.ui.theme.ComiiTheme
@@ -73,6 +74,9 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     var speed by remember { mutableFloatStateOf(1f) }
     var pitch by remember { mutableFloatStateOf(1f) }
     var pitchFollows by remember { mutableStateOf(settings.videoPitchFollowsSpeed) }
+    var bassUltra by remember { mutableFloatStateOf(settings.videoBassUltra) }
+    var bassLow by remember { mutableFloatStateOf(settings.videoBassLow) }
+    var bassMid by remember { mutableFloatStateOf(settings.videoBassMid) }
     var showTuning by remember { mutableStateOf(false) }
     var index by remember { mutableIntStateOf(0) }
     var count by remember { mutableIntStateOf(0) }
@@ -107,6 +111,25 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     }
     DisposableEffect(Unit) {
         onDispose { player.release() }
+    }
+    val bassController = remember { BassEffectController() }
+    DisposableEffect(player) {
+        onDispose { bassController.release() }
+    }
+    LaunchedEffect(player) {
+        repeat(25) {
+            if (player.audioSessionId != -1) {
+                bassController.attach(player.audioSessionId)
+                return@LaunchedEffect
+            }
+            kotlinx.coroutines.delay(200)
+        }
+    }
+    LaunchedEffect(bassUltra, bassLow, bassMid) {
+        bassController.update(bassMid, bassLow, bassUltra)
+        settings.videoBassUltra = bassUltra
+        settings.videoBassLow = bassLow
+        settings.videoBassMid = bassMid
     }
     LaunchedEffect(muted, speed, pitch, pitchFollows) { applyPlayback(player) }
 
@@ -278,9 +301,14 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                 Slider(
                     value = speed,
                     onValueChange = { speed = it },
-                    valueRange = 0.5f..3f,
-                    steps = 49,
+                    valueRange = 0.5f..5f,
+                    steps = 89,
                 )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("降速 0.50", color = palette.textTertiary, fontSize = 10.sp)
+                    Text("原音 1.00", color = palette.textTertiary, fontSize = 10.sp)
+                    Text("加速 5.00", color = palette.textTertiary, fontSize = 10.sp)
+                }
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -307,15 +335,26 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     enabled = !pitchFollows,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("低 0.50", color = palette.textTertiary, fontSize = 10.sp)
+                    Text("降速 0.50", color = palette.textTertiary, fontSize = 10.sp)
                     Text("原音 1.00", color = palette.textTertiary, fontSize = 10.sp)
-                    Text("高 2.00", color = palette.textTertiary, fontSize = 10.sp)
+                    Text("加速 5.00", color = palette.textTertiary, fontSize = 10.sp)
                 }
+                Spacer(Modifier.height(16.dp))
+                Text("低音增强", color = palette.textPrimary, fontSize = 15.sp)
+                Text("从左到右：中重低音、重低音、超重低音", color = palette.textSecondary, fontSize = 11.sp)
+                Spacer(Modifier.height(10.dp))
+                BassSlider("中重低音", bassMid) { bassMid = it }
+                BassSlider("重低音", bassLow) { bassLow = it }
+                BassSlider("超重低音", bassUltra) { bassUltra = it }
+
                 Spacer(Modifier.height(10.dp))
                 TextButton(onClick = {
                     speed = 1f
                     pitch = 1f
                     pitchFollows = false
+                    bassMid = 0f
+                    bassLow = 0f
+                    bassUltra = 0f
                 }) {
                     Text("恢复默认（1.00x / 原音）", color = palette.accent, fontSize = 13.sp)
                 }
@@ -324,3 +363,20 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
         }
     }
 }
+
+
+@Composable
+private fun BassSlider(label: String, value: Float, onChange: (Float) -> Unit) {
+    val palette = ComiiTheme.palette
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.width(78.dp))
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = 0f..100f,
+            modifier = Modifier.weight(1f),
+        )
+        Text("${value.toInt()}", color = palette.textTertiary, fontSize = 11.sp, modifier = Modifier.width(30.dp))
+    }
+}
+

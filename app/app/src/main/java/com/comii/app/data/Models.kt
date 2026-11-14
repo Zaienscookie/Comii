@@ -51,6 +51,16 @@ data class GalleryItem(
 )
 
 @Serializable
+data class FolderItem(
+    val path: String = "",
+    val name: String = "",
+    val depth: Int = 0,
+)
+
+@Serializable
+data class FolderResponse(val items: List<FolderItem> = emptyList())
+
+@Serializable
 data class MediaInfo(
     val path: String = "",
     val name: String = "",

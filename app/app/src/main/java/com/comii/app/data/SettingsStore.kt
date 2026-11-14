@@ -1,4 +1,4 @@
-package com.comii.app.data
+﻿package com.comii.app.data
 
 import android.content.Context
 
@@ -96,6 +96,18 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("video_pitch_follow", false)
         set(value) = prefs.edit().putBoolean("video_pitch_follow", value).apply()
 
+    var videoBassUltra: Float
+        get() = prefs.getFloat("video_bass_ultra", 0f)
+        set(value) = prefs.edit().putFloat("video_bass_ultra", value).apply()
+
+    var videoBassLow: Float
+        get() = prefs.getFloat("video_bass_low", 0f)
+        set(value) = prefs.edit().putFloat("video_bass_low", value).apply()
+
+    var videoBassMid: Float
+        get() = prefs.getFloat("video_bass_mid", 0f)
+        set(value) = prefs.edit().putFloat("video_bass_mid", value).apply()
+
     // ------------------------------------------------------- entry / privacy
     var entryPrompt: Boolean
         get() = prefs.getBoolean("entry_prompt", true)
@@ -127,3 +139,4 @@ class SettingsStore(context: Context) {
 
     fun markRead(path: String) = prefs.edit().putLong("read_at_$path", System.currentTimeMillis()).apply()
 }
+
