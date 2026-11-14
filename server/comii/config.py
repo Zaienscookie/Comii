@@ -48,6 +48,7 @@ class Settings:
         self.port = _env_int("COMII_PORT", 8000)
         self.api_port = _env_int("COMII_API_PORT", 8001)
         self.log_level = os.environ.get("COMII_LOG_LEVEL", "info")
+        self.access_token = os.environ.get("COMII_ACCESS_TOKEN", "").strip()
         self.trash_ttl_seconds = _env_int("COMII_TRASH_TTL_DAYS", 3) * 24 * 3600
         self.max_upload_mb = _env_int("COMII_MAX_UPLOAD_MB", 512)
         self.allowed_origins = os.environ.get("COMII_CORS_ORIGINS", "*").split(",")

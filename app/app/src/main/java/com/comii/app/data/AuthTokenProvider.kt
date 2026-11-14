@@ -4,4 +4,6 @@ package com.comii.app.data
 object AuthTokenProvider {
     @Volatile
     var token: String = ""
+    @Volatile
+    var accessToken: String = ""
 }

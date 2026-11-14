@@ -11,6 +11,10 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("server_url", "").orEmpty()
         set(value) = prefs.edit().putString("server_url", value.trim()).apply()
 
+    var accessToken: String
+        get() = prefs.getString("access_token", "").orEmpty()
+        set(value) = prefs.edit().putString("access_token", value.trim()).apply()
+
     var authToken: String
         get() = prefs.getString("auth_token", "").orEmpty()
         set(value) = prefs.edit().putString("auth_token", value).apply()

@@ -65,6 +65,7 @@ fun SetupScreen(
             state.serverUrl.ifBlank { history.firstOrNull() ?: "192.168.2.126:8001" }
         )
     }
+    var accessToken by remember { mutableStateOf(settings.accessToken) }
     var status by remember { mutableStateOf<String?>(null) }
     var statusOk by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -146,6 +147,32 @@ fun SetupScreen(
             )
 
             Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
+            Text("服务器访问令牌（可选）", fontSize = 13.sp, color = palette.textSecondary)
+            Spacer(Modifier.height(8.dp))
+            TextField(
+                value = accessToken,
+                onValueChange = { accessToken = it },
+                singleLine = true,
+                placeholder = { Text("CF / 公网白名单 Token", color = palette.textTertiary) },
+                shape = RoundedCornerShape(14.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = palette.card,
+                    unfocusedContainerColor = palette.card,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    focusedTextColor = palette.textPrimary,
+                    unfocusedTextColor = palette.textPrimary,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "局域网可留空；走 Cloudflare 或公网时填服务器配置的 COMII_ACCESS_TOKEN。",
+                fontSize = 11.sp,
+                color = palette.textTertiary,
+            )
+
+            Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
                     onClick = { test(normalize(address)) },
@@ -280,6 +307,8 @@ fun SetupScreen(
                     val url = normalize(address)
                     test(url) { ok ->
                         if (ok) {
+                            settings.accessToken = accessToken.trim()
+                            com.comii.app.data.AuthTokenProvider.accessToken = accessToken.trim()
                             state.setServer(url)
                             state.showToast("已连接 ${url}")
                             onDone()

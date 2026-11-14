@@ -25,12 +25,11 @@ object Http {
             .retryOnConnectionFailure(true)
             .addInterceptor { chain ->
                 val token = AuthTokenProvider.token
-                if (token.isBlank()) chain.proceed(chain.request())
-                else chain.proceed(
-                    chain.request().newBuilder()
-                        .header("Authorization", "Bearer $token")
-                        .build()
-                )
+                val access = AuthTokenProvider.accessToken
+                val builder = chain.request().newBuilder()
+                if (token.isNotBlank()) builder.header("Authorization", "Bearer $token")
+                if (access.isNotBlank()) builder.header("X-Comii-Token", access)
+                chain.proceed(builder.build())
             }
             .build()
     }

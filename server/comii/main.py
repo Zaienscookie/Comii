@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 import time
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
@@ -108,6 +109,21 @@ async def access_log(request: Request, call_next):
 
 
 
+async def access_gate(request: Request, call_next):
+    """Shared server whitelist token for the 8001 data API."""
+    token = settings.access_token
+    path = request.url.path
+    if token and path.startswith("/api/") and not (
+        path == "/api/v1/ping"
+        or path.startswith("/api/v1/app/update")
+        or path == "/api/v1/auth/status"
+    ):
+        supplied = request.headers.get("x-comii-token", "")
+        if not supplied or not secrets.compare_digest(token, supplied):
+            return JSONResponse(status_code=401, content={"detail": "无效的服务器访问令牌"})
+    return await call_next(request)
+
+
 async def auth_gate(request: Request, call_next):
     path = request.url.path
     if not auth.enabled():
@@ -170,6 +186,7 @@ def create_api_app() -> FastAPI:
         openapi_url=f"{settings.api_prefix}/openapi.json",
     )
     _add_middleware(api)
+    api.middleware("http")(access_gate)
     api.include_router(auth_router)
     api.include_router(router)
     api.include_router(ai_router)

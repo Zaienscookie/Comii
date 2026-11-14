@@ -20,6 +20,7 @@ class AppState(
 
     init {
         com.comii.app.data.AuthTokenProvider.token = repository.settings.authToken
+        com.comii.app.data.AuthTokenProvider.accessToken = repository.settings.accessToken
     }
 
     var serverUrl by mutableStateOf(repository.settings.serverUrl)
@@ -247,5 +248,6 @@ object Routes {
     fun player(path: String, name: String) = "player/${encode(path)}/${encode(name)}"
     fun upload(folder: String) = "upload/${encode(folder)}"
 }
+
 
 
