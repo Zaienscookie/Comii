@@ -85,7 +85,9 @@ def resolve_file(raw_directory: str, filename: str) -> Path:
     if not filename or filename in (".", "..") or "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="文件名不合法")
     base = resolve_directory(raw_directory)
-    target = _ensure_inside(base / filename, base)
+    # 收藏夹里的文件是指向媒体库其它位置的软链接：允许目标在 library 根内，
+    # 但仍不允许逃出 library。
+    target = _ensure_inside(base / filename, library_root())
     if not target.is_file():
         raise HTTPException(status_code=404, detail="文件不存在")
     return target
