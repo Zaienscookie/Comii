@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -140,6 +141,39 @@ def gallery(
 def set_cover(payload: SetCoverRequest) -> ActionResult:
     library.set_cover(payload.path, payload.name)
     return ActionResult(status="ok", path=payload.path)
+
+
+@router.post("/favorites", response_model=ActionResult)
+def add_favorite(payload: dict) -> ActionResult:
+    """Create a symlink under <library>/收藏夹/<collection>/.
+
+    Body: {"path": "album/or/series", "name": "optional file name", "collection": "默认"}
+    """
+    raw_path = str(payload.get("path") or "").strip()
+    name = str(payload.get("name") or "").strip()
+    collection = str(payload.get("collection") or "默认").strip() or "默认"
+    collection = Path(collection).name
+    root = library.library_root()
+    if name:
+        source = library.resolve_file(raw_path, name)
+    else:
+        source = library.resolve_directory(raw_path)
+    try:
+        source.relative_to(root)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="只能收藏媒体库内的内容")
+    favorite_root = root / "收藏夹"
+    if favorite_root == source or favorite_root in source.parents:
+        raise HTTPException(status_code=400, detail="不能收藏收藏夹本身")
+    target_dir = favorite_root / collection
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / source.name
+    counter = 1
+    while target.exists() or target.is_symlink():
+        target = target_dir / f"{source.stem}_{counter}{source.suffix}"
+        counter += 1
+    os.symlink(source, target)
+    return ActionResult(status="ok", path=str(target.relative_to(root)))
 
 
 @router.get("/stats", response_model=StatsResponse)

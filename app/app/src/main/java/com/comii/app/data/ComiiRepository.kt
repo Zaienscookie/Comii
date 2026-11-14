@@ -125,6 +125,12 @@ class ComiiRepository(private val context: Context) {
     suspend fun setAlbumCover(path: String, series: String): ActionResult =
         requireApi().setAlbumCover(path, series)
 
+    suspend fun addFavorite(
+        path: String,
+        name: String = "",
+        collection: String = "默认",
+    ): ActionResult = requireApi().addFavorite(path, name, collection)
+
     suspend fun deleteMedia(path: String, names: List<String>): ActionResult =
         requireApi().deleteMedia(path, names)
 

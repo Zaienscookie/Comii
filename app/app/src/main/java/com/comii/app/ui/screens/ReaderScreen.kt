@@ -1,7 +1,8 @@
-package com.comii.app.ui.screens
+﻿package com.comii.app.ui.screens
 
 import android.content.Intent
 import android.content.res.Configuration
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
@@ -69,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
@@ -86,6 +89,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.comii.app.data.AppLog
 import com.comii.app.data.Http
+import com.comii.app.data.ImageMemoryCache
 import com.comii.app.ui.AppState
 import com.comii.app.ui.components.BottomSheet
 import com.comii.app.ui.components.SegmentControl
@@ -202,6 +206,23 @@ fun ReaderScreen(
         }
         val name = names.getOrNull(current) ?: return null
         return if (path.isBlank()) name else "$path/$name"
+    }
+
+    fun currentPair(): Pair<String, String>? {
+        if (allMode) {
+            val item = allItems.getOrNull(current) ?: return null
+            return item.series_path to item.name
+        }
+        return path to (names.getOrNull(current) ?: return null)
+    }
+
+    fun favoriteCurrent() {
+        val (series, name) = currentPair() ?: return
+        scope.launch {
+            runCatching { repository.addFavorite(series, name) }
+                .onSuccess { state.showToast("已收藏到「收藏夹」") }
+                .onFailure { state.showToast("收藏失败：${it.message}") }
+        }
     }
 
     fun shareCurrent() {
@@ -416,12 +437,16 @@ fun ReaderScreen(
         val indices = (current - 1)..(current + prefetchAhead.coerceIn(0, 12))
         indices.forEach { index ->
             if (index in names.indices) {
+                val model = pageModel(index)
                 runCatching {
-                    loader.enqueue(
+                    val result = loader.execute(
                         coil.request.ImageRequest.Builder(context)
-                            .data(pageModel(index))
+                            .data(model)
                             .build()
                     )
+                    if (result is coil.request.SuccessResult) {
+                        ImageMemoryCache.putDrawable(model?.toString(), result.drawable)
+                    }
                 }
             }
         }
@@ -528,6 +553,9 @@ fun ReaderScreen(
                 Text("${current + 1} / ${names.size}", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
                 IconButton(onClick = { showGrid = true }) {
                     Icon(Icons.Rounded.GridView, contentDescription = "页码", tint = Color.White)
+                }
+                IconButton(onClick = { favoriteCurrent() }) {
+                    Icon(Icons.Rounded.StarBorder, contentDescription = "收藏", tint = Color.White)
                 }
                 IconButton(onClick = { showEditMenu = true }) {
                     Icon(Icons.Rounded.Edit, contentDescription = "编辑", tint = Color.White)
@@ -821,13 +849,33 @@ private fun ReaderPageImage(
         contentAlignment = Alignment.TopCenter,
     ) {
         val imageRequest = ImageRequest.Builder(context).data(model).crossfade(false).build()
-        if (fullHeight) {
+        val cacheKey = model?.toString()
+        var cachedBitmap by remember(cacheKey) {
+            mutableStateOf(ImageMemoryCache.get(cacheKey))
+        }
+        val rememberLoaded: (coil.compose.AsyncImagePainter.State.Success) -> Unit = { result ->
+            ImageMemoryCache.putDrawable(cacheKey, result.result.drawable)
+            cachedBitmap = ImageMemoryCache.get(cacheKey)
+        }
+        if (cachedBitmap != null) {
+            Image(
+                bitmap = cachedBitmap!!.asImageBitmap(),
+                contentDescription = null,
+                contentScale = if (fullHeight) ContentScale.Fit else ContentScale.Fit,
+                modifier = if (fullHeight) {
+                    Modifier.fillMaxSize().then(zoomModifier)
+                } else {
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp).then(zoomModifier)
+                },
+            )
+        } else if (fullHeight) {
             if (maxWidth > maxHeight) {
                 // 横屏：整张图缩放到屏幕内，避免只看到一半
                 AsyncImage(
                     model = imageRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
+                    onSuccess = rememberLoaded,
                     modifier = Modifier
                         .fillMaxSize()
                         .then(gestureModifier)
@@ -850,6 +898,7 @@ private fun ReaderPageImage(
                             model = imageRequest,
                             contentDescription = null,
                             contentScale = ContentScale.FillWidth,
+                            onSuccess = rememberLoaded,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .then(gestureModifier)
@@ -863,6 +912,7 @@ private fun ReaderPageImage(
                 model = imageRequest,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
+                onSuccess = rememberLoaded,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
@@ -872,4 +922,7 @@ private fun ReaderPageImage(
         }
     }
 }
+
+
+
 

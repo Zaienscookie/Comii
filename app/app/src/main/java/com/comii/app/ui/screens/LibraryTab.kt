@@ -1,4 +1,4 @@
-package com.comii.app.ui.screens
+﻿package com.comii.app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -215,8 +215,14 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     }
 
     val allItems = browseData?.items.orEmpty()
+        .filterNot { it.name == "#recycle" || it.name == "@eaDir" || it.name == "#snapshot" }
+        .sortedWith(compareBy({ if (it.name == "收藏夹") 0 else 1 }, { it.name.lowercase() }))
     val showingSearch = query.isNotBlank()
-    val gridItems = if (showingSearch) searchResults else allItems
+    val gridItems = if (showingSearch) {
+        searchResults.filterNot { it.name == "#recycle" || it.name == "@eaDir" || it.name == "#snapshot" }
+    } else {
+        allItems
+    }
     val albumCount = allItems.count { it.isAlbum || it.isFolder }
     val mediaCount = media.size
 
@@ -564,7 +570,8 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                                 .onFailure { state.showToast("操作失败：${it.message}") }
                         }
                     }
-                    SheetAction("下载整个相册") { sheetItem = null; startDownload(node) }
+                    SheetAction("收藏到收藏夹") { sheetItem = null; scope.launch { runCatching { state.repository.addFavorite(node.path) }.onSuccess { state.showToast("已收藏到收藏夹") }.onFailure { state.showToast("收藏失败：${it.message}") } } }
+                SheetAction("下载整个相册") { sheetItem = null; startDownload(node) }
                 } else {
                     SheetAction("设置封面") { sheetItem = null; dialog = LibraryDialog.SetCover(node) }
                     SheetAction("下载到本地") { sheetItem = null; startDownload(node) }
@@ -761,7 +768,7 @@ private fun AlbumCard(
                             .background(Color.Black.copy(alpha = 0.5f))
                             .padding(horizontal = 4.dp, vertical = 2.dp),
                     ) {
-                        Text("${node.child_count ?: 0}", color = Color.White, fontSize = 9.sp)
+                        Text(if (node.name == "收藏夹") "★" else "${node.child_count ?: 0}", color = if (node.name == "收藏夹") palette.accent else Color.White, fontSize = if (node.name == "收藏夹") 12.sp else 9.sp)
                     }
                 }
                 if (progress != null && progress.total > 0 && !node.isAlbum) {
@@ -1340,4 +1347,6 @@ private suspend fun shareMedia(
     }
     context.startActivity(android.content.Intent.createChooser(intent, "分享"))
 }
+
+
 

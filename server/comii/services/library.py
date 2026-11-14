@@ -23,6 +23,16 @@ KIND_MARKER = ".comii_type"
 LEGACY_KIND_MARKER = ".komi_type"
 COVER_MARKER = ".comii_cover"
 VALID_KINDS = {"manga", "video", "mixed"}
+# NAS 自己的回收站/缩略图/快照目录：Comii 不展示、不扫描、不改动。
+IGNORED_DIRECTORIES = {
+    "#recycle",
+    "@eaDir",
+    "@Recycle",
+    "#snapshot",
+    ".Trash",
+    ".trash",
+    "System Volume Information",
+}
 
 
 def natural_sort_key(name: str) -> list[object]:
@@ -283,7 +293,9 @@ def visible_directories(directory: Path) -> list[Path]:
         entries = [
             entry
             for entry in directory.iterdir()
-            if entry.is_dir() and not entry.name.startswith(".")
+            if entry.is_dir()
+            and not entry.name.startswith(".")
+            and entry.name not in IGNORED_DIRECTORIES
         ]
     except OSError:
         return []

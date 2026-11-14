@@ -1,6 +1,7 @@
 package com.comii.app.data
 
 import java.net.URLEncoder
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -129,6 +130,19 @@ class ComiiApi(val baseUrl: String) {
 
     suspend fun setAlbumCover(path: String, series: String): ActionResult =
         decode(post("/album_cover", ComiiJson.encodeToString(AlbumCoverBody(path, series))))
+
+    suspend fun addFavorite(
+        path: String,
+        name: String,
+        collection: String = "默认",
+    ): ActionResult {
+        val body = JSONObject()
+            .put("path", path)
+            .put("name", name)
+            .put("collection", collection)
+            .toString()
+        return decode(post("/favorites", body))
+    }
 
     suspend fun deleteMedia(path: String, names: List<String>): ActionResult =
         decode(post("/media/delete", ComiiJson.encodeToString(MediaDeleteBody(path, names))))
