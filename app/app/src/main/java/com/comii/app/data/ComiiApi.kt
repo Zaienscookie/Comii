@@ -144,6 +144,9 @@ class ComiiApi(val baseUrl: String) {
         return decode(post("/favorites", body))
     }
 
+    suspend fun mediaInfo(path: String, name: String): MediaInfo =
+        decode(get("/media/info?path=${encode(path)}&name=${encode(name)}"))
+
     suspend fun favoriteStatus(path: String, name: String): Pair<Boolean, List<String>> {
         val text = get("/favorites/status?path=${encode(path)}&name=${encode(name)}")
         val obj = JSONObject(text)

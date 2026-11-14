@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -68,11 +69,21 @@ import com.comii.app.ui.AppState
 import com.comii.app.ui.Routes
 import com.comii.app.ui.components.EmptyState
 import com.comii.app.ui.theme.ComiiTheme
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 private const val PHOTO_PAGE = 500
+
+private fun timelineLabel(mtime: Double): String {
+    if (mtime <= 0.0) return "未知时间"
+    val formatter = SimpleDateFormat("yyyy年M月d日", Locale.getDefault())
+    return formatter.format(Date((mtime * 1000).toLong()))
+}
+
 
 /** 「照片」：整库所有图片 + 视频，vivo 相册那种 4 列方格。 */
 @Composable
@@ -258,6 +269,14 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         nav.navigate(Routes.reader(path, index, all = true, name = name))
     }
 
+    val timeline = remember(items) {
+        val groups = LinkedHashMap<String, MutableList<GalleryItem>>()
+        items.forEach { item ->
+            groups.getOrPut(timelineLabel(item.mtime)) { mutableListOf() }.add(item)
+        }
+        groups
+    }
+
     Column(Modifier.fillMaxSize()) {
         androidx.compose.foundation.layout.Row(
             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 14.dp),
@@ -312,7 +331,17 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(items, key = { "${it.series_path}/${it.name}" }) { item ->
+                    timeline.forEach { (label, group) ->
+                        item(key = "timeline:$label", span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                label,
+                                color = palette.textSecondary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(start = 8.dp, top = 14.dp, bottom = 4.dp),
+                            )
+                        }
+                        items(group, key = { "${it.series_path}/${it.name}" }) { item ->
                         Box(
                             Modifier
                                 .fillMaxWidth()
@@ -384,8 +413,9 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                             }
                         }
                     }
+                    }
                     if (loadingMore) {
-                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
                             Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(color = palette.accent, modifier = Modifier.size(20.dp))
                             }

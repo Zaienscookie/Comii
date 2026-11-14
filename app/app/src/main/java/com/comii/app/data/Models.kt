@@ -51,6 +51,25 @@ data class GalleryItem(
 )
 
 @Serializable
+data class MediaInfo(
+    val path: String = "",
+    val name: String = "",
+    val size: Long = 0,
+    val mtime: Double = 0.0,
+    val kind: String = "image",
+    val width: Int? = null,
+    val height: Int? = null,
+    val format: String = "",
+    val camera: String = "",
+    val date_taken: String = "",
+    val exposure: String = "",
+    val f_number: String = "",
+    val iso: String = "",
+    val focal_length: String = "",
+    val lens: String = "",
+)
+
+@Serializable
 data class GalleryResponse(
     val items: List<GalleryItem> = emptyList(),
     val total: Int = 0,

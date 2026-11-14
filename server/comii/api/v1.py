@@ -228,6 +228,67 @@ def media_image(request: Request, path: str, name: str) -> Response:
     return media.file_response(source, request)
 
 
+@router.get("/media/info")
+def media_info(path: str, name: str) -> dict:
+    """Basic file info + EXIF metadata for the app's detail sheet."""
+    source = library.resolve_file(path, name)
+    stat = source.stat()
+    payload = {
+        "path": path,
+        "name": name,
+        "size": stat.st_size,
+        "mtime": stat.st_mtime,
+        "kind": "video" if library.is_video(source) else "image",
+        "width": None,
+        "height": None,
+        "format": source.suffix.lower().lstrip("."),
+        "camera": "",
+        "date_taken": "",
+        "exposure": "",
+        "f_number": "",
+        "iso": "",
+        "focal_length": "",
+        "lens": "",
+    }
+    if library.is_image(source):
+        try:
+            from PIL import Image
+
+            with Image.open(source) as image:
+                payload["width"], payload["height"] = image.size
+                payload["format"] = (image.format or payload["format"]).lower()
+                exif = image.getexif()
+                payload["camera"] = " ".join(
+                    str(exif.get(tag) or "").strip() for tag in (271, 272)
+                ).strip()
+                payload["date_taken"] = str(exif.get(36867) or exif.get(306) or "")
+                exposure = exif.get(33434)
+                if exposure:
+                    try:
+                        payload["exposure"] = f"{float(exposure):g}s"
+                    except Exception:
+                        payload["exposure"] = str(exposure)
+                f_number = exif.get(33437)
+                if f_number:
+                    try:
+                        payload["f_number"] = f"f/{float(f_number):g}"
+                    except Exception:
+                        payload["f_number"] = str(f_number)
+                iso = exif.get(34855)
+                if iso:
+                    payload["iso"] = str(iso)
+                focal = exif.get(37386)
+                if focal:
+                    try:
+                        payload["focal_length"] = f"{float(focal):g}mm"
+                    except Exception:
+                        payload["focal_length"] = str(focal)
+                payload["lens"] = str(exif.get(42036) or "")
+        except Exception:
+            pass
+    return payload
+
+
 @router.get("/media/thumb")
 def media_thumb(request: Request, path: str, name: str) -> Response:
     source = library.resolve_file(path, name)

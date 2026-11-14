@@ -135,6 +135,8 @@ class ComiiRepository(private val context: Context) {
         collection: String = "默认",
     ): ActionResult = requireApi().addFavorite(path, name, collection)
 
+    suspend fun mediaInfo(path: String, name: String): MediaInfo = requireApi().mediaInfo(path, name)
+
     suspend fun favoriteStatus(path: String, name: String): Pair<Boolean, List<String>> =
         requireApi().favoriteStatus(path, name)
 

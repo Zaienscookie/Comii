@@ -45,6 +45,10 @@ import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.runtime.setValue
+import com.comii.app.data.MediaInfo
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
@@ -66,6 +70,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -97,6 +102,9 @@ import com.comii.app.ui.components.BottomSheet
 import com.comii.app.ui.components.SegmentControl
 import com.comii.app.ui.theme.ComiiTheme
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -159,7 +167,11 @@ fun ReaderScreen(
     var showGrid by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showEditMenu by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     var showFavoritePicker by remember { mutableStateOf(false) }
+    var showInfo by remember { mutableStateOf(false) }
+    var infoLoading by remember { mutableStateOf(false) }
+    var mediaInfo by remember { mutableStateOf<MediaInfo?>(null) }
     var favoriteMark by remember { mutableStateOf(false) }
     var favoriteCollections by remember { mutableStateOf(listOf("默认")) }
     var newCollection by remember { mutableStateOf("") }
@@ -586,9 +598,6 @@ fun ReaderScreen(
                     modifier = Modifier.weight(1f),
                 )
                 Text("${current + 1} / ${names.size}", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
-                IconButton(onClick = { showGrid = true }) {
-                    Icon(Icons.Rounded.GridView, contentDescription = "页码", tint = Color.White)
-                }
                 IconButton(onClick = {
                     showFavoritePicker = true
                     scope.launch {
@@ -604,22 +613,8 @@ fun ReaderScreen(
                         tint = if (favoriteMark) Color(0xFFFFCC00) else Color.White,
                     )
                 }
-                IconButton(onClick = { showEditMenu = true }) {
-                    Icon(Icons.Rounded.Edit, contentDescription = "编辑", tint = Color.White)
-                }
-                IconButton(onClick = {
-                    val next = !manualLandscape
-                    manualLandscape = next
-                    activity?.requestedOrientation = if (next) {
-                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                    } else {
-                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    }
-                }) {
-                    Icon(Icons.Rounded.ScreenRotation, contentDescription = "横竖屏切换", tint = Color.White)
-                }
-                IconButton(onClick = { showSettings = true }) {
-                    Icon(Icons.Rounded.Tune, contentDescription = "阅读设置", tint = Color.White)
+                IconButton(onClick = { showMoreMenu = true }) {
+                    Icon(Icons.Rounded.MoreVert, contentDescription = "更多", tint = Color.White)
                 }
             }
 
@@ -686,25 +681,96 @@ fun ReaderScreen(
                         }
                     }
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .padding(horizontal = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { shareCurrent() }) {
-                        Icon(Icons.Rounded.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("分享", color = Color.White, fontSize = 12.sp)
+            }
+        }
+    }
+
+    LaunchedEffect(showInfo, current, allMode, path) {
+        if (!showInfo) return@LaunchedEffect
+        val pair = currentPair() ?: return@LaunchedEffect
+        infoLoading = true
+        mediaInfo = runCatching { repository.mediaInfo(pair.first, pair.second) }.getOrNull()
+        infoLoading = false
+    }
+
+    if (showMoreMenu) {
+        BottomSheet(onDismiss = { showMoreMenu = false }) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                Text("更多", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { showMoreMenu = false; showGrid = true }) {
+                    Text("跳到页码", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = { showMoreMenu = false; showInfo = true }) {
+                    Text("详细信息", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = { showMoreMenu = false; shareCurrent() }) {
+                    Text("分享原图", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = {
+                    showMoreMenu = false
+                    val next = !manualLandscape
+                    manualLandscape = next
+                    activity?.requestedOrientation = if (next) {
+                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    } else {
+                        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     }
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { deleteCurrent() }) {
-                        Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Color.White, modifier = Modifier.size(19.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("删除", color = Color.White, fontSize = 12.sp)
+                }) {
+                    Text(if (manualLandscape) "切换为竖屏" else "切换为横屏", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = { showMoreMenu = false; showSettings = true }) {
+                    Text("阅读设置", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = { showMoreMenu = false; deleteCurrent() }) {
+                    Text("删除", color = palette.danger, fontSize = 15.sp)
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+        }
+    }
+
+    if (showInfo) {
+        BottomSheet(onDismiss = { showInfo = false }) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                Text("详细信息", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp))
+                if (infoLoading) {
+                    CircularProgressIndicator(color = palette.accent, modifier = Modifier.size(22.dp))
+                } else {
+                    val info = mediaInfo
+                    if (info == null) {
+                        Text("读取失败", color = palette.textSecondary, fontSize = 13.sp)
+                    } else {
+                        @Composable
+                        fun row(label: String, value: String?) {
+                            if (!value.isNullOrBlank()) {
+                                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                    Text(label, color = palette.textSecondary, fontSize = 12.sp,
+                                        modifier = Modifier.width(76.dp))
+                                    Text(value, color = palette.textPrimary, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                        if (info.width != null && info.height != null) row("尺寸", "${info.width} × ${info.height}")
+                        row("格式", info.format.uppercase())
+                        row("大小", formatInfoSize(info.size))
+                        row("所在", info.path)
+                        row("文件", info.name)
+                        row("时间", runCatching {
+                            SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                                .format(Date((info.mtime * 1000).toLong()))
+                        }.getOrDefault(""))
+                        row("相机", info.camera)
+                        row("拍摄时间", info.date_taken)
+                        row("曝光", info.exposure)
+                        row("光圈", info.f_number)
+                        row("ISO", info.iso)
+                        row("焦距", info.focal_length)
+                        row("镜头", info.lens)
                     }
                 }
+                Spacer(Modifier.height(18.dp))
             }
         }
     }
@@ -1006,6 +1072,18 @@ private fun ReaderPageImage(
     }
 }
 
+
+
+
+
+
+private fun formatInfoSize(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024) return String.format("%.1f KB", kb)
+    val mb = kb / 1024.0
+    return if (mb < 1024) String.format("%.1f MB", mb) else String.format("%.2f GB", mb / 1024.0)
+}
 
 
 
