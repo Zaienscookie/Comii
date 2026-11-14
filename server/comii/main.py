@@ -141,6 +141,10 @@ async def auth_gate(request: Request, call_next):
                 headers={"WWW-Authenticate": "Bearer"},
             )
         request.state.user = user
+        # Viewer 只能看：任何写操作（含 WebUI 用的 /api/* 旧接口）统一拒绝
+        if user.get("role") == "viewer" and request.method not in ("GET", "HEAD", "OPTIONS"):
+            if not path.startswith("/api/v1/auth/"):
+                return JSONResponse(status_code=403, content={"detail": "没有权限（Viewer 只能查看）"})
     return await call_next(request)
 
 

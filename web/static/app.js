@@ -343,6 +343,7 @@ function renderFolderCard(item, i) {
 // ---------- Drag & Drop ----------
 let _dragItem = null;
 function bindDragDrop(items) {
+  if (!canWrite) return;
   const cards = grid.querySelectorAll(".card");
   cards.forEach(card => {
     // 拖拽开始
@@ -595,6 +596,28 @@ function openItem(item) {
 
 // ---------- Folder navigation ----------
 let currentPath = "";
+let canWrite = false;
+let roleName = "";
+
+function applyReadOnly() {
+  if (canWrite) return;
+  document.body.classList.add("readonly");
+  const style = document.createElement("style");
+  style.id = "readonly-style";
+  style.textContent = `
+    .card-del,.card-move,.card-dl,#newFolderBtn,#addToggle,#editToggle,
+    #importToggle,#trashToggle,#tagsToggle,#mediaBar,.new-folder-btn{display:none!important}
+    .media-tile .select-chip{display:none!important}
+  `;
+  document.head.appendChild(style);
+}
+
+function refreshBackBtn() {
+  const btn = document.getElementById("backBtn");
+  if (!btn) return;
+  const show = Boolean(currentPath) || Boolean(tagResults);
+  btn.style.display = show ? "flex" : "none";
+}
 
 function openFolder(path) {
   currentPath = path;
@@ -606,6 +629,7 @@ function openFolder(path) {
     searchResults = null;
     if (search) search.value = "";
   }
+  refreshBackBtn();
   loadLibrary();
 }
 
@@ -1406,6 +1430,7 @@ function openMedia(item) {
 }
 
 async function deleteMedia() {
+  if (!canWrite) { toast("只读账号不能删除文件"); return; }
   if (!selectedMedia.size) return;
   const ok = confirm(`确定删除选中的 ${selectedMedia.size} 个文件吗？\n文件会移入服务器 data/trash/media，仍可手工找回。`);
   if (!ok) return;
@@ -1627,6 +1652,18 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("moreOverlay")?.classList.remove("show");
     document.getElementById("moreSheet")?.classList.remove("show");
   };
+  document.getElementById("backBtn")?.addEventListener("click", () => {
+    if (tagResults) { tagResults = null; refreshBackBtn(); loadLibrary(); return; }
+    if (currentPath) {
+      currentPath = currentPath.split("/").slice(0, -1).join("/");
+      selectedMedia.clear();
+      updateMediaBar();
+      refreshBackBtn();
+      loadLibrary();
+      return;
+    }
+    history.back();
+  });
   document.getElementById("moreToggle")?.addEventListener("click", openMore);
   document.getElementById("moreOverlay")?.addEventListener("click", closeMore);
   document.querySelectorAll("#moreSheet .more-item").forEach(btn => {
@@ -1702,12 +1739,15 @@ document.addEventListener("DOMContentLoaded", () => {
     .then((data) => {
       const link = document.getElementById("adminLink");
       const role = data?.user?.role || "";
+      roleName = role;
+      canWrite = role === "owner" || role === "admin";
       if (link && role !== "owner") link.style.display = "none";
-      if (role !== "owner" && role !== "admin") {
-        ["importToggle", "tagsToggle", "trashToggle", "editToggle"].forEach((id) => {
+      if (!canWrite) {
+        ["importToggle", "tagsToggle", "trashToggle", "editToggle", "addToggle"].forEach((id) => {
           const button = document.getElementById(id);
           if (button) button.style.display = "none";
         });
+        applyReadOnly();
       }
     })
     .catch(() => {});

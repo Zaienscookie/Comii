@@ -1,6 +1,8 @@
 ﻿package com.comii.app.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -64,6 +67,7 @@ import com.comii.app.ui.components.BottomSheet
 import com.comii.app.ui.components.SegmentControl
 import com.comii.app.ui.theme.ComiiTheme
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @Composable
 fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostController) {
@@ -86,6 +90,11 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     var index by remember { mutableIntStateOf(0) }
     var count by remember { mutableIntStateOf(0) }
     var landscape by remember { mutableStateOf(false) }
+    var showChrome by remember { mutableStateOf(true) }
+    var seekTarget by remember { mutableStateOf<Long?>(null) }
+    var dragStartPos by remember { mutableLongStateOf(0L) }
+    var dragAccum by remember { mutableFloatStateOf(0f) }
+    var playerView by remember { mutableStateOf<PlayerView?>(null) }
     val activity = context as? android.app.Activity
     val autoRotate = settings.autoRotate
     DisposableEffect(autoRotate) {
@@ -96,6 +105,28 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
         onDispose {
             activity?.requestedOrientation =
                 android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // 全屏沉浸：隐藏状态栏/导航栏，退出时恢复（顶部灰边就是状态栏区域）
+    DisposableEffect(Unit) {
+        val window = activity?.window
+        val controller = window?.let {
+            androidx.core.view.WindowCompat.getInsetsController(it, it.decorView)
+        }
+        controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        controller?.systemBarsBehavior =
+            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        onDispose {
+            controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        }
+    }
+    // 顶栏 4 秒后自动收起，点一下播放器可再唤出
+    LaunchedEffect(showChrome) {
+        if (showChrome) {
+            delay(4000)
+            playerView?.hideController()
+            showChrome = false
         }
     }
 
@@ -198,23 +229,34 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
         onDispose { player.removeListener(listener) }
     }
 
-    var dragTotal by remember { mutableFloatStateOf(0f) }
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(count) {
+            .pointerInput(count, player) {
                 detectHorizontalDragGestures(
-                    onDragStart = { dragTotal = 0f },
-                    onHorizontalDrag = { _, amount -> dragTotal += amount },
-                    onDragEnd = {
-                        if (count > 1) {
-                            if (dragTotal < -90 && player.hasNextMediaItem()) {
-                                player.seekToNextMediaItem()
-                            } else if (dragTotal > 90 && player.hasPreviousMediaItem()) {
-                                player.seekToPreviousMediaItem()
-                            }
+                    onDragStart = {
+                        dragAccum = 0f
+                        dragStartPos = player.currentPosition.coerceAtLeast(0L)
+                    },
+                    onHorizontalDrag = { _, amount ->
+                        dragAccum += amount
+                        val duration = player.duration
+                        if (duration > 0L) {
+                            // 整屏宽度 ≈ 3 分钟，拖动时实时预览
+                            val deltaMs = (dragAccum / size.width.toFloat()) * 180_000f
+                            val target = (dragStartPos + deltaMs.toLong()).coerceIn(0L, duration)
+                            seekTarget = target
+                            player.seekTo(target)
                         }
+                    },
+                    onDragEnd = {
+                        seekTarget = null
+                        dragAccum = 0f
+                    },
+                    onDragCancel = {
+                        seekTarget = null
+                        dragAccum = 0f
                     },
                 )
             }
@@ -234,15 +276,47 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                         setShowNextButton(true)
                         setShowPreviousButton(true)
                         setBackgroundColor(android.graphics.Color.BLACK)
+                        setControllerVisibilityListener(
+                            PlayerView.ControllerVisibilityListener { visibility ->
+                                showChrome = visibility == android.view.View.VISIBLE
+                            }
+                        )
+                        playerView = this
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
             )
         }
 
+        seekTarget?.let { target ->
+            val duration = player.duration.coerceAtLeast(1L)
+            val delta = (target - dragStartPos) / 1000
+            Column(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .padding(horizontal = 22.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    formatClock(target) + " / " + formatClock(duration),
+                    color = Color.White,
+                    fontSize = 17.sp,
+                )
+                if (delta != 0L) {
+                    Text(
+                        (if (delta > 0) "+" else "") + delta + " 秒",
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+        AnimatedVisibility(visible = showChrome, modifier = Modifier.align(Alignment.TopCenter)) {
         Row(
             modifier = Modifier
-                .align(Alignment.TopCenter)
+                .fillMaxWidth()
                 .fillMaxWidth()
                 .background(Color.Black.copy(alpha = 0.38f))
                 .statusBarsPadding()
@@ -267,7 +341,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                 )
                 if (count > 1) {
                     Text(
-                        "第 ${index + 1} / $count 集 · 左右滑动切换",
+                        "第 ${index + 1} / $count 集 · 左右拖动快进快退",
                         color = Color.White.copy(alpha = 0.7f),
                         fontSize = 11.sp,
                     )
@@ -303,6 +377,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
             IconButton(onClick = { nav.popBackStack() }) {
                 Icon(Icons.Rounded.Close, contentDescription = "关闭", tint = Color.White, modifier = Modifier.size(20.dp))
             }
+        }
         }
     }
 
@@ -397,4 +472,13 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
             }
         }
     }
+}
+
+private fun formatClock(ms: Long): String {
+    val total = (ms / 1000).coerceAtLeast(0)
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val sec = total % 60
+    return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, sec)
+    else String.format(Locale.US, "%d:%02d", m, sec)
 }

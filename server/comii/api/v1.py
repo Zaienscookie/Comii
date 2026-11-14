@@ -156,7 +156,7 @@ def gallery(
     rows = [row for row in rows if auth.can(user, row["series_path"], "view")]
     return GalleryResponse(
         items=[GalleryItem(**row) for row in rows],
-        total=len(rows) if offset == 0 else total,
+        total=total,
         offset=offset,
         limit=limit,
     )

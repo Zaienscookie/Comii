@@ -5,6 +5,10 @@ import android.content.res.Configuration
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.rememberScrollState
@@ -1004,9 +1008,36 @@ private fun ReaderPageImage(
     val context = LocalContext.current
     var zoom by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
-    // 图片区域不要拦截单指拖动，否则 HorizontalPager 收不到左右滑手势。
-    // 全屏照片查看暂时不接管手势，把翻页交给外层 Pager。
-    val gestureModifier = Modifier
+    // 双指缩放/放大后单指拖动；缩放为 1 时不拦截单指，翻页仍交给外层 Pager。
+    val gestureModifier = Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            do {
+                val event = awaitPointerEvent()
+                val pressed = event.changes.count { it.pressed }
+                val zoomChange = event.calculateZoom()
+                val panChange = event.calculatePan()
+                if (pressed >= 2) {
+                    val next = (zoom * zoomChange).coerceIn(1f, 5f)
+                    if (next > 1.01f) {
+                        zoom = next
+                        panOffset += panChange
+                    } else {
+                        zoom = 1f
+                        panOffset = Offset.Zero
+                    }
+                    event.changes.forEach { it.consume() }
+                } else if (zoom > 1.01f) {
+                    panOffset += panChange
+                    event.changes.forEach { it.consume() }
+                }
+            } while (event.changes.any { it.pressed })
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(model) {
+        zoom = 1f
+        panOffset = Offset.Zero
+    }
     val zoomModifier = Modifier.graphicsLayer {
         scaleX = zoom
         scaleY = zoom

@@ -130,7 +130,8 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         runCatching { state.repository.gallery(limit = PHOTO_PAGE, offset = 0, sort = "recent") }
             .onSuccess {
                 items = it.items
-                total = it.total
+                // 旧服务端在 offset=0 时把 total 写成首页条数（500），会让分页误以为到底
+                total = if (it.items.size < PHOTO_PAGE) it.items.size else maxOf(it.total, it.items.size + 1)
                 state.photosItems = it.items
                 state.photosTotal = it.total
                 state.photosLoaded = true
@@ -147,7 +148,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
             state.repository.gallery(limit = PHOTO_PAGE, offset = items.size, sort = "recent")
         }.onSuccess {
             items = items + it.items
-            total = it.total
+            total = if (it.items.size < PHOTO_PAGE) items.size else maxOf(it.total, items.size + 1)
             state.photosItems = items
             state.photosTotal = it.total
             AppLog.add("photos", "loadMore ok size=${items.size}")
