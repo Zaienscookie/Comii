@@ -140,6 +140,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var showSearch by rememberSaveable { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
+    var dragSelectOn by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var refreshKey by remember { mutableIntStateOf(0) }
     var sheetItem by remember { mutableStateOf<LibraryNode?>(null) }
@@ -247,13 +248,50 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         path = node.path
     }
 
-    fun selectAt(position: Offset) {
+    fun nodeAt(position: Offset): LibraryNode? {
         val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
             position.x >= item.offset.x && position.x <= item.offset.x + item.size.width &&
                 position.y >= item.offset.y && position.y <= item.offset.y + item.size.height
-        } ?: return
-        val node = gridItems.getOrNull(info.index) ?: return
-        selected = selected + node.path
+        } ?: return null
+        return gridItems.getOrNull(info.index)
+    }
+
+    fun paintAt(position: Offset, select: Boolean) {
+        val node = nodeAt(position) ?: return
+        selected = if (select) selected + node.path else selected - node.path
+    }
+
+    fun cutSelection(nodes: List<LibraryNode>) {
+        if (nodes.isEmpty()) return
+        state.setClipboard(nodes.map { it.path }, nodes.joinToString("、") { it.name })
+        selected = emptySet()
+        selectedMedia = emptySet()
+        editing = false
+        state.showToast("已剪切 ${nodes.size} 项，进入目标相册后点「粘贴」")
+    }
+
+    fun pasteClipboard() {
+        val paths = state.clipboardPaths
+        if (paths.isEmpty()) return
+        val target = path
+        if (paths.any { target == it || target.startsWith(it + "/") }) {
+            state.showToast("不能粘贴到被剪切目录的内部")
+            return
+        }
+        scope.launch {
+            runCatching { state.repository.move(paths, target) }
+                .onSuccess { batch ->
+                    if (batch.failed.isEmpty()) {
+                        state.clearClipboard()
+                        state.showToast("已粘贴到「${if (target.isBlank()) "根目录" else target.substringAfterLast('/')}」")
+                    } else {
+                        state.showToast("部分失败：${batch.failed.first().message}")
+                        if (batch.succeeded.isNotEmpty()) state.clearClipboard()
+                    }
+                    refreshKey++
+                }
+                .onFailure { state.showToast("粘贴失败：${it.message}") }
+        }
     }
 
     fun openNode(node: LibraryNode) {
@@ -348,6 +386,11 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 if (!showSearch) query = ""
             }) {
                 Icon(Icons.Rounded.Search, contentDescription = "搜索", tint = palette.accent, modifier = Modifier.size(22.dp))
+            }
+            if (state.clipboardPaths.isNotEmpty()) {
+                TextButton(onClick = { pasteClipboard() }) {
+                    Text("粘贴", color = palette.accent, fontWeight = FontWeight.Medium)
+                }
             }
             TextButton(onClick = {
                 editing = !editing
@@ -456,9 +499,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                         .pointerInput(editing, gridItems) {
                             if (editing) {
                                 detectDragGestures(
-                                    onDragStart = { selectAt(it) },
+                                    onDragStart = { position ->
+                                        val node = nodeAt(position)
+                                        dragSelectOn = node != null && !selected.contains(node.path)
+                                        paintAt(position, dragSelectOn)
+                                    },
                                     onDrag = { change, _ ->
-                                        selectAt(change.position)
+                                        paintAt(change.position, dragSelectOn)
                                         change.consume()
                                     },
                                 )
@@ -522,7 +569,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     count = selected.size,
                     onMove = {
                         val nodes = allItems.filter { selected.contains(it.path) }
-                        if (nodes.isNotEmpty()) dialog = LibraryDialog.Move(nodes)
+                        if (nodes.isNotEmpty()) cutSelection(nodes)
                     },
                     onRename = {
                         val nodes = allItems.filter { selected.contains(it.path) }
@@ -610,7 +657,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 Spacer(Modifier.height(14.dp))
                 SheetAction("打开") { sheetItem = null; openNode(node) }
                 SheetAction("重命名") { sheetItem = null; dialog = LibraryDialog.Rename(node) }
-                SheetAction("移动到…") { sheetItem = null; dialog = LibraryDialog.Move(listOf(node)) }
+                SheetAction("剪切") { sheetItem = null; cutSelection(listOf(node)) }
                 if (node.isAlbum || node.isFolder) {
                     SheetAction("设为相册封面") {
                         sheetItem = null
@@ -1009,7 +1056,7 @@ private fun EditBar(
         Text("已选 $count", color = palette.textSecondary, fontSize = 12.sp)
         Spacer(Modifier.weight(1f))
         TextButton(onClick = onMove, enabled = count > 0) {
-            Text("移动", color = palette.accent, fontSize = 12.sp)
+            Text("剪切", color = palette.accent, fontSize = 12.sp)
         }
         TextButton(onClick = onRename, enabled = count == 1) {
             Text("重命名", color = if (count == 1) palette.accent else palette.textTertiary, fontSize = 12.sp)

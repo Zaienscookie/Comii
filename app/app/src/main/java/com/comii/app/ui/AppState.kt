@@ -43,6 +43,22 @@ class AppState(
     var photosScrollOffset by mutableIntStateOf(0)
 
     val hasServer: Boolean get() = serverUrl.isNotBlank()
+    /** 剪切板：存相对路径，文件夹或单个文件都可以。 */
+    var clipboardPaths by mutableStateOf<List<String>>(emptyList())
+        private set
+    var clipboardLabel by mutableStateOf("")
+        private set
+
+    fun setClipboard(paths: List<String>, label: String = "") {
+        clipboardPaths = paths
+        clipboardLabel = label
+    }
+
+    fun clearClipboard() {
+        clipboardPaths = emptyList()
+        clipboardLabel = ""
+    }
+
 
     fun setTheme(mode: String) {
         themeMode = mode

@@ -82,19 +82,27 @@ def move(raw_paths: list[str], destination: str) -> BatchResult:
             normalized = library.normalize_path(raw)
             if not normalized:
                 raise HTTPException(status_code=400, detail="不能移动库根目录")
-            source = library.resolve_directory(normalized)
+            try:
+                source = library.resolve_directory(normalized)
+            except HTTPException:
+                # 也允许剪切单个文件：路径最后一段是文件名。
+                parent, _, filename = normalized.rpartition("/")
+                if not parent or not filename:
+                    raise
+                source = library.resolve_file(parent, filename)
             target = destination_dir / source.name
             if source == target:
                 result.succeeded.append(normalized)
                 continue
             if target.exists():
                 raise HTTPException(status_code=409, detail="目标位置已存在同名项目")
-            source_resolved = str(source.resolve())
-            destination_resolved = str(destination_dir.resolve())
-            if destination_resolved == source_resolved or destination_resolved.startswith(
-                source_resolved + str(Path("/"))
-            ):
-                raise HTTPException(status_code=400, detail="不能移动到自身内部")
+            if source.is_dir():
+                source_resolved = str(source.resolve())
+                destination_resolved = str(destination_dir.resolve())
+                if destination_resolved == source_resolved or destination_resolved.startswith(
+                    source_resolved + str(Path("/"))
+                ):
+                    raise HTTPException(status_code=400, detail="不能移动到自身内部")
             shutil.move(str(source), str(target))
             result.succeeded.append(normalized)
         except HTTPException as exc:

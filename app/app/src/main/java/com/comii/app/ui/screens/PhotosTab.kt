@@ -8,6 +8,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -97,6 +99,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf(false) }
+    var dragSelectOn by remember { mutableStateOf(true) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var confirmDelete by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
@@ -173,6 +176,21 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 gridState.scrollToItem(state.photosScrollIndex, state.photosScrollOffset)
             }
         }
+    }
+
+    fun keyAt(position: Offset): String? {
+        val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
+            position.x >= item.offset.x && position.x <= item.offset.x + item.size.width &&
+                position.y >= item.offset.y && position.y <= item.offset.y + item.size.height
+        } ?: return null
+        val key = info.key?.toString() ?: return null
+        if (key.startsWith("timeline:") || key.startsWith("loading")) return null
+        return key
+    }
+
+    fun paintAt(position: Offset, select: Boolean) {
+        val key = keyAt(position) ?: return
+        selected = if (select) selected + key else selected - key
     }
 
     fun itemKey(item: GalleryItem): String = "${item.series_path}/${item.name}"
@@ -329,7 +347,24 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 110.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
-                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = !editing,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(editing, items) {
+                            if (editing) {
+                                detectDragGestures(
+                                    onDragStart = { position ->
+                                        val key = keyAt(position)
+                                        dragSelectOn = key != null && key !in selected
+                                        paintAt(position, dragSelectOn)
+                                    },
+                                    onDrag = { change, _ ->
+                                        paintAt(change.position, dragSelectOn)
+                                        change.consume()
+                                    },
+                                )
+                            }
+                        },
                 ) {
                     timeline.forEach { (label, group) ->
                         item(key = "timeline:$label", span = { GridItemSpan(maxLineSpan) }) {
@@ -446,6 +481,17 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = { shareSelected() }, enabled = selected.isNotEmpty() && !sharing) {
                             Text(if (sharing) "分享中…" else "分享原图", color = palette.accent)
+                        }
+                        TextButton(onClick = {
+                            val picked = selectedItems()
+                            if (picked.isNotEmpty()) {
+                                state.setClipboard(picked.map { itemKey(it) }, "${picked.size} 个文件")
+                                selected = emptySet()
+                                editing = false
+                                state.showToast("已剪切 ${picked.size} 项，进入相册后点「粘贴」")
+                            }
+                        }, enabled = selected.isNotEmpty()) {
+                            Text("剪切", color = palette.accent)
                         }
                         TextButton(onClick = { confirmDelete = true }, enabled = selected.isNotEmpty()) {
                             Text("删除", color = palette.danger)
