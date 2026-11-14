@@ -144,6 +144,17 @@ class ComiiApi(val baseUrl: String) {
         return decode(post("/favorites", body))
     }
 
+    suspend fun favoriteStatus(path: String, name: String): Pair<Boolean, List<String>> {
+        val text = get("/favorites/status?path=${encode(path)}&name=${encode(name)}")
+        val obj = JSONObject(text)
+        val collections = mutableListOf<String>()
+        val array = obj.optJSONArray("collections")
+        if (array != null) {
+            for (i in 0 until array.length()) collections += array.optString(i)
+        }
+        return obj.optBoolean("favorited") to collections
+    }
+
     suspend fun deleteMedia(path: String, names: List<String>): ActionResult =
         decode(post("/media/delete", ComiiJson.encodeToString(MediaDeleteBody(path, names))))
 

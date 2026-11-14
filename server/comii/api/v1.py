@@ -167,6 +167,10 @@ def add_favorite(payload: dict) -> ActionResult:
         raise HTTPException(status_code=400, detail="不能收藏收藏夹本身")
     target_dir = favorite_root / collection
     target_dir.mkdir(parents=True, exist_ok=True)
+    source_real = os.path.realpath(source)
+    for existing in target_dir.iterdir():
+        if existing.is_symlink() and os.path.realpath(existing) == source_real:
+            return ActionResult(status="ok", path=str(existing.relative_to(root)))
     target = target_dir / source.name
     counter = 1
     while target.exists() or target.is_symlink():
@@ -174,6 +178,32 @@ def add_favorite(payload: dict) -> ActionResult:
         counter += 1
     os.symlink(source, target)
     return ActionResult(status="ok", path=str(target.relative_to(root)))
+
+
+@router.get("/favorites/status")
+def favorite_status(path: str = "", name: str = "") -> dict:
+    root = library.library_root()
+    favorite_root = root / "收藏夹"
+    collections = []
+    if favorite_root.is_dir():
+        for entry in sorted(favorite_root.iterdir(), key=lambda item: item.name):
+            if entry.is_dir() and not entry.name.startswith("."):
+                collections.append(entry.name)
+    favorited = False
+    if path and name:
+        try:
+            source = library.resolve_file(path, name)
+            source_real = os.path.realpath(source)
+            for collection in collections:
+                for entry in (favorite_root / collection).iterdir():
+                    if entry.is_symlink() and os.path.realpath(entry) == source_real:
+                        favorited = True
+                        break
+                if favorited:
+                    break
+        except Exception:
+            pass
+    return {"favorited": favorited, "collections": collections}
 
 
 @router.get("/stats", response_model=StatsResponse)

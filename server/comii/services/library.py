@@ -541,6 +541,9 @@ def list_gallery(
     base = library_root() if not parts else resolve_directory(normalized)
 
     for directory, rel in _iter_series(base, normalized):
+        # 收藏夹只是原图的软链接，不参与「全部」照片流，避免重复和位置错乱
+        if rel == "收藏夹" or rel.startswith("收藏夹/"):
+            continue
         images, videos = list_media(directory)
         series_name = directory.name
         if wanted in ("all", "image"):

@@ -1,6 +1,7 @@
-﻿FROM comii:2.32.0-arm64
+﻿FROM comii:2.33.0-arm64
 COPY server /app/server
 COPY web /app/web
 WORKDIR /app/server
 CMD ["python", "-m", "comii.serve"]
+
 

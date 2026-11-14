@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Tune
@@ -53,6 +54,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -157,6 +159,10 @@ fun ReaderScreen(
     var showGrid by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var showEditMenu by remember { mutableStateOf(false) }
+    var showFavoritePicker by remember { mutableStateOf(false) }
+    var favoriteMark by remember { mutableStateOf(false) }
+    var favoriteCollections by remember { mutableStateOf(listOf("默认")) }
+    var newCollection by remember { mutableStateOf("") }
     var current by remember { mutableIntStateOf(0) }
     var initializing by remember { mutableStateOf(allMode) }
     var allOffset by remember { mutableIntStateOf(0) }
@@ -216,13 +222,26 @@ fun ReaderScreen(
         return path to (names.getOrNull(current) ?: return null)
     }
 
-    fun favoriteCurrent() {
+    fun chooseFavorite(collection: String) {
         val (series, name) = currentPair() ?: return
         scope.launch {
-            runCatching { repository.addFavorite(series, name) }
-                .onSuccess { state.showToast("已收藏到「收藏夹」") }
+            runCatching { repository.addFavorite(series, name, collection.ifBlank { "默认" }) }
+                .onSuccess {
+                    favoriteMark = true
+                    showFavoritePicker = false
+                    state.showToast("已收藏到「${collection.ifBlank { "默认" }}」")
+                }
                 .onFailure { state.showToast("收藏失败：${it.message}") }
         }
+    }
+
+    LaunchedEffect(current, allMode, path, names.size, allItems.size) {
+        val (series, name) = currentPair() ?: return@LaunchedEffect
+        runCatching { repository.favoriteStatus(series, name) }
+            .onSuccess { (marked, collections) ->
+                favoriteMark = marked
+                if (collections.isNotEmpty()) favoriteCollections = collections
+            }
     }
 
     fun shareCurrent() {
@@ -295,11 +314,14 @@ fun ReaderScreen(
             return@LaunchedEffect
         }
         val savedAll = settings.localPage(ALL_PROGRESS_KEY)
-        val target = when {
+        var target = when {
             initialPage >= 0 -> initialPage
             savedAll > 0 -> savedAll
             else -> 0
         }
+        val wantedName = initialName
+        val wantedSeries = path
+        var exactTarget = -1
         val loaded = mutableListOf<com.comii.app.data.GalleryItem>()
         var offset = 0
         var rowsTotal = 0
@@ -315,10 +337,23 @@ fun ReaderScreen(
             offset += raw.size
             rowsTotal = response.total
             hasMore = offset < rowsTotal
+            if (wantedName.isNotBlank()) {
+                exactTarget = loaded.indexOfFirst {
+                    it.name == wantedName && (wantedSeries.isBlank() || it.series_path == wantedSeries)
+                }
+                if (exactTarget >= 0) {
+                    target = exactTarget
+                    break
+                }
+            }
             AppLog.add(
                 "reader",
                 "all page offset=${offset - raw.size} raw=${raw.size} images=${loaded.size} total=${response.total}",
             )
+        }
+        if (exactTarget >= 0) {
+            target = exactTarget
+            AppLog.add("reader", "resolved target ${wantedSeries}/${wantedName} -> $target")
         }
         if (loaded.isEmpty()) {
             error = "没有可阅读的图片"
@@ -554,8 +589,20 @@ fun ReaderScreen(
                 IconButton(onClick = { showGrid = true }) {
                     Icon(Icons.Rounded.GridView, contentDescription = "页码", tint = Color.White)
                 }
-                IconButton(onClick = { favoriteCurrent() }) {
-                    Icon(Icons.Rounded.StarBorder, contentDescription = "收藏", tint = Color.White)
+                IconButton(onClick = {
+                    showFavoritePicker = true
+                    scope.launch {
+                        runCatching { repository.favoriteStatus(currentPair()?.first ?: "", currentPair()?.second ?: "") }
+                            .onSuccess { (_, collections) ->
+                                if (collections.isNotEmpty()) favoriteCollections = collections
+                            }
+                    }
+                }) {
+                    Icon(
+                        if (favoriteMark) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                        contentDescription = "收藏",
+                        tint = if (favoriteMark) Color(0xFFFFCC00) else Color.White,
+                    )
                 }
                 IconButton(onClick = { showEditMenu = true }) {
                     Icon(Icons.Rounded.Edit, contentDescription = "编辑", tint = Color.White)
@@ -658,6 +705,42 @@ fun ReaderScreen(
                         Text("删除", color = Color.White, fontSize = 12.sp)
                     }
                 }
+            }
+        }
+    }
+
+    if (showFavoritePicker) {
+        BottomSheet(onDismiss = { showFavoritePicker = false }) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                Text("收藏到收藏夹", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                favoriteCollections.forEach { collection ->
+                    TextButton(onClick = { chooseFavorite(collection) }) {
+                        Text("★  $collection", color = palette.textPrimary, fontSize = 15.sp)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                TextField(
+                    value = newCollection,
+                    onValueChange = { newCollection = it },
+                    singleLine = true,
+                    placeholder = { Text("新建收藏夹名称") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                TextButton(
+                    onClick = {
+                        val name = newCollection.trim()
+                        if (name.isNotEmpty()) {
+                            chooseFavorite(name)
+                            newCollection = ""
+                        }
+                    },
+                    enabled = newCollection.isNotBlank(),
+                ) {
+                    Text("新建并收藏", color = palette.accent, fontWeight = FontWeight.Medium)
+                }
+                Spacer(Modifier.height(16.dp))
             }
         }
     }

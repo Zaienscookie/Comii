@@ -131,6 +131,9 @@ class ComiiRepository(private val context: Context) {
         collection: String = "默认",
     ): ActionResult = requireApi().addFavorite(path, name, collection)
 
+    suspend fun favoriteStatus(path: String, name: String): Pair<Boolean, List<String>> =
+        requireApi().favoriteStatus(path, name)
+
     suspend fun deleteMedia(path: String, names: List<String>): ActionResult =
         requireApi().deleteMedia(path, names)
 
