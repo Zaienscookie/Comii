@@ -136,7 +136,15 @@ async function loadAudit(){
     return `<tr><td>${d}</td><td>${escapeHtml(row.username||'')}</td><td>${escapeHtml(row.action||'')}</td><td>${escapeHtml(row.path||'')}</td><td>${row.status||''}</td><td>${escapeHtml(row.ip||'')}</td></tr>`;
   }).join('');
 }
-load();
+(async () => {
+  const me = await api('/api/v1/auth/me').catch(() => null);
+  if (!me || me.user?.role !== 'owner') {
+    document.body.innerHTML = '<div class="wrap"><h1>仅 Owner 可管理用户</h1><p class="sub">Admin 只能管理内容，不能创建用户或分配权限。</p><a href="/">返回媒体库</a></div>';
+    return;
+  }
+  await load();
+  loadAudit();
+})();
 </script>
 </body>
 </html>

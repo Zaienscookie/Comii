@@ -43,6 +43,7 @@ object AppUpdater {
         val request = Request.Builder()
             .url("$base/api/v1/app/update")
             .header("User-Agent", "Comii/${BuildConfig.VERSION_NAME}")
+            .header("X-Comii-Token", AuthTokenProvider.accessToken)
             .get()
             .build()
         runCatching {
@@ -69,6 +70,7 @@ object AppUpdater {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", "Comii/${BuildConfig.VERSION_NAME}")
+            .header("X-Comii-Token", AuthTokenProvider.accessToken)
             .get()
             .build()
         client.newCall(request).execute().use { response ->

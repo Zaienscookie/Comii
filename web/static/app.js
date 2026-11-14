@@ -1675,9 +1675,33 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // 退出登录：撤销当前 cookie/session，回到登录页
-document.getElementById("logoutToggle")?.addEventListener("click", async () => {
-  try {
-    await fetch("/api/v1/auth/logout", { method: "POST", credentials: "same-origin" });
-  } catch (_) {}
-  location.href = "/login.html";
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("logoutToggle")?.addEventListener("click", async () => {
+    try {
+      await fetch("/api/v1/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: (() => {
+          const token = localStorage.getItem("comii_access_token") || "";
+          return token ? { "X-Comii-Token": token } : {};
+        })(),
+      });
+    } catch (_) {}
+    location.href = "/login.html";
+  });
+
+  // 只有 Owner 显示用户管理入口；Admin 看不到，也不能创建用户。
+  fetch("/api/v1/auth/me", {
+    credentials: "same-origin",
+    headers: (() => {
+      const token = localStorage.getItem("comii_access_token") || "";
+      return token ? { "X-Comii-Token": token } : {};
+    })(),
+  })
+    .then((response) => response.ok ? response.json() : null)
+    .then((data) => {
+      const link = document.getElementById("adminLink");
+      if (link && data?.user?.role !== "owner") link.style.display = "none";
+    })
+    .catch(() => {});
 });

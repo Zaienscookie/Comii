@@ -145,7 +145,9 @@ class AppState(
     }
 
     suspend fun logout() {
+        authDisabled = false
         repository.authLogout()
+        authToken = ""
         authUsername = ""
         authRole = ""
         authGrants = emptyList()
@@ -255,6 +257,7 @@ object Routes {
     fun player(path: String, name: String) = "player/${encode(path)}/${encode(name)}"
     fun upload(folder: String) = "upload/${encode(folder)}"
 }
+
 
 
 
