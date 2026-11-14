@@ -23,10 +23,11 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:12px;backg
   <input id="username" placeholder="用户名" autocomplete="username" autofocus>
   <input id="password" type="password" placeholder="密码" autocomplete="current-password">
   <input id="password2" type="password" placeholder="确认密码" autocomplete="new-password" style="display:none">
+  <input id="accessToken" placeholder="服务器访问令牌（可选，8001 白名单）" autocomplete="off">
   <label style="display:flex;gap:8px;align-items:center;color:#8e8e93;font-size:13px"><input id="remember" type="checkbox" checked style="width:auto;margin:0"> 记住登录</label>
   <button id="submit" type="submit">登录</button>
   <div class="error" id="error"></div>
-  <div class="hint" id="hint"></div>
+  <div class="hint" id="hint">WebUI 8000 登录不需要白名单 Token；App/8001 数据接口需要。</div>
 </form>
 <script>
 const form = document.getElementById('form');
@@ -34,6 +35,15 @@ const error = document.getElementById('error');
 const hint = document.getElementById('hint');
 let initialized = true;
 const next = new URLSearchParams(location.search).get('next') || '/';
+const savedAccess = localStorage.getItem('comii_access_token') || '';
+document.getElementById('accessToken').value = savedAccess;
+const originalFetch = window.fetch;
+window.fetch = (input, init = {}) => {
+  const access = document.getElementById('accessToken')?.value?.trim() || localStorage.getItem('comii_access_token') || '';
+  const headers = new Headers(init.headers || {});
+  if (access) headers.set('X-Comii-Token', access);
+  return originalFetch(input, {...init, headers});
+};
 async function boot(){
   try {
     const status = await fetch('/api/v1/auth/status', {credentials:'same-origin'}).then(r=>r.json());
@@ -55,6 +65,8 @@ form.addEventListener('submit', async (event) => {
   const password2 = document.getElementById('password2').value;
   if (!username || !password) { error.textContent = '请输入用户名和密码'; return; }
   if (!initialized && password !== password2) { error.textContent = '两次密码不一致'; return; }
+  const access = document.getElementById('accessToken').value.trim();
+  localStorage.setItem('comii_access_token', access);
   const endpoint = initialized ? '/api/v1/auth/login' : '/api/v1/auth/setup';
   const body = {username, password, remember: document.getElementById('remember').checked};
   const response = await fetch(endpoint, {

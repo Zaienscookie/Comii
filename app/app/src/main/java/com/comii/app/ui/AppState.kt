@@ -89,7 +89,8 @@ class AppState(
 
     suspend fun checkServerAuth(): Boolean {
         if (serverUrl.isBlank()) return false
-        val status = repository.authStatus(serverUrl)
+        val status = runCatching { repository.authStatus(serverUrl) }.getOrNull()
+            ?: return false
         authDisabled = !status.auth_enabled
         if (authDisabled) return true
         if (repository.settings.authToken.isBlank()) return false

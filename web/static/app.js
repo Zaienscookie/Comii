@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 // ---------- Theme ----------
 const THEME_KEY = "komi-theme";
@@ -1672,4 +1672,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 260));
   }
   if (grid) loadLibrary();
+});
+
+// 退出登录：撤销当前 cookie/session，回到登录页
+document.getElementById("logoutToggle")?.addEventListener("click", async () => {
+  try {
+    await fetch("/api/v1/auth/logout", { method: "POST", credentials: "same-origin" });
+  } catch (_) {}
+  location.href = "/login.html";
 });

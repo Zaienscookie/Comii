@@ -100,6 +100,30 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
         }
 
         Spacer(Modifier.height(18.dp))
+        SettingsGroup("账号") {
+            SettingsRow(
+                title = state.authUsername.ifBlank { "未登录" },
+                subtitle = when (state.authRole) {
+                    "owner" -> "Owner · 全部权限"
+                    "admin" -> "Admin · 内容管理"
+                    "viewer" -> "Viewer · 只读"
+                    else -> "Custom · 按目录权限"
+                },
+                showChevron = false,
+            )
+            SettingsRow(
+                title = "退出登录",
+                subtitle = "切换账号会回到登录页",
+                onClick = {
+                    scope.launch {
+                        state.logout()
+                        state.showToast("已退出登录")
+                    }
+                },
+            )
+        }
+
+        Spacer(Modifier.height(18.dp))
         SettingsGroup("外观") {
             Column(Modifier.padding(14.dp)) {
                 Text("主题", fontSize = 14.sp, color = palette.textPrimary)

@@ -222,6 +222,17 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
         return
     }
 
+    var authChecked by remember { mutableStateOf(false) }
+    LaunchedEffect(state.serverUrl) {
+        if (state.serverUrl.isBlank()) {
+            authChecked = true
+            return@LaunchedEffect
+        }
+        authChecked = false
+        state.checkServerAuth()
+        authChecked = true
+    }
+
     if (!state.hasServer) {
         SetupScreen(
             state = state,
@@ -231,12 +242,6 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
         return
     }
 
-    var authChecked by remember { mutableStateOf(false) }
-    LaunchedEffect(state.serverUrl) {
-        authChecked = false
-        state.checkServerAuth()
-        authChecked = true
-    }
     if (!authChecked) {
         Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
             CircularProgressIndicator(color = ComiiTheme.palette.accent)
