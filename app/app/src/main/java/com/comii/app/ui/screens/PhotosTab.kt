@@ -35,13 +35,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items as staggeredItems
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.ViewAgenda
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -100,6 +106,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf(false) }
     var dragSelectOn by remember { mutableStateOf(true) }
+    var galleryMode by remember { mutableStateOf(state.repository.settings.photosGallery) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var confirmDelete by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
@@ -200,6 +207,17 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     }
 
     fun itemKey(item: GalleryItem): String = "${item.series_path}/${item.name}"
+
+    fun openItem(item: GalleryItem) {
+        if (item.kind == "video") {
+            nav.navigate(Routes.player(item.series_path, item.name))
+        } else {
+            val imageIndex = items
+                .takeWhile { !(it.series_path == item.series_path && it.name == item.name) }
+                .count { it.kind != "video" }
+            nav.navigate(Routes.reader(path = item.series_path, page = imageIndex, all = true, name = item.name))
+        }
+    }
 
     fun toggleSelected(item: GalleryItem) {
         val key = itemKey(item)
@@ -332,6 +350,16 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     Icon(Icons.Rounded.History, contentDescription = "观看历史", tint = palette.accent)
                 }
             }
+            IconButton(onClick = {
+                galleryMode = !galleryMode
+                state.repository.settings.photosGallery = galleryMode
+            }) {
+                Icon(
+                    if (galleryMode) Icons.Rounded.ViewAgenda else Icons.Rounded.GridView,
+                    contentDescription = if (galleryMode) "方格模式" else "画廊模式（保持比例）",
+                    tint = palette.accent,
+                )
+            }
             IconButton(onClick = { refreshKey++ }) {
                 Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent)
             }
@@ -347,6 +375,52 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     title = "还没有照片",
                     subtitle = "在相册里导入图片或视频后会出现在这里",
                 )
+                galleryMode -> LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Fixed(3),
+                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 110.dp),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalItemSpacing = 3.dp,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    staggeredItems(items, key = { "${it.series_path}/${it.name}" }) { item ->
+                        var ratio by remember(item.series_path, item.name) { mutableFloatStateOf(0f) }
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .then(if (ratio > 0f) Modifier.aspectRatio(ratio) else Modifier.height(180.dp))
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(palette.card)
+                                .pointerInput(item.series_path, item.name, editing) {
+                                    detectTapGestures {
+                                        if (editing) toggleSelected(item) else openItem(item)
+                                    }
+                                }
+                        ) {
+                            AsyncImage(
+                                model = state.repository.mediaUrl(item.thumb),
+                                contentDescription = item.name,
+                                contentScale = ContentScale.FillWidth,
+                                onSuccess = { result ->
+                                    val w = result.result.drawable.intrinsicWidth
+                                    val h = result.result.drawable.intrinsicHeight
+                                    if (w > 0 && h > 0) ratio = w.toFloat() / h
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            if (item.kind == "video") {
+                                Box(
+                                    Modifier.align(Alignment.Center).size(28.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "视频", tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(4),
                     state = gridState,

@@ -1678,6 +1678,8 @@ async function showTagged(tag) {
 // ---------- 照片 / 相册 两种视图 ----------
 let viewMode = "albums";
 let photoItems = [];
+let photosMasonry = false;
+try { photosMasonry = localStorage.getItem("comii_photos_masonry") === "1"; } catch (_) {}
 let photoTotal = 0;
 let photoLoading = false;
 
@@ -1726,6 +1728,7 @@ function renderPhotos() {
   if (!mediaGrid) return;
   mediaGrid.hidden = false;
   mediaGrid.classList.add("photo-grid");
+  mediaGrid.classList.toggle("masonry", photosMasonry);
   mediaGrid.innerHTML = "";
   heroSub.textContent = `共 ${photoTotal} 项`;
   photoItems.forEach(item => {
@@ -1797,6 +1800,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     history.back();
   });
+  document.getElementById("galleryToggle")?.addEventListener("click", () => {
+    photosMasonry = !photosMasonry;
+    try { localStorage.setItem("comii_photos_masonry", photosMasonry ? "1" : "0"); } catch (_) {}
+    const btn = document.getElementById("galleryToggle");
+    if (btn) btn.textContent = photosMasonry ? "方格模式" : "画廊模式";
+    if (mediaGrid) mediaGrid.classList.toggle("masonry", photosMasonry);
+  });
   document.getElementById("moreToggle")?.addEventListener("click", openMore);
   document.getElementById("moreOverlay")?.addEventListener("click", closeMore);
   document.querySelectorAll("#moreSheet .more-item").forEach(btn => {
@@ -1805,6 +1815,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".bn-item").forEach(btn => {
     btn.addEventListener("click", () => setView(btn.dataset.view));
   });
+  const gbtn = document.getElementById("galleryToggle");
+  if (gbtn) gbtn.textContent = photosMasonry ? "方格模式" : "画廊模式";
   const initialView = new URLSearchParams(location.search).get("view");
   setView(initialView === "photos" ? "photos" : "albums");
   document.getElementById("tagsToggle")?.addEventListener("click", openTags);

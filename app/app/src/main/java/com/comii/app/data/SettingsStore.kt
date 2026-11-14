@@ -40,6 +40,10 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("server_name", "").orEmpty()
         set(value) = prefs.edit().putString("server_name", value).apply()
 
+    var photosGallery: Boolean
+        get() = prefs.getBoolean("photos_gallery", false)
+        set(value) = prefs.edit().putBoolean("photos_gallery", value).apply()
+
     var themeMode: String
         get() = prefs.getString("theme", "auto").orEmpty()
         set(value) = prefs.edit().putString("theme", value).apply()
