@@ -325,6 +325,7 @@ class ComiiRepository(private val context: Context) {
         uris: List<Uri>,
         folder: String,
         name: String,
+        direct: Boolean = false,
         onBytes: (Long) -> Unit = {},
     ): ImportResult = withContext(Dispatchers.IO) {
         val api = requireApi()
@@ -335,7 +336,7 @@ class ComiiRepository(private val context: Context) {
             ComiiApi.UploadPart(fileName, UploadRequestBody(resolver, uri, mime, onBytes))
         }
         if (parts.isEmpty()) throw ApiException(0, "没有可上传的文件")
-        api.upload(api.buildUpload(parts, folder, name))
+        api.upload(api.buildUpload(parts, folder, name, direct))
     }
 
     private fun guessMime(fileName: String): String = when (fileName.substringAfterLast('.', "").lowercase()) {

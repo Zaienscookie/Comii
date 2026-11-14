@@ -247,8 +247,8 @@ class ComiiApi(val baseUrl: String) {
 
     class UploadPart(val fileName: String, val body: RequestBody)
 
-    fun buildUpload(parts: List<UploadPart>, folder: String, name: String): MultipartBody {
-        val builder = multipartBody().addFormDataPart("folder", folder).addFormDataPart("name", name)
+    fun buildUpload(parts: List<UploadPart>, folder: String, name: String, direct: Boolean = false): MultipartBody {
+        val builder = multipartBody().addFormDataPart("folder", folder).addFormDataPart("name", name).addFormDataPart("direct", direct.toString())
         parts.forEach { part ->
             builder.addFormDataPart("files", part.fileName, part.body)
         }

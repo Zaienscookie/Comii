@@ -33,6 +33,15 @@ def sanitize_name(raw: str, fallback: str = "untitled") -> str:
     return candidate or fallback
 
 
+def _direct_directory(folder: str) -> tuple[Path, str]:
+    """Upload into the current folder instead of creating a new series folder."""
+    normalized = library.normalize_path(folder)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="直接上传必须指定目标文件夹")
+    base = library.resolve_directory(normalized)
+    return base, base.name
+
+
 def _target_directory(folder: str, name: str) -> tuple[Path, str]:
     root = library.library_root()
     folder_rel = library.normalize_path(folder)
@@ -84,11 +93,11 @@ def _write_pdf_pages(pdf_bytes: bytes, dpi: int) -> list[bytes]:
     return pages
 
 
-def import_pdf(raw: bytes, folder: str, name: str, dpi: int = 200) -> ImportResult:
+def import_pdf(raw: bytes, folder: str, name: str, dpi: int = 200, direct: bool = False) -> ImportResult:
     pages = _write_pdf_pages(raw, dpi)
     if not pages:
         raise HTTPException(status_code=400, detail="PDF 中没有可渲染的页面")
-    target, clean_name = _target_directory(folder, name)
+    target, clean_name = _direct_directory(folder) if direct else _target_directory(folder, name)
     target.mkdir(parents=True, exist_ok=True)
     for index, payload in enumerate(pages, start=1):
         (target / f"{index:04d}.jpg").write_bytes(payload)
@@ -243,7 +252,7 @@ def _flatten_single_directory(staging: Path) -> None:
         inner.rmdir()
 
 
-def import_archive(raw, folder: str, name: str = "", suffix: str = ".zip") -> ImportResult:
+def import_archive(raw, folder: str, name: str = "", suffix: str = ".zip", direct: bool = False) -> ImportResult:
     """Import a zip/cbz/7z archive (bytes or a spooled file path)."""
     staging = Path(tempfile.mkdtemp(prefix="comii_cbz_"))
     try:
@@ -254,7 +263,7 @@ def import_archive(raw, folder: str, name: str = "", suffix: str = ".zip") -> Im
                 detail += "（跳过了 " + "、".join(skipped_summary) + "）"
             raise HTTPException(status_code=400, detail=detail)
         _flatten_single_directory(staging)
-        target, clean_name = _target_directory(folder, name)
+        target, clean_name = _direct_directory(folder) if direct else _target_directory(folder, name)
         target.mkdir(parents=True, exist_ok=True)
         image_index = 1
         video_index = 1
@@ -313,7 +322,7 @@ def _spool(upload: UploadFile, suffix: str) -> Path:
     return path
 
 
-def import_uploads(files: Iterable[UploadFile], folder: str, name: str = "") -> ImportResult:
+def import_uploads(files: Iterable[UploadFile], folder: str, name: str = "", direct: bool = False) -> ImportResult:
     uploads = [item for item in files if getattr(item, "filename", None)]
     if not uploads:
         raise HTTPException(status_code=400, detail="没有收到文件")
@@ -325,15 +334,15 @@ def import_uploads(files: Iterable[UploadFile], folder: str, name: str = "") -> 
     if len(uploads) == 1 and first_suffix in ARCHIVE_EXTENSIONS:
         spooled = _spool(uploads[0], first_suffix)
         try:
-            return import_archive(spooled, folder, name or fallback_name, first_suffix)
+            return import_archive(spooled, folder, name or fallback_name, first_suffix, direct)
         finally:
             spooled.unlink(missing_ok=True)
     if len(uploads) == 1 and first_suffix in PDF_EXTENSIONS:
         payload = uploads[0].file.read()
         uploads[0].file.seek(0)
-        return import_pdf(payload, folder, name or fallback_name, dpi=200)
+        return import_pdf(payload, folder, name or fallback_name, dpi=200, direct=direct)
 
-    target, clean_name = _target_directory(folder, series_name)
+    target, clean_name = _direct_directory(folder) if direct else _target_directory(folder, series_name)
     target.mkdir(parents=True, exist_ok=True)
     written_files = 0
     for upload in uploads:
@@ -350,7 +359,8 @@ def import_uploads(files: Iterable[UploadFile], folder: str, name: str = "") -> 
             continue
         written_files += 1
     if written_files == 0:
-        shutil.rmtree(target, ignore_errors=True)
+        if not direct:
+            shutil.rmtree(target, ignore_errors=True)
         raise HTTPException(status_code=400, detail="上传的文件为空")
     images, videos = _count(target)
     return ImportResult(

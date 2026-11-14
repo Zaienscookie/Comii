@@ -391,9 +391,10 @@ async def upload(
     files: list[UploadFile] = File(...),
     folder: str = Form(""),
     name: str = Form(""),
+    direct: bool = Form(False),
 ) -> ImportResult:
     _check_content_length(request)
-    return importers.import_uploads(files, folder, name)
+    return importers.import_uploads(files, folder, name, direct)
 
 
 @router.post("/import/pdf", response_model=ImportResult)

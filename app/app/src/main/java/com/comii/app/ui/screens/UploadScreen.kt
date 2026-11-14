@@ -60,6 +60,7 @@ fun UploadScreen(state: AppState, initialFolder: String, nav: NavHostController)
     var uris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var names by remember { mutableStateOf<List<String>>(emptyList()) }
     var folder by remember { mutableStateOf(initialFolder) }
+    var direct by remember { mutableStateOf(initialFolder.isNotBlank()) }
     var seriesName by remember { mutableStateOf("") }
     var uploading by remember { mutableStateOf(false) }
     var uploadedBytes by remember { mutableStateOf(0L) }
@@ -80,7 +81,7 @@ fun UploadScreen(state: AppState, initialFolder: String, nav: NavHostController)
         result = null
         scope.launch {
             runCatching {
-                state.repository.upload(uris, folder.trim(), seriesName.trim()) { bytes ->
+                state.repository.upload(uris, folder.trim(), seriesName.trim(), direct) { bytes ->
                     uploadedBytes += bytes
                 }
             }.onSuccess { import ->
@@ -151,40 +152,61 @@ fun UploadScreen(state: AppState, initialFolder: String, nav: NavHostController)
             }
 
             Spacer(Modifier.height(18.dp))
-            Text("系列名称（留空则用文件名）", fontSize = 12.sp, color = palette.textSecondary)
-            Spacer(Modifier.height(6.dp))
-            TextField(
-                value = seriesName,
-                onValueChange = { seriesName = it },
-                singleLine = true,
-                placeholder = { Text("例如：某漫画 第1卷", color = palette.textTertiary) },
-                shape = RoundedCornerShape(12.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = palette.card,
-                    unfocusedContainerColor = palette.card,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (direct) {
+                Text("上传到当前文件夹", fontSize = 12.sp, color = palette.textSecondary)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "/" + initialFolder.trim('/'),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = palette.textPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(palette.card, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "图片/视频会直接放进这个文件夹，不会再新建子文件夹。",
+                    fontSize = 12.sp,
+                    color = palette.textTertiary,
+                )
+            } else {
+                Text("系列名称（留空则用文件名）", fontSize = 12.sp, color = palette.textSecondary)
+                Spacer(Modifier.height(6.dp))
+                TextField(
+                    value = seriesName,
+                    onValueChange = { seriesName = it },
+                    singleLine = true,
+                    placeholder = { Text("例如：某漫画 第1卷", color = palette.textTertiary) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = palette.card,
+                        unfocusedContainerColor = palette.card,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
-            Spacer(Modifier.height(14.dp))
-            Text("目标文件夹（相对路径，留空为根目录）", fontSize = 12.sp, color = palette.textSecondary)
-            Spacer(Modifier.height(6.dp))
-            TextField(
-                value = folder,
-                onValueChange = { folder = it },
-                singleLine = true,
-                placeholder = { Text("例如：作者A", color = palette.textTertiary) },
-                shape = RoundedCornerShape(12.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = palette.card,
-                    unfocusedContainerColor = palette.card,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
+                Spacer(Modifier.height(14.dp))
+                Text("目标文件夹（相对路径，留空为根目录）", fontSize = 12.sp, color = palette.textSecondary)
+                Spacer(Modifier.height(6.dp))
+                TextField(
+                    value = folder,
+                    onValueChange = { folder = it },
+                    singleLine = true,
+                    placeholder = { Text("例如：作者A", color = palette.textTertiary) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = palette.card,
+                        unfocusedContainerColor = palette.card,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             Spacer(Modifier.height(24.dp))
             result?.let {
