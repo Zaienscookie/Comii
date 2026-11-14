@@ -39,7 +39,10 @@ class AppState(
     )
         private set
 
-    val isLoggedIn: Boolean get() = repository.settings.authToken.isNotBlank()
+    var authDisabled by mutableStateOf(false)
+        private set
+
+    val isLoggedIn: Boolean get() = authDisabled || repository.settings.authToken.isNotBlank()
 
     /** 切换服务器时递增，让照片/相册/系列界面强制丢弃旧服务器的数据与图片地址。 */
     var serverGeneration by mutableIntStateOf(0)
@@ -83,7 +86,27 @@ class AppState(
         repository.settings.themeMode = mode
     }
 
+    suspend fun checkServerAuth(): Boolean {
+        if (serverUrl.isBlank()) return false
+        val status = repository.authStatus(serverUrl)
+        authDisabled = !status.auth_enabled
+        if (authDisabled) return true
+        if (repository.settings.authToken.isBlank()) return false
+        return runCatching {
+            val me = repository.authMe()
+            authUsername = me.user.username
+            authRole = me.user.role
+            authGrants = me.grants
+            true
+        }.getOrElse {
+            repository.settings.authToken = ""
+            com.comii.app.data.AuthTokenProvider.token = ""
+            false
+        }
+    }
+
     suspend fun loginWithPassword(url: String, username: String, password: String): Unit {
+        authDisabled = false
         repository.settings.serverUrl = url.trim()
         serverUrl = url.trim()
         val response = repository.authLogin(url, username, password)
@@ -96,6 +119,7 @@ class AppState(
     }
 
     suspend fun loginWithToken(url: String, token: String): Unit {
+        authDisabled = false
         repository.settings.serverUrl = url.trim()
         serverUrl = url.trim()
         com.comii.app.data.AuthTokenProvider.token = token.trim()

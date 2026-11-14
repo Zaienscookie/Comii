@@ -27,6 +27,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -217,6 +219,28 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
             onConfirm = { entered = true },
             onQuit = { },
         )
+        return
+    }
+
+    if (!state.hasServer) {
+        SetupScreen(
+            state = state,
+            onDone = { },
+            onCancel = null,
+        )
+        return
+    }
+
+    var authChecked by remember { mutableStateOf(false) }
+    LaunchedEffect(state.serverUrl) {
+        authChecked = false
+        state.checkServerAuth()
+        authChecked = true
+    }
+    if (!authChecked) {
+        Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+            CircularProgressIndicator(color = ComiiTheme.palette.accent)
+        }
         return
     }
 

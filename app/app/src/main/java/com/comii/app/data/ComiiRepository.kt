@@ -126,6 +126,9 @@ class ComiiRepository(private val context: Context) {
         collection: String = "默认",
     ): ActionResult = requireApi().addFavorite(path, name, collection)
 
+    suspend fun authStatus(base: String = settings.serverUrl): AuthStatus =
+        ComiiApi(base.trim().trimEnd('/')).authStatus()
+
     suspend fun authLogin(base: String, username: String, password: String): AuthResponse {
         val api = ComiiApi(base.trim().trimEnd('/'))
         val response = api.authLogin(username, password)

@@ -153,6 +153,8 @@ class ComiiApi(val baseUrl: String) {
         return decode(post("/favorites", body))
     }
 
+    suspend fun authStatus(): AuthStatus = decode(get("/auth/status"))
+
     suspend fun authLogin(username: String, password: String, remember: Boolean = true): AuthResponse {
         val body = JSONObject().put("username", username).put("password", password).put("remember", remember).toString()
         return decode(post("/auth/login", body))

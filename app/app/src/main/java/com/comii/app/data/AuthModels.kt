@@ -37,3 +37,10 @@ data class AuthMe(
     val grants: List<AuthGrant> = emptyList(),
     val permissions: List<String> = emptyList(),
 )
+
+@Serializable
+data class AuthStatus(
+    val initialized: Boolean = false,
+    val auth_enabled: Boolean = true,
+    val version: String = "",
+)

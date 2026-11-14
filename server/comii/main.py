@@ -110,6 +110,9 @@ async def access_log(request: Request, call_next):
 
 async def auth_gate(request: Request, call_next):
     path = request.url.path
+    if not auth.enabled():
+        request.state.user = auth.LOCAL_OWNER
+        return await call_next(request)
     if auth.public_path(path):
         return await call_next(request)
     if path.startswith("/api/"):
@@ -297,4 +300,5 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
 

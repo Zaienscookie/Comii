@@ -24,7 +24,7 @@ def _cookie(response: Response, request: Request, token: str, remember: bool) ->
 
 @router.get("/auth/status")
 def status() -> dict:
-    return {"initialized": auth.initialized(), "version": settings.version}
+    return {"initialized": auth.initialized(), "auth_enabled": auth.enabled(), "version": settings.version}
 
 
 @router.post("/auth/setup")
@@ -32,6 +32,7 @@ def setup(payload: dict, request: Request, response: Response) -> dict:
     username = str(payload.get("username") or "")
     password = str(payload.get("password") or "")
     user = auth.setup_owner(username, password)
+    auth.audit(user, "setup", "/auth/setup", 200, request.client.host if request.client else "", request.headers.get("user-agent", ""))
     token, expires = auth.create_session(int(user["id"]), True, request.headers.get("user-agent", ""))
     _cookie(response, request, token, True)
     return {"token": token, "expires_at": expires, **auth.session_payload(user)}
@@ -44,9 +45,12 @@ def login(payload: dict, request: Request, response: Response) -> dict:
     remember = bool(payload.get("remember", True))
     user = auth.find_user(username)
     if user is None or not user["enabled"]:
+        auth.audit(None, "login_failed", "/auth/login", 401, request.client.host if request.client else "", request.headers.get("user-agent", ""), username)
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     if not auth._verify_password(password, _password_hash(int(user["id"]))):
+        auth.audit(user, "login_failed", "/auth/login", 401, request.client.host if request.client else "", request.headers.get("user-agent", ""), username)
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    auth.audit(user, "login", "/auth/login", 200, request.client.host if request.client else "", request.headers.get("user-agent", ""))
     token, expires = auth.create_session(int(user["id"]), remember, request.headers.get("user-agent", ""))
     _cookie(response, request, token, remember)
     return {"token": token, "expires_at": expires, **auth.session_payload(user)}
@@ -62,7 +66,9 @@ def _password_hash(user_id: int) -> str:
 
 @router.post("/auth/logout")
 def logout(request: Request, response: Response) -> dict:
+    user = auth.user_from_request(request)
     auth.revoke_session(auth.bearer_token(request))
+    auth.audit(user, "logout", "/auth/logout", 200, request.client.host if request.client else "", request.headers.get("user-agent", ""))
     response.delete_cookie(auth.COOKIE_NAME, path="/")
     return {"status": "ok"}
 
@@ -184,6 +190,12 @@ def delete_token(token_id: int, request: Request) -> dict:
     return {"status": "ok"}
 
 
+@router.get("/admin/audit")
+def audit_log(request: Request, limit: int = 200) -> dict:
+    _owner(request)
+    return {"items": auth.list_audit(limit)}
+
+
 @router.get("/admin/users/{user_id}/grants")
 def get_grants(user_id: int, request: Request) -> dict:
     _owner(request)
@@ -195,4 +207,5 @@ def put_grants(user_id: int, payload: dict, request: Request) -> dict:
     _owner(request)
     auth.set_grants(user_id, payload.get("items") or [])
     return {"status": "ok", "items": auth.grants_for(user_id)}
+
 

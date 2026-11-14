@@ -65,6 +65,13 @@ a{color:#0a84ff}
   </div>
 
   <div class="card">
+    <h3>审计日志</h3>
+    <div class="sub">登录、失败登录、修改操作；默认保留 30 天。</div>
+    <button onclick="loadAudit()">刷新日志</button>
+    <table style="margin-top:10px"><thead><tr><th>时间</th><th>用户</th><th>动作</th><th>路径</th><th>状态</th><th>IP</th></tr></thead><tbody id="audit"></tbody></table>
+  </div>
+
+  <div class="card">
     <h3>API Token</h3>
     <div class="sub">给 App 或 Cloudflare 外部访问用，只显示一次。</div>
     <select id="tokenUser"></select>
@@ -121,6 +128,13 @@ async function createToken(){
   const id=tokenUser.value; if(!id) return;
   const data=await api('/api/v1/admin/users/'+id+'/tokens',{method:'POST',body:JSON.stringify({name:tokenName.value,days:Number(tokenDays.value)||30})});
   tokenOut.innerHTML='<div class="sub">Token 只显示一次，请保存：</div><div class="token">'+escapeHtml(data.token)+'</div>';
+}
+async function loadAudit(){
+  const data=await api('/api/v1/admin/audit?limit=200');
+  document.getElementById('audit').innerHTML=(data.items||[]).map(row=>{
+    const d=new Date(row.ts*1000).toLocaleString();
+    return `<tr><td>${d}</td><td>${escapeHtml(row.username||'')}</td><td>${escapeHtml(row.action||'')}</td><td>${escapeHtml(row.path||'')}</td><td>${row.status||''}</td><td>${escapeHtml(row.ip||'')}</td></tr>`;
+  }).join('');
 }
 load();
 </script>

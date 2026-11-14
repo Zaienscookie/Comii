@@ -43,7 +43,7 @@ fun LoginScreen(state: AppState) {
     var token by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var mode by remember { mutableStateOf(0) } // 0 token, 1 password
+    var mode by remember { mutableStateOf(1) } // 0 token, 1 password
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -169,4 +169,5 @@ fun LoginScreen(state: AppState) {
         )
     }
 }
+
 

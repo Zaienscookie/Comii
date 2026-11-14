@@ -71,6 +71,18 @@ def ensure_schema() -> None:
                 last_used_at REAL,
                 revoked INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts REAL NOT NULL,
+                user_id INTEGER,
+                username TEXT,
+                action TEXT NOT NULL,
+                path TEXT,
+                status INTEGER,
+                ip TEXT,
+                user_agent TEXT,
+                detail TEXT
+            );
             CREATE TABLE IF NOT EXISTS grants (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
@@ -121,6 +133,13 @@ def _row_user(row: sqlite3.Row) -> dict[str, Any]:
         "last_login_at": row["last_login_at"],
     }
 
+
+def enabled() -> bool:
+    """Auth can be disabled for a trusted/local server (e.g. frp neko)."""
+    return os.environ.get("COMII_AUTH_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+
+LOCAL_OWNER = {"id": 0, "username": "local", "role": "owner", "enabled": True, "created_at": 0, "last_login_at": 0}
 
 def initialized() -> bool:
     ensure_schema()
@@ -247,6 +266,8 @@ def bearer_token(request: Request) -> str:
 
 
 def user_from_request(request: Request) -> Optional[dict[str, Any]]:
+    if not enabled():
+        return dict(LOCAL_OWNER)
     user = getattr(request.state, "user", None)
     if user is not None:
         return user
@@ -254,6 +275,8 @@ def user_from_request(request: Request) -> Optional[dict[str, Any]]:
 
 
 def require_user(request: Request) -> dict[str, Any]:
+    if not enabled():
+        return dict(LOCAL_OWNER)
     user = user_from_request(request)
     if user is None:
         raise HTTPException(
@@ -381,6 +404,57 @@ def session_payload(user: dict[str, Any]) -> dict[str, Any]:
         "grants": grants_for(int(user["id"])) if user["role"] == "custom" else [],
         "permissions": list(ACTIONS),
     }
+
+
+
+
+AUDIT_RETENTION_DAYS = 30
+
+
+def audit(
+    user: Optional[dict[str, Any]],
+    action: str,
+    path: str = "",
+    status: int = 0,
+    ip: str = "",
+    user_agent: str = "",
+    detail: str = "",
+) -> None:
+    try:
+        now = time.time()
+        with _connect() as db:
+            db.execute(
+                "INSERT INTO audit_logs(ts,user_id,username,action,path,status,ip,user_agent,detail) "
+                "VALUES(?,?,?,?,?,?,?,?,?)",
+                (
+                    now,
+                    int(user["id"]) if user else None,
+                    user["username"] if user else "",
+                    action,
+                    path[:500],
+                    status,
+                    ip[:100],
+                    user_agent[:300],
+                    detail[:500],
+                ),
+            )
+            db.execute(
+                "DELETE FROM audit_logs WHERE ts < ?",
+                (now - AUDIT_RETENTION_DAYS * 24 * 3600,),
+            )
+    except Exception:
+        pass
+
+
+def list_audit(limit: int = 200) -> list[dict[str, Any]]:
+    limit = max(1, min(1000, int(limit)))
+    with _connect() as db:
+        rows = db.execute(
+            "SELECT id,ts,user_id,username,action,path,status,ip,user_agent,detail "
+            "FROM audit_logs ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def public_path(path: str) -> bool:
