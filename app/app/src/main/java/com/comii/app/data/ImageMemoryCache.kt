@@ -10,7 +10,7 @@ import android.util.LruCache
  * 再次打开相邻图片时直接复用，不再重新下载/解码。
  */
 object ImageMemoryCache {
-    private val maxKb = (Runtime.getRuntime().maxMemory() / 1024 / 10).toInt().coerceAtLeast(16 * 1024)
+    private val maxKb = (Runtime.getRuntime().maxMemory() / 1024 / 6).toInt().coerceAtLeast(16 * 1024)
     private val cache = object : LruCache<String, Bitmap>(maxKb) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
     }

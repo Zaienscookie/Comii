@@ -64,6 +64,8 @@ class AppState(
     var photosItems by mutableStateOf<List<GalleryItem>>(emptyList())
     var photosTotal by mutableIntStateOf(0)
     var photosLoaded by mutableStateOf(false)
+    var photosGeneration by mutableIntStateOf(-1)
+    var libraryGeneration by mutableIntStateOf(-1)
     var photosScrollIndex by mutableIntStateOf(0)
     var photosScrollOffset by mutableIntStateOf(0)
 

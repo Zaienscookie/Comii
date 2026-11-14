@@ -1048,7 +1048,8 @@ private fun ReaderPageImage(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (fullHeight) Modifier.height(pageHeight) else Modifier),
+            .then(if (fullHeight) Modifier.height(pageHeight) else Modifier)
+            .then(gestureModifier),
         contentAlignment = Alignment.TopCenter,
     ) {
         val imageRequest = ImageRequest.Builder(context).data(model).crossfade(false).build()
@@ -1081,7 +1082,6 @@ private fun ReaderPageImage(
                     onSuccess = rememberLoaded,
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(gestureModifier)
                         .then(zoomModifier),
                 )
             } else {
@@ -1104,7 +1104,6 @@ private fun ReaderPageImage(
                             onSuccess = rememberLoaded,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .then(gestureModifier)
                                 .then(zoomModifier),
                         )
                     }
@@ -1119,7 +1118,6 @@ private fun ReaderPageImage(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
-                    .then(gestureModifier)
                     .then(zoomModifier),
             )
         }

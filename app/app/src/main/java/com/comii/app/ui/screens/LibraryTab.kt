@@ -205,7 +205,9 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
 
     LaunchedEffect(path, refreshKey, state.serverGeneration) { reload() }
     LaunchedEffect(state.serverGeneration) {
-        if (state.serverGeneration > 0) {
+        // 只在换服务器/重新登录时重置，切 Tab 回来保留原路径和滚动位置
+        if (state.serverGeneration != state.libraryGeneration) {
+            state.libraryGeneration = state.serverGeneration
             history.clear()
             path = ""
             selected = emptySet()

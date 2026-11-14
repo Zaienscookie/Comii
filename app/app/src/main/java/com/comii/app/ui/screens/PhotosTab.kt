@@ -112,8 +112,10 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
             .distinctUntilChanged()
             .collect { (index, offset) ->
-                state.photosScrollIndex = index
-                state.photosScrollOffset = offset
+                if (items.isNotEmpty() && !loading) {
+                    state.photosScrollIndex = index
+                    state.photosScrollOffset = offset
+                }
             }
     }
 
@@ -157,12 +159,15 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     }
 
     LaunchedEffect(refreshKey, state.serverGeneration) {
-        if (state.serverGeneration > 0) {
+        // 只有切换服务器 / 重新登录（generation 变化）才清空；切 Tab 回来直接用缓存
+        val switched = state.serverGeneration != state.photosGeneration
+        if (switched) {
+            state.photosGeneration = state.serverGeneration
             items = emptyList()
             total = 0
             loading = true
         }
-        loadFirst(force = refreshKey > 0 || state.serverGeneration > 0)
+        loadFirst(force = refreshKey > 0 || switched)
     }
 
     LaunchedEffect(gridState, items.size, total) {
