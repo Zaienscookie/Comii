@@ -541,6 +541,18 @@ fun ReaderScreen(
         }
     }
 
+    val readerActivity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val window = readerActivity?.window
+        val controller = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
+        controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        controller?.systemBarsBehavior =
+            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        onDispose {
+            controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         when {
             loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1028,8 +1040,11 @@ private fun ReaderPageImage(
                     }
                     event.changes.forEach { it.consume() }
                 } else if (zoom > 1.01f) {
-                    panOffset += panChange
-                    event.changes.forEach { it.consume() }
+                    val moved = kotlin.math.abs(panChange.x) + kotlin.math.abs(panChange.y)
+                    if (moved > 0.6f) {
+                        panOffset += panChange
+                        event.changes.forEach { it.consume() }
+                    }
                 }
             } while (event.changes.any { it.pressed })
         }
