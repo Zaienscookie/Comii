@@ -97,7 +97,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 2.28.0")
+        LargeTitle("设置", "Comii 2.29.0")
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -144,12 +144,12 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
                 Text("图片清晰度", fontSize = 14.sp, color = palette.textPrimary)
                 Spacer(Modifier.height(10.dp))
                 SegmentControl(
-                    options = listOf("原图", "高清", "标准", "流畅", "省流"),
+                    options = listOf("原图", "高清", "标准", "流畅"),
                     selectedIndex = qualityIndex,
                     onSelect = {
                         qualityIndex = it
                         repository.settings.imageQuality =
-                            listOf("original", "high", "standard", "smooth", "low")[it]
+                            listOf("original", "high", "standard", "smooth")[it]
                     },
                 )
                 Spacer(Modifier.height(6.dp))
@@ -377,6 +377,8 @@ private fun ToggleRow(
         )
     }
 }
+
+
 
 
 

@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.Share
@@ -80,15 +81,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.comii.app.data.Http
 import com.comii.app.ui.AppState
 import com.comii.app.ui.components.BottomSheet
 import com.comii.app.ui.components.SegmentControl
 import com.comii.app.ui.theme.ComiiTheme
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val ALL_PROGRESS_KEY = "__comii_all__"
 
@@ -146,8 +151,10 @@ fun ReaderScreen(
     var manualLandscape by remember { mutableStateOf(false) }
     var showGrid by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
+    var showEditMenu by remember { mutableStateOf(false) }
     var current by remember { mutableIntStateOf(0) }
     var initializing by remember { mutableStateOf(allMode) }
+    val viewMode = if (allMode) "horizontal" else mode
 
     val listState = rememberLazyListState()
     val filmState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -179,7 +186,7 @@ fun ReaderScreen(
     fun goTo(index: Int) {
         val target = index.coerceIn(0, (names.size - 1).coerceAtLeast(0))
         scope.launch {
-            if (mode == "horizontal") pagerState.scrollToPage(target) else listState.scrollToItem(target)
+            if (viewMode == "horizontal") pagerState.scrollToPage(target) else listState.scrollToItem(target)
         }
         current = target
     }
@@ -194,20 +201,47 @@ fun ReaderScreen(
     }
 
     fun shareCurrent() {
-        val url = if (allMode) {
-            allItems.getOrNull(current)?.let { serverBase?.imageUrl(it.series_path, it.name) }
-        } else {
-            serverBase?.imageUrl(path, names.getOrNull(current) ?: return)
+        val item = if (allMode) allItems.getOrNull(current) else null
+        val name = item?.name ?: names.getOrNull(current) ?: return
+        val series = item?.series_path ?: path
+        val url = serverBase?.imageUrl(series, name)
+        val local = localDir?.let { File(it, name) }
+        scope.launch {
+            val uri = runCatching {
+                withContext(Dispatchers.IO) {
+                    val directory = File(context.cacheDir, "share").apply { mkdirs() }
+                    val target = File(directory, "${System.currentTimeMillis()}_${name.substringAfterLast('/')}")
+                    if (local != null && local.isFile) {
+                        local.copyTo(target, overwrite = true)
+                    } else {
+                        val link = url ?: error("没有可分享的原图")
+                        Http.client.newCall(
+                            okhttp3.Request.Builder().url(link).get().build()
+                        ).execute().use { response ->
+                            if (!response.isSuccessful) error("下载原图失败")
+                            val body = response.body ?: error("下载原图失败")
+                            body.byteStream().use { input ->
+                                target.outputStream().use { output -> input.copyTo(output) }
+                            }
+                        }
+                    }
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        target,
+                    )
+                }
+            }.getOrElse {
+                state.showToast("分享失败：${it.message}")
+                return@launch
+            }
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "image/*"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "分享原图"))
         }
-        if (url.isNullOrBlank()) {
-            state.showToast("离线图片暂不支持分享")
-            return
-        }
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, url)
-        }
-        context.startActivity(Intent.createChooser(intent, "分享图片"))
     }
 
     fun deleteCurrent() {
@@ -259,7 +293,7 @@ fun ReaderScreen(
         title = items.getOrNull(current)?.series_name ?: "全部"
         loading = false
         delay(60)
-        if (mode == "horizontal") pagerState.scrollToPage(current) else listState.scrollToItem(current)
+        if (viewMode == "horizontal") pagerState.scrollToPage(current) else listState.scrollToItem(current)
         delay(80)
         initializing = false
     }
@@ -301,7 +335,7 @@ fun ReaderScreen(
         val saved = current
         if (saved > 0 && names.isNotEmpty()) {
             delay(60)
-            if (mode == "horizontal") pagerState.scrollToPage(saved) else listState.scrollToItem(saved)
+            if (viewMode == "horizontal") pagerState.scrollToPage(saved) else listState.scrollToItem(saved)
             current = saved
         }
     }
@@ -311,7 +345,7 @@ fun ReaderScreen(
         delay(40)
         val target = current
         if (current > 0) {
-            if (mode == "horizontal") pagerState.scrollToPage(target) else listState.scrollToItem(target)
+            if (viewMode == "horizontal") pagerState.scrollToPage(target) else listState.scrollToItem(target)
         }
     }
 
@@ -388,7 +422,7 @@ fun ReaderScreen(
                             }
                         }
                 ) {
-                    if (mode == "horizontal") {
+                    if (viewMode == "horizontal") {
                         HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                             ReaderPageImage(
                                 model = pageModel(page),
@@ -438,6 +472,9 @@ fun ReaderScreen(
                 Text("${current + 1} / ${names.size}", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
                 IconButton(onClick = { showGrid = true }) {
                     Icon(Icons.Rounded.GridView, contentDescription = "页码", tint = Color.White)
+                }
+                IconButton(onClick = { showEditMenu = true }) {
+                    Icon(Icons.Rounded.Edit, contentDescription = "编辑", tint = Color.White)
                 }
                 IconButton(onClick = {
                     val next = !manualLandscape
@@ -537,6 +574,32 @@ fun ReaderScreen(
                         Text("删除", color = Color.White, fontSize = 12.sp)
                     }
                 }
+            }
+        }
+    }
+
+    if (showEditMenu) {
+        BottomSheet(onDismiss = { showEditMenu = false }) {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                Text("编辑", color = palette.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp))
+                TextButton(onClick = {
+                    showEditMenu = false
+                    shareCurrent()
+                }) {
+                    Icon(Icons.Rounded.Share, contentDescription = null, tint = palette.accent, modifier = Modifier.size(19.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("分享原图", color = palette.textPrimary, fontSize = 15.sp)
+                }
+                TextButton(onClick = {
+                    showEditMenu = false
+                    deleteCurrent()
+                }) {
+                    Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = palette.danger, modifier = Modifier.size(19.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("删除", color = palette.danger, fontSize = 15.sp)
+                }
+                Spacer(Modifier.height(16.dp))
             }
         }
     }
@@ -758,3 +821,4 @@ private fun ReaderPageImage(
         }
     }
 }
+

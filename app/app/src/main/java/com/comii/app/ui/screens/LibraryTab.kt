@@ -389,7 +389,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     subtitle = if (showingSearch) "换个关键词试试" else "点右上角「+」新建相册，或从菜单里导入内容",
                 )
                 else -> LazyVerticalGrid(
-                    columns = GridCells.Fixed(if (path.isEmpty()) 3 else 4),
+                    columns = GridCells.Fixed(4),
                     state = gridState,
                     contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 4.dp, bottom = 120.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -403,7 +403,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                             progress = if (showingSearch) null else progressMap[node.path],
                             editing = editing && !showingSearch,
                             selected = selected.contains(node.path),
-                            compact = path.isNotEmpty(),
+                            compact = true,
                             onClick = {
                                 if (editing && !showingSearch) {
                                     selected = if (selected.contains(node.path)) selected - node.path else selected + node.path
@@ -422,15 +422,6 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                         )
                     }
                     if (media.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Text(
-                                "本相册内容 · $mediaCount 项",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = palette.textSecondary,
-                                modifier = Modifier.padding(start = 2.dp, top = 8.dp),
-                            )
-                        }
                         items(media, key = { "media:${it.name}:${it.index}" }) { entry ->
                             val model = state.repository.apiOrNull()?.let { api ->
                                 if (entry.isVideo) api.videoThumbUrl(path, entry.name) else api.thumbUrl(path, entry.name)
@@ -1352,3 +1343,4 @@ private suspend fun shareMedia(
     }
     context.startActivity(android.content.Intent.createChooser(intent, "分享"))
 }
+

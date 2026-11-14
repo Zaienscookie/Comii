@@ -1,4 +1,4 @@
-package com.comii.app
+﻿package com.comii.app
 
 import android.app.Activity
 import android.app.Application
@@ -90,13 +90,13 @@ class ComiiApplication : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .memoryCache {
             MemoryCache.Builder(this)
-                .maxSizePercent(0.20)
+                .maxSizePercent(0.25)
                 .build()
         }
         .diskCache {
             DiskCache.Builder()
                 .directory(cacheDir.resolve("comii-image-cache"))
-                .maxSizeBytes(2L * 1024 * 1024 * 1024)
+                .maxSizeBytes(4L * 1024 * 1024 * 1024)
                 .build()
         }
         // 媒体接口没有强缓存头，强制使用磁盘缓存，退出重进不再重新下载
@@ -368,3 +368,4 @@ private fun EntryGate(onConfirm: () -> Unit, onQuit: () -> Unit) {
         )
     }
 }
+
