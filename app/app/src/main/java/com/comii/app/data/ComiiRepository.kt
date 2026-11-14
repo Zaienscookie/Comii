@@ -13,9 +13,12 @@ import java.net.Socket
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -30,6 +33,8 @@ class ComiiRepository(private val context: Context) {
 
     val settings = SettingsStore(context)
     val offline = OfflineStore(context)
+    /** 下载不跟页面生命周期绑定；切 Tab/退出页面也能继续。 */
+    private val downloadScope = kotlinx.coroutines.CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     data class FolderEntry(val path: String, val name: String, val depth: Int)
 
@@ -128,8 +133,7 @@ class ComiiRepository(private val context: Context) {
      * named after the folder, so a whole author / category is available offline.
      */
     suspend fun downloadFolder(path: String, onProgress: (Int, Int) -> Unit = { _, _ -> }): Int =
-        withContext(Dispatchers.IO) {
-            val series = collectSeries(path)
+        withContext(Dispatchers.IO) {            val series = collectSeries(path)
             if (series.isEmpty()) throw ApiException(0, "这个文件夹里没有可下载的系列")
             val folderName = path.substringAfterLast('/').ifBlank { "未分类" }
             runCatching { offline.createCategory(folderName) }
@@ -370,6 +374,31 @@ class ComiiRepository(private val context: Context) {
                     onBytes(read)
                 }
             }
+        }
+    }
+
+    fun startDownloadFolder(
+        path: String,
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+        onError: (Throwable) -> Unit = {},
+    ): Job = downloadScope.launch {
+        try {
+            downloadFolder(path, onProgress)
+        } catch (error: Throwable) {
+            onError(error)
+        }
+    }
+
+    fun startDownloadSeries(
+        path: String,
+        includeVideos: Boolean,
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+        onError: (Throwable) -> Unit = {},
+    ): Job = downloadScope.launch {
+        try {
+            downloadSeries(path, includeVideos, onProgress)
+        } catch (error: Throwable) {
+            onError(error)
         }
     }
 }

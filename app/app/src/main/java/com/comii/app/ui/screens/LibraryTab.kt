@@ -238,25 +238,22 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         downloadHidden = false
         if (node.isAlbum || node.isFolder) {
             downloadState = DownloadProgress(node.name, 0, 0, "个系列")
-            downloadJob = scope.launch {
-                runCatching {
-                    state.repository.downloadFolder(node.path) { done, total ->
-                        downloadState = DownloadProgress(node.name, done, total, "个系列")
-                    }
-                }.onSuccess { count -> state.showToast("已下载「${node.name}」$count 个系列") }
-                    .onFailure { state.showToast("下载失败：${it.message}") }
+            val job = state.repository.startDownloadFolder(node.path, onProgress = { done, total ->
+                downloadState = DownloadProgress(node.name, done, total, "个系列")
+            }, onError = { state.showToast("下载失败：${it.message}") })
+            downloadJob = job
+            scope.launch {
+                job.join()
                 downloadState = null
             }
         } else {
             downloadState = DownloadProgress(node.name, 0, 0, "页")
-            downloadJob = scope.launch {
-                runCatching {
-                    state.repository.downloadSeries(node.path, includeVideos = true) { done, total ->
-                        downloadState = DownloadProgress(node.name, done, total, "页")
-                    }
-                }.onSuccess { saved ->
-                    state.showToast("已下载「${node.name}」${formatBytes(saved.totalBytes)}")
-                }.onFailure { state.showToast("下载失败：${it.message}") }
+            val job = state.repository.startDownloadSeries(node.path, includeVideos = true, onProgress = { done, total ->
+                downloadState = DownloadProgress(node.name, done, total, "页")
+            }, onError = { state.showToast("下载失败：${it.message}") })
+            downloadJob = job
+            scope.launch {
+                job.join()
                 downloadState = null
             }
         }

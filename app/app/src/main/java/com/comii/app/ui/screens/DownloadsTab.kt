@@ -1,4 +1,4 @@
-package com.comii.app.ui.screens
+﻿package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -96,7 +96,7 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
     var version by remember { mutableIntStateOf(0) }
     var categories by remember { mutableStateOf(safeCategories(state)) }
     var activeCategory by rememberSaveable { mutableStateOf("") }
-    var layout by rememberSaveable { mutableStateOf(state.repository.settings.downloadsLayout) }
+    var layout by rememberSaveable { mutableStateOf("folders") }
     var mainFilter by rememberSaveable { mutableStateOf("all") }
     var editing by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
@@ -117,13 +117,7 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
         categories.filter { it.isNotBlank() && it != UNCATEGORIZED }.distinct()
     }
     val flatMode = layout == "flat"
-    val filteredSeries = remember(visibleSeries, mainFilter) {
-        when (mainFilter) {
-            "manga" -> visibleSeries.filter { it.kind == NodeKind.MANGA }
-            "video" -> visibleSeries.filter { it.kind == NodeKind.VIDEO }
-            else -> visibleSeries
-        }
-    }
+    val filteredSeries = visibleSeries
     val layoutOptions = when (mainFilter) {
         "manga" -> listOf("按文件夹", "全部图片")
         "video" -> listOf("按文件夹", "全部视频")
@@ -198,23 +192,6 @@ fun DownloadsTab(state: AppState, nav: NavHostController) {
             }
         }
         Spacer(Modifier.height(8.dp))
-        Column(Modifier.padding(horizontal = 20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CategoryChip("全部", activeCategory.isBlank()) { activeCategory = "" }
-                validCategories.forEach { name ->
-                    CategoryChip(name, activeCategory == name) { activeCategory = name }
-                }
-                Spacer(Modifier.weight(1f))
-                AddCategoryChip {
-                    sheetSeries = null
-                    startInCreate = true
-                    showCategorySheet = true
-                }
-            }
-        }
         Spacer(Modifier.height(10.dp))
 
         Box(Modifier.weight(1f)) {
@@ -477,8 +454,8 @@ private fun OfflineCard(
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.7f)
-                .clip(RoundedCornerShape(16.dp))
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(8.dp))
                 .background(palette.card)
         ) {
             if (cover != null) {
@@ -487,21 +464,6 @@ private fun OfflineCard(
                 VideoThumbnail(file = videoFile, modifier = Modifier.fillMaxSize())
             } else {
                 CoverImage(model = null, kind = item.kind, modifier = Modifier.fillMaxSize())
-            }
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .padding(horizontal = 7.dp, vertical = 3.dp)
-            ) {
-                Text(
-                    if (item.kind == NodeKind.VIDEO) "视频" else "漫画",
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                )
             }
             if (editing) {
                 Box(
@@ -522,7 +484,7 @@ private fun OfflineCard(
             item.name,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            fontSize = 13.5.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = palette.textPrimary,
             modifier = Modifier.padding(horizontal = 2.dp),
@@ -778,4 +740,5 @@ private fun CategorySheet(
         }
     }
 }
+
 
