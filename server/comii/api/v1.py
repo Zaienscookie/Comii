@@ -399,7 +399,8 @@ def set_folder_kind(request: Request, payload: SetFolderKindRequest) -> ActionRe
 
 
 @router.post("/rename", response_model=ActionResult)
-def rename(payload: RenameRequest) -> ActionResult:
+def rename(request: Request, payload: RenameRequest) -> ActionResult:
+    auth.require_path(request, payload.path, "manage")
     renamed = manage.rename(payload.path, payload.name)
     return ActionResult(status="ok", path=renamed)
 
@@ -468,7 +469,8 @@ def trash_sweep(request: Request) -> ActionResult:
 
 # ----------------------------------------------------------------- export
 @router.get("/export")
-def export(path: str, include_video: bool = True) -> FileResponse:
+def export(request: Request, path: str, include_video: bool = True) -> FileResponse:
+    auth.require_path(request, path, "download")
     handle, filename = archive.build_export(path, include_video=include_video)
     return FileResponse(
         handle,
@@ -542,8 +544,9 @@ def progress_update(payload: ProgressUpdate) -> ReadingProgress:
 
 
 @router.post("/album_cover", response_model=ActionResult)
-def set_album_cover(payload: AlbumCoverRequest) -> ActionResult:
+def set_album_cover(request: Request, payload: AlbumCoverRequest) -> ActionResult:
     """Use one series inside a folder as the folder card cover (empty = default)."""
+    auth.require_path(request, payload.path, "manage")
     library.set_album_cover(payload.path, payload.series)
     return ActionResult(status="ok", path=payload.path)
 

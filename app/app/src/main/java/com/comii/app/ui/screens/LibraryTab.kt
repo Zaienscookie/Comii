@@ -666,34 +666,53 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 }
                 Spacer(Modifier.height(14.dp))
                 SheetAction("打开") { sheetItem = null; openNode(node) }
-                SheetAction("重命名") { sheetItem = null; dialog = LibraryDialog.Rename(node) }
-                SheetAction("剪切") { sheetItem = null; cutSelection(listOf(node)) }
+                if (state.can("manage", node.path)) {
+                    SheetAction("重命名") { sheetItem = null; dialog = LibraryDialog.Rename(node) }
+                }
+                if (state.can("move", node.path)) {
+                    SheetAction("剪切") { sheetItem = null; cutSelection(listOf(node)) }
+                }
                 if (node.isAlbum || node.isFolder) {
-                    SheetAction("设为相册封面") {
-                        sheetItem = null
-                        if (path.isEmpty()) {
-                            state.showToast("请先进入一个相册")
-                        } else {
+                    if (state.can("manage", node.path)) {
+                        SheetAction("设为相册封面") {
+                            sheetItem = null
+                            if (path.isEmpty()) {
+                                state.showToast("请先进入一个相册")
+                            } else {
+                                scope.launch {
+                                    runCatching { state.repository.setAlbumCover(path, node.path) }
+                                        .onSuccess { state.showToast("已设为相册封面"); refreshKey++ }
+                                        .onFailure { state.showToast("设置失败：${it.message}") }
+                                }
+                            }
+                        }
+                        SheetAction("恢复默认封面") {
+                            sheetItem = null
                             scope.launch {
-                                runCatching { state.repository.setAlbumCover(path, node.path) }
-                                    .onSuccess { state.showToast("已设为相册封面"); refreshKey++ }
-                                    .onFailure { state.showToast("设置失败：${it.message}") }
+                                runCatching { state.repository.setAlbumCover(node.path, "") }
+                                    .onSuccess { state.showToast("已恢复默认封面"); refreshKey++ }
+                                    .onFailure { state.showToast("操作失败：${it.message}") }
+                            }
+                        }
+                        SheetAction("收藏到收藏夹") {
+                            sheetItem = null
+                            scope.launch {
+                                runCatching { state.repository.addFavorite(node.path) }
+                                    .onSuccess { state.showToast("已收藏到收藏夹") }
+                                    .onFailure { state.showToast("收藏失败：${it.message}") }
                             }
                         }
                     }
-                    SheetAction("恢复默认封面") {
-                        sheetItem = null
-                        scope.launch {
-                            runCatching { state.repository.setAlbumCover(node.path, "") }
-                                .onSuccess { state.showToast("已恢复默认封面"); refreshKey++ }
-                                .onFailure { state.showToast("操作失败：${it.message}") }
-                        }
+                    if (state.can("download", node.path)) {
+                        SheetAction("下载整个相册") { sheetItem = null; startDownload(node) }
                     }
-                    SheetAction("收藏到收藏夹") { sheetItem = null; scope.launch { runCatching { state.repository.addFavorite(node.path) }.onSuccess { state.showToast("已收藏到收藏夹") }.onFailure { state.showToast("收藏失败：${it.message}") } } }
-                SheetAction("下载整个相册") { sheetItem = null; startDownload(node) }
                 } else {
-                    SheetAction("设置封面") { sheetItem = null; dialog = LibraryDialog.SetCover(node) }
-                    SheetAction("下载到本地") { sheetItem = null; startDownload(node) }
+                    if (state.can("manage", node.path)) {
+                        SheetAction("设置封面") { sheetItem = null; dialog = LibraryDialog.SetCover(node) }
+                    }
+                    if (state.can("download", node.path)) {
+                        SheetAction("下载到本地") { sheetItem = null; startDownload(node) }
+                    }
                 }
                 if (state.can("manage", node.path)) {
                     SheetAction("标签…") { sheetItem = null; tagTargets = listOf(node.path) }
