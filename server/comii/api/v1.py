@@ -177,7 +177,7 @@ def add_favorite(request: Request, payload: dict) -> ActionResult:
     """
     raw_path = str(payload.get("path") or "").strip()
     name = str(payload.get("name") or "").strip()
-    auth.require_path(request, raw_path, "view")
+    auth.require_path(request, raw_path, "manage")
     collection = str(payload.get("collection") or "默认").strip() or "默认"
     collection = Path(collection).name
     root = library.library_root()
@@ -439,25 +439,29 @@ def delete_items(request: Request, payload: dict) -> BatchResult:
 
 # ------------------------------------------------------------------ trash
 @router.get("/trash", response_model=TrashListResponse)
-def trash_list() -> TrashListResponse:
+def trash_list(request: Request) -> TrashListResponse:
+    auth.require_path(request, "", "delete")
     entries = trash.list_entries()
     return TrashListResponse(items=entries, total=len(entries))
 
 
 @router.post("/trash/{entry_id}/restore", response_model=ActionResult)
-def trash_restore(entry_id: str) -> ActionResult:
+def trash_restore(request: Request, entry_id: str) -> ActionResult:
+    auth.require_path(request, "", "delete")
     restored = trash.restore(entry_id)
     return ActionResult(status="ok", path=restored, message="已恢复")
 
 
 @router.delete("/trash/{entry_id}", response_model=ActionResult)
-def trash_purge(entry_id: str) -> ActionResult:
+def trash_purge(request: Request, entry_id: str) -> ActionResult:
+    auth.require_path(request, "", "delete")
     trash.purge(entry_id)
     return ActionResult(status="ok", message="已彻底删除")
 
 
 @router.post("/trash/sweep", response_model=ActionResult)
-def trash_sweep() -> ActionResult:
+def trash_sweep(request: Request) -> ActionResult:
+    auth.require_path(request, "", "delete")
     removed = trash.sweep()
     return ActionResult(status="ok", message=f"已清理 {removed} 项")
 
@@ -556,14 +560,14 @@ def tags_all() -> TagsResponse:
 
 @router.post("/tags/create", response_model=TagCount)
 def tags_create(request: Request, payload: TagCreateRequest) -> TagCount:
-    auth.require_user(request)
+    auth.require_path(request, "", "manage")
     created = tags.create_tag(payload.name, payload.group)
     return TagCount(name=created["name"], count=0, group=created["group"])
 
 
 @router.delete("/tags/{name}", response_model=ActionResult)
 def tags_delete(request: Request, name: str) -> ActionResult:
-    auth.require_user(request)
+    auth.require_path(request, "", "manage")
     removed = tags.delete_tag(name)
     return ActionResult(status="ok", message=f"已从 {removed} 个相册移除标签")
 

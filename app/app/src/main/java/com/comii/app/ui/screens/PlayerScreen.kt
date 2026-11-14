@@ -52,9 +52,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavHostController
+import com.comii.app.data.AuthTokenProvider
 import com.comii.app.data.BassEffectController
 import com.comii.app.ui.AppState
 import com.comii.app.ui.components.BottomSheet
@@ -105,11 +108,23 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     }
 
     val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            playWhenReady = true
-            repeatMode = Player.REPEAT_MODE_ONE
-            setHandleAudioBecomingNoisy(true)
+        val headers = mutableMapOf<String, String>()
+        if (AuthTokenProvider.accessToken.isNotBlank()) {
+            headers["X-Comii-Token"] = AuthTokenProvider.accessToken
         }
+        if (AuthTokenProvider.token.isNotBlank()) {
+            headers["Authorization"] = "Bearer ${AuthTokenProvider.token}"
+        }
+        val dataSource = DefaultHttpDataSource.Factory()
+            .setDefaultRequestProperties(headers)
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
+            .build()
+            .apply {
+                playWhenReady = true
+                repeatMode = Player.REPEAT_MODE_ONE
+                setHandleAudioBecomingNoisy(true)
+            }
     }
     DisposableEffect(Unit) {
         onDispose { player.release() }

@@ -1701,7 +1701,14 @@ document.addEventListener("DOMContentLoaded", () => {
     .then((response) => response.ok ? response.json() : null)
     .then((data) => {
       const link = document.getElementById("adminLink");
-      if (link && data?.user?.role !== "owner") link.style.display = "none";
+      const role = data?.user?.role || "";
+      if (link && role !== "owner") link.style.display = "none";
+      if (role !== "owner" && role !== "admin") {
+        ["importToggle", "tagsToggle", "trashToggle", "editToggle"].forEach((id) => {
+          const button = document.getElementById(id);
+          if (button) button.style.display = "none";
+        });
+      }
     })
     .catch(() => {});
 });

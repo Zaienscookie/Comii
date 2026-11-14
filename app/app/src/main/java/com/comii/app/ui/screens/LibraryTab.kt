@@ -616,9 +616,15 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     if (menuOpen) {
         BottomSheet(onDismiss = { menuOpen = false }) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-                MenuRow("导入内容", Icons.Rounded.Upload) { menuOpen = false; nav.navigate(Routes.upload(path)) }
-                MenuRow("标签", Icons.Rounded.Sell) { menuOpen = false; nav.navigate("tags") }
-                MenuRow("回收站", Icons.Rounded.Delete) { menuOpen = false; nav.navigate("trash") }
+                if (state.can("upload", path)) {
+                    MenuRow("导入内容", Icons.Rounded.Upload) { menuOpen = false; nav.navigate(Routes.upload(path)) }
+                }
+                if (state.can("manage", path)) {
+                    MenuRow("标签", Icons.Rounded.Sell) { menuOpen = false; nav.navigate("tags") }
+                }
+                if (state.can("delete", path)) {
+                    MenuRow("回收站", Icons.Rounded.Delete) { menuOpen = false; nav.navigate("trash") }
+                }
                 MenuRow("刷新", Icons.Rounded.Refresh) { menuOpen = false; refreshKey++ }
                 Spacer(Modifier.height(14.dp))
             }
@@ -689,8 +695,12 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     SheetAction("设置封面") { sheetItem = null; dialog = LibraryDialog.SetCover(node) }
                     SheetAction("下载到本地") { sheetItem = null; startDownload(node) }
                 }
-                SheetAction("标签…") { sheetItem = null; tagTargets = listOf(node.path) }
-                SheetAction("删除", danger = true) { sheetItem = null; dialog = LibraryDialog.Delete(listOf(node)) }
+                if (state.can("manage", node.path)) {
+                    SheetAction("标签…") { sheetItem = null; tagTargets = listOf(node.path) }
+                }
+                if (state.can("delete", node.path)) {
+                    SheetAction("删除", danger = true) { sheetItem = null; dialog = LibraryDialog.Delete(listOf(node)) }
+                }
                 Spacer(Modifier.height(14.dp))
             }
         }

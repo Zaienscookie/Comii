@@ -619,20 +619,22 @@ fun ReaderScreen(
                     modifier = Modifier.weight(1f),
                 )
                 Text("${current + 1} / ${names.size}", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
-                IconButton(onClick = {
-                    showFavoritePicker = true
-                    scope.launch {
-                        runCatching { repository.favoriteStatus(currentPair()?.first ?: "", currentPair()?.second ?: "") }
-                            .onSuccess { (_, collections) ->
-                                if (collections.isNotEmpty()) favoriteCollections = collections
-                            }
+                if (state.can("manage", currentPair()?.first ?: "")) {
+                    IconButton(onClick = {
+                        showFavoritePicker = true
+                        scope.launch {
+                            runCatching { repository.favoriteStatus(currentPair()?.first ?: "", currentPair()?.second ?: "") }
+                                .onSuccess { (_, collections) ->
+                                    if (collections.isNotEmpty()) favoriteCollections = collections
+                                }
+                        }
+                    }) {
+                        Icon(
+                            if (favoriteMark) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            contentDescription = "收藏",
+                            tint = if (favoriteMark) Color(0xFFFFCC00) else Color.White,
+                        )
                     }
-                }) {
-                    Icon(
-                        if (favoriteMark) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                        contentDescription = "收藏",
-                        tint = if (favoriteMark) Color(0xFFFFCC00) else Color.White,
-                    )
                 }
                 IconButton(onClick = { showMoreMenu = true }) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = "更多", tint = Color.White)
