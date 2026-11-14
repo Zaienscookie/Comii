@@ -1,6 +1,7 @@
 package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +68,7 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
     var items by remember { mutableStateOf<List<GalleryItem>>(emptyList()) }
     var collections by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedCollection by remember { mutableStateOf("") }
+    var pendingDelete by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var showCreate by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
@@ -108,9 +110,14 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
                 .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            CollectionChip("全部", selectedCollection.isBlank()) { selectedCollection = "" }
+            CollectionChip("全部", selectedCollection.isBlank(), onClick = { selectedCollection = "" })
             collections.forEach { name ->
-                CollectionChip(name, selectedCollection == name) { selectedCollection = name }
+                CollectionChip(
+                    name,
+                    selectedCollection == name,
+                    onClick = { selectedCollection = name },
+                    onLongClick = { pendingDelete = name },
+                )
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -209,14 +216,20 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
 }
 
 @Composable
-private fun CollectionChip(text: String, active: Boolean, onClick: () -> Unit) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun CollectionChip(
+    text: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+) {
     val palette = ComiiTheme.palette
-    TextButton(
-        onClick = onClick,
-        modifier = Modifier
+    Box(
+        Modifier
             .clip(RoundedCornerShape(18.dp))
             .background(if (active) palette.accent else palette.card)
-            .padding(horizontal = 4.dp),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
         Text(text, color = if (active) Color.White else palette.textPrimary, fontSize = 13.sp)
     }

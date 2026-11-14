@@ -612,7 +612,12 @@ fun ReaderScreen(
             }
         }
 
-        if (showBar && names.isNotEmpty()) {
+        var favorited by remember { mutableStateOf(false) }
+    LaunchedEffect(path) {
+        favorited = runCatching { state.repository.favoriteStatus(path, "").first }.getOrDefault(false)
+    }
+
+    if (showBar && names.isNotEmpty()) {
             // top bar
             Row(
                 modifier = Modifier

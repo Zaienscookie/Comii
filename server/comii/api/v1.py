@@ -304,6 +304,21 @@ def delete_highlight(request: Request, path: str, name: str, time_ms: int) -> di
     return {"items": data[key]}
 
 
+@router.post("/highlights/delete")
+def delete_highlight_post(request: Request, payload: dict) -> dict:
+    return delete_highlight(
+        request,
+        str(payload.get("path") or ""),
+        str(payload.get("name") or ""),
+        int(payload.get("time_ms") or 0),
+    )
+
+
+@router.post("/favorites/collection/delete", response_model=ActionResult)
+def delete_favorite_collection_post(request: Request, payload: dict) -> ActionResult:
+    return delete_favorite_collection(request, str(payload.get("name") or ""))
+
+
 @router.get("/favorites/status")
 def favorite_status(request: Request, path: str = "", name: str = "") -> dict:
     user = auth.require_user(request)
@@ -539,21 +554,24 @@ def delete_items(request: Request, payload: dict) -> BatchResult:
 @router.get("/trash", response_model=TrashListResponse)
 def trash_list(request: Request) -> TrashListResponse:
     auth.require_path(request, "", "delete")
-    entries = trash.list_entries()
+    entries = trash.list_entries() + media_trash.list_entries()
     return TrashListResponse(items=entries, total=len(entries))
 
 
 @router.post("/trash/{entry_id}/restore", response_model=ActionResult)
 def trash_restore(request: Request, entry_id: str) -> ActionResult:
     auth.require_path(request, "", "delete")
-    restored = trash.restore(entry_id)
+    restored = media_trash.restore(entry_id) if entry_id.startswith("media|") else trash.restore(entry_id)
     return ActionResult(status="ok", path=restored, message="已恢复")
 
 
 @router.delete("/trash/{entry_id}", response_model=ActionResult)
 def trash_purge(request: Request, entry_id: str) -> ActionResult:
     auth.require_path(request, "", "delete")
-    trash.purge(entry_id)
+    if entry_id.startswith("media|"):
+        media_trash.purge(entry_id)
+    else:
+        trash.purge(entry_id)
     return ActionResult(status="ok", message="已彻底删除")
 
 

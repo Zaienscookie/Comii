@@ -157,6 +157,34 @@ class ComiiApi(val baseUrl: String) {
         return decode(post("/favorites/remove", body))
     }
 
+    suspend fun highlights(path: String, name: String): List<Pair<Long, String>> {
+        val text = get("/highlights?path=${encode(path)}&name=${encode(name)}")
+        val array = JSONObject(text).optJSONArray("items")
+        val result = mutableListOf<Pair<Long, String>>()
+        if (array != null) {
+            for (i in 0 until array.length()) {
+                val item = array.optJSONObject(i) ?: continue
+                result += item.optLong("time_ms") to item.optString("label")
+            }
+        }
+        return result.sortedBy { it.first }
+    }
+
+    suspend fun addHighlight(path: String, name: String, timeMs: Long, label: String = ""): Unit {
+        val body = JSONObject().put("path", path).put("name", name).put("time_ms", timeMs).put("label", label).toString()
+        decode<ActionResult>(post("/highlights", body))
+    }
+
+    suspend fun removeHighlight(path: String, name: String, timeMs: Long): Unit {
+        val body = JSONObject().put("path", path).put("name", name).put("time_ms", timeMs).toString()
+        decode<ActionResult>(post("/highlights/delete", body))
+    }
+
+    suspend fun deleteFavoriteCollection(name: String): ActionResult {
+        val body = JSONObject().put("name", name).toString()
+        return decode(post("/favorites/collection/delete", body))
+    }
+
     suspend fun authStatus(): AuthStatus = decode(get("/auth/status"))
 
     suspend fun authLogin(username: String, password: String, remember: Boolean = true): AuthResponse {

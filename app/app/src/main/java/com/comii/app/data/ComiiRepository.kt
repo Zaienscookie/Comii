@@ -131,6 +131,17 @@ class ComiiRepository(private val context: Context) {
     suspend fun removeFavorite(path: String, name: String = ""): ActionResult =
         requireApi().removeFavorite(path, name)
 
+    suspend fun highlights(path: String, name: String) = requireApi().highlights(path, name)
+
+    suspend fun addHighlight(path: String, name: String, timeMs: Long, label: String = "") =
+        requireApi().addHighlight(path, name, timeMs, label)
+
+    suspend fun removeHighlight(path: String, name: String, timeMs: Long) =
+        requireApi().removeHighlight(path, name, timeMs)
+
+    suspend fun deleteFavoriteCollection(name: String): ActionResult =
+        requireApi().deleteFavoriteCollection(name)
+
     suspend fun authStatus(base: String = settings.serverUrl): AuthStatus =
         ComiiApi(base.trim().trimEnd('/')).authStatus()
 

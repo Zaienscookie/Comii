@@ -112,6 +112,9 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     val scope = rememberCoroutineScope()
     var currentName by remember { mutableStateOf(startName) }
     var showHighlights by remember { mutableStateOf(false) }
+    var marks by remember { mutableStateOf<List<Pair<Long, String>>>(emptyList()) }
+    var askCollection by remember { mutableStateOf(false) }
+    var collectionInput by remember { mutableStateOf("默认") }
     val activity = context as? android.app.Activity
     val autoRotate = settings.autoRotate
     DisposableEffect(autoRotate) {
@@ -475,9 +478,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                             .onSuccess { favorited = false; state.showToast("已取消收藏") }
                             .onFailure { state.showToast("取消失败：${it.message}") }
                     } else {
-                        runCatching { state.repository.addFavorite(path, currentName) }
-                            .onSuccess { favorited = true; state.showToast("已收藏") }
-                            .onFailure { state.showToast("收藏失败：${it.message}") }
+                        askCollection = true
                     }
                 }
             }) {
@@ -490,8 +491,14 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
             IconButton(onClick = {
                 val ms = player.currentPosition
                 if (ms > 0) {
-                    state.repository.settings.addHighlight(path, currentName, ms)
-                    state.showToast("已标记 ${formatClock(ms)}")
+                    scope.launch {
+                        runCatching { state.repository.addHighlight(path, currentName, ms) }
+                            .onSuccess {
+                                marks = state.repository.highlights(path, currentName)
+                                state.showToast("已标记 ${formatClock(ms)}")
+                            }
+                            .onFailure { state.showToast("标记失败：${it.message}") }
+                    }
                 }
             }) {
                 Icon(Icons.Rounded.BookmarkAdd, contentDescription = "标记高潮", tint = Color.White)
@@ -503,8 +510,41 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
         }
     }
 
+    if (askCollection) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { askCollection = false },
+            containerColor = palette.card,
+            title = { Text("收藏到哪个收藏夹？", color = palette.textPrimary) },
+            text = {
+                Column {
+                    Text("留空或写「默认」会放进默认收藏夹", color = palette.textSecondary, fontSize = 12.sp)
+                    Spacer(Modifier.height(8.dp))
+                    androidx.compose.material3.OutlinedTextField(
+                        value = collectionInput,
+                        onValueChange = { collectionInput = it },
+                        singleLine = true,
+                        label = { Text("收藏夹名称") },
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = collectionInput.trim().ifBlank { "默认" }
+                    askCollection = false
+                    scope.launch {
+                        runCatching { state.repository.addFavorite(path, currentName, target) }
+                            .onSuccess { favorited = true; state.showToast("已收藏到「$target」") }
+                            .onFailure { state.showToast("收藏失败：${it.message}") }
+                    }
+                }) { Text("收藏", color = palette.accent) }
+            },
+            dismissButton = { TextButton(onClick = { askCollection = false }) { Text("取消") } },
+        )
+    }
     if (showHighlights) {
-        val marks = state.repository.settings.highlights(path, currentName)
+        LaunchedEffect(currentName, showHighlights) {
+            marks = runCatching { state.repository.highlights(path, currentName) }.getOrDefault(emptyList())
+        }
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { showHighlights = false },
             containerColor = palette.card,
@@ -529,6 +569,15 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                                     Text(formatClock(ms), color = palette.accent, fontSize = 14.sp)
                                     Spacer(Modifier.width(10.dp))
                                     Text(label.ifBlank { "跳转到这里" }, color = palette.textSecondary, fontSize = 12.sp)
+                                    Spacer(Modifier.weight(1f))
+                                    IconButton(onClick = {
+                                        scope.launch {
+                                            runCatching { state.repository.removeHighlight(path, currentName, ms) }
+                                                .onSuccess { marks = marks.filterNot { it.first == ms } }
+                                        }
+                                    }) {
+                                        Icon(Icons.Rounded.Close, contentDescription = "删除标记", tint = palette.textTertiary, modifier = Modifier.size(16.dp))
+                                    }
                                 }
                             }
                         }
