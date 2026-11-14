@@ -40,10 +40,13 @@ class AppState(
     )
         private set
 
+    var authToken by mutableStateOf(repository.settings.authToken)
+        private set
+
     var authDisabled by mutableStateOf(false)
         private set
 
-    val isLoggedIn: Boolean get() = authDisabled || repository.settings.authToken.isNotBlank()
+    val isLoggedIn: Boolean get() = authDisabled || authToken.isNotBlank()
 
     /** 切换服务器时递增，让照片/相册/系列界面强制丢弃旧服务器的数据与图片地址。 */
     var serverGeneration by mutableIntStateOf(0)
@@ -102,6 +105,7 @@ class AppState(
             true
         }.getOrElse {
             repository.settings.authToken = ""
+            authToken = ""
             com.comii.app.data.AuthTokenProvider.token = ""
             false
         }
@@ -112,6 +116,7 @@ class AppState(
         repository.settings.serverUrl = url.trim()
         serverUrl = url.trim()
         val response = repository.authLogin(url, username, password)
+        authToken = response.token
         authUsername = response.user.username
         authRole = response.user.role
         authGrants = response.grants
@@ -127,6 +132,7 @@ class AppState(
         com.comii.app.data.AuthTokenProvider.token = token.trim()
         val me = repository.authMe()
         repository.settings.authToken = token.trim()
+        authToken = token.trim()
         repository.settings.authUsername = me.user.username
         repository.settings.authRole = me.user.role
         repository.settings.authGrantsJson = com.comii.app.data.ComiiJson.encodeToString(me.grants)

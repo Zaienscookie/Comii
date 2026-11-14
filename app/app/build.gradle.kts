@@ -30,8 +30,8 @@ android {
         applicationId = "com.comii.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 57
-        versionName = "3.1.2-beta"
+        versionCode = 58
+        versionName = "3.1.3-beta"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -108,6 +108,7 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
 
 
 
