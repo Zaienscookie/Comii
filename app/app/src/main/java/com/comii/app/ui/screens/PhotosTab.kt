@@ -107,6 +107,8 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     var editing by remember { mutableStateOf(false) }
     var dragSelectOn by remember { mutableStateOf(true) }
     var galleryMode by remember { mutableStateOf(state.repository.settings.photosGallery) }
+    val staggerState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
+    var pendingAnchor by remember { mutableIntStateOf(-1) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var confirmDelete by remember { mutableStateOf(false) }
     var sharing by remember { mutableStateOf(false) }
@@ -351,6 +353,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 }
             }
             IconButton(onClick = {
+                pendingAnchor = if (galleryMode) staggerState.firstVisibleItemIndex else gridState.firstVisibleItemIndex
                 galleryMode = !galleryMode
                 state.repository.settings.photosGallery = galleryMode
             }) {
@@ -364,7 +367,21 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 Icon(Icons.Rounded.Refresh, contentDescription = "刷新", tint = palette.accent)
             }
         }
+        LaunchedEffect(galleryMode, pendingAnchor) {
+            val anchor = pendingAnchor
+            if (anchor > 0) {
+                pendingAnchor = -1
+                if (galleryMode) runCatching { staggerState.scrollToItem(anchor) }
+                else runCatching { gridState.scrollToItem(anchor) }
+            }
+        }
         Spacer(Modifier.height(8.dp))
+        androidx.compose.animation.Crossfade(
+            targetState = galleryMode,
+            animationSpec = androidx.compose.animation.core.tween(220),
+            label = "photo-layout",
+            modifier = Modifier.weight(1f),
+        ) { galleryLayout ->
         Box(Modifier.weight(1f)) {
             when {
                 loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -375,11 +392,12 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     title = "还没有照片",
                     subtitle = "在相册里导入图片或视频后会出现在这里",
                 )
-                galleryMode -> LazyVerticalStaggeredGrid(
-                    columns = StaggeredGridCells.Fixed(3),
+                galleryLayout -> LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Fixed(2),
+                    state = staggerState,
                     contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 110.dp),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
-                    verticalItemSpacing = 3.dp,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalItemSpacing = 4.dp,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     staggeredItems(items, key = { "${it.series_path}/${it.name}" }) { item ->
@@ -387,7 +405,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                         Box(
                             Modifier
                                 .fillMaxWidth()
-                                .then(if (ratio > 0f) Modifier.aspectRatio(ratio) else Modifier.height(180.dp))
+                                .then(if (ratio > 0f) Modifier.aspectRatio(ratio) else Modifier.aspectRatio(0.75f))
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
                                 .pointerInput(item.series_path, item.name, editing) {
@@ -583,6 +601,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     }
                 }
             }
+        }
         }
     }
 
