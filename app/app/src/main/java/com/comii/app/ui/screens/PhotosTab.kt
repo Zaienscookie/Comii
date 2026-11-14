@@ -576,10 +576,10 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
             var scrubbing by remember { mutableStateOf(false) }
             var scrubProgress by remember { mutableFloatStateOf(0f) }
             if (items.size > 60 && !editing) {
-                Box(
+                androidx.compose.foundation.layout.BoxWithConstraints(
                     Modifier
                         .align(Alignment.CenterEnd)
-                        .fillMaxHeight(0.62f)
+                        .fillMaxHeight(0.84f)
                         .width(26.dp)
                         .padding(end = 2.dp)
                         .pointerInput(items.size) {
@@ -605,14 +605,15 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                             .clip(RoundedCornerShape(2.dp))
                             .background(palette.textTertiary.copy(alpha = 0.25f))
                     )
+                    val thumbH = if (scrubbing) 40.dp else 22.dp
                     Box(
                         Modifier
                             .align(Alignment.TopCenter)
-                            .fillMaxWidth(0.55f)
-                            .height((if (scrubbing) 44.dp else 18.dp))
-                            .offset(y = (0.dp))
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(palette.accent.copy(alpha = if (scrubbing) 0.9f else 0.5f))
+                            .fillMaxWidth(0.6f)
+                            .height(thumbH)
+                            .offset(y = ((maxHeight - thumbH) * scrubProgress.coerceIn(0f, 1f)))
+                            .clip(RoundedCornerShape(thumbH / 2))
+                            .background(palette.accent.copy(alpha = if (scrubbing) 0.95f else 0.65f))
                     )
                     if (scrubbing) {
                         Text(

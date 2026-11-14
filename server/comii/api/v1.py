@@ -208,6 +208,23 @@ def add_favorite(request: Request, payload: dict) -> ActionResult:
     return ActionResult(status="ok", path=str(target.relative_to(root)))
 
 
+@router.delete("/favorites/collection", response_model=ActionResult)
+def delete_favorite_collection(request: Request, name: str) -> ActionResult:
+    """删掉一个收藏夹分类（只允许删 收藏夹 下的子目录）。"""
+    user = auth.require_user(request)
+    if user["role"] not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="没有权限")
+    collection = Path(str(name or "")).name.strip()
+    if not collection or collection in (".", ".."):
+        raise HTTPException(status_code=400, detail="分类名不合法")
+    root = library.library_root() / "收藏夹" / collection
+    if not root.is_dir():
+        raise HTTPException(status_code=404, detail="分类不存在")
+    import shutil
+    shutil.rmtree(root, ignore_errors=True)
+    return ActionResult(status="ok", message=f"已删除收藏夹「{collection}」")
+
+
 @router.get("/favorites/status")
 def favorite_status(request: Request, path: str = "", name: str = "") -> dict:
     user = auth.require_user(request)

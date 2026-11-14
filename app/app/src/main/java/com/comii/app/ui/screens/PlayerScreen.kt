@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.VolumeUp
@@ -47,6 +50,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +78,7 @@ import com.comii.app.ui.components.SegmentControl
 import com.comii.app.ui.theme.ComiiTheme
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostController) {
@@ -101,6 +106,9 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     var dragStartPos by remember { mutableLongStateOf(0L) }
     var dragAccum by remember { mutableFloatStateOf(0f) }
     var playerView by remember { mutableStateOf<PlayerView?>(null) }
+    var favorited by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var currentName by remember { mutableStateOf(startName) }
     val activity = context as? android.app.Activity
     val autoRotate = settings.autoRotate
     DisposableEffect(autoRotate) {
@@ -189,6 +197,10 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     LaunchedEffect(muted, speed, pitch, pitchFollows) { applyPlayback(player) }
 
     LaunchedEffect(path, startName) {
+        favorited = runCatching { state.repository.favoriteStatus(path, startName).first }.getOrDefault(false)
+    }
+
+    LaunchedEffect(path, startName) {
         val offline = state.repository.offline.find(path)
         val api = state.repository.apiOrNull()
         val items = mutableListOf<MediaItem>()
@@ -222,6 +234,9 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
             error = "这个系列没有视频"
         }
         applyPlayback(player)
+        // 继续上次播放位置
+        val saved = state.repository.settings.videoPosition(path, startName)
+        if (saved > 3000) runCatching { player.seekTo(saved) }
         loading = false
     }
 
@@ -229,6 +244,12 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
         val listener = object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 index = player.currentMediaItemIndex
+                scope.launch {
+                    runCatching {
+                        val detail = state.repository.series(path)
+                        detail.videos.getOrNull(player.currentMediaItemIndex)?.let { currentName = it }
+                    }
+                }
             }
         }
         player.addListener(listener)
@@ -270,6 +291,60 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                 )
             }
     ) {
+        // 左侧上下滑 = 亮度，右侧上下滑 = 音量
+        var hint by remember { mutableStateOf<String?>(null) }
+        var hintJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+        val window = (context as? android.app.Activity)?.window
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    var startX = 0f
+                    var startVolume = 0f
+                    var startBrightness = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            startX = offset.x
+                            startVolume = player.volume
+                            startBrightness = window?.attributes?.screenBrightness ?: 0.5f
+                        },
+                        onVerticalDrag = { change, amount ->
+                            val fraction = -amount / size.height.toFloat()
+                            if (startX > size.width * 0.55f) {
+                                val next = (player.volume + fraction).coerceIn(0f, 1f)
+                                player.volume = next
+                                hint = "音量 ${(next * 100).toInt()}%"
+                            } else if (startX < size.width * 0.45f) {
+                                val next = (startBrightness + fraction).coerceIn(0.05f, 1f)
+                                if (window != null) {
+                                    val attrs = window.attributes
+                                    attrs.screenBrightness = next
+                                    window.attributes = attrs
+                                }
+                                hint = "亮度 ${(next * 100).toInt()}%"
+                            }
+                            change.consume()
+                            hintJob?.cancel()
+                            hintJob = scope.launch {
+                                kotlinx.coroutines.delay(900)
+                                hint = null
+                            }
+                        },
+                    )
+                }
+        )
+        hint?.let { text ->
+            Box(
+                Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                Text(text, color = Color.White, fontSize = 15.sp)
+            }
+        }
+
         if (loading) {
             CircularProgressIndicator(color = palette.accent, modifier = Modifier.align(Alignment.Center))
         }
@@ -385,8 +460,22 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
             }) {
                 Icon(Icons.Rounded.ScreenRotation, contentDescription = "横竖屏切换", tint = Color.White)
             }
-            IconButton(onClick = { nav.popBackStack() }) {
-                Icon(Icons.Rounded.Close, contentDescription = "关闭", tint = Color.White, modifier = Modifier.size(20.dp))
+            IconButton(onClick = {
+                if (favorited) {
+                    state.showToast("已经在收藏夹里了")
+                } else {
+                    scope.launch {
+                        runCatching { state.repository.addFavorite(path, startName) }
+                            .onSuccess { favorited = true; state.showToast("已收藏") }
+                            .onFailure { state.showToast("收藏失败：${it.message}") }
+                    }
+                }
+            }) {
+                Icon(
+                    if (favorited) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                    contentDescription = "收藏",
+                    tint = if (favorited) Color(0xFFFFC107) else Color.White,
+                )
             }
         }
         }

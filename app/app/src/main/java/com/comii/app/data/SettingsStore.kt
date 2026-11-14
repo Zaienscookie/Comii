@@ -44,6 +44,30 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("photos_gallery", false)
         set(value) = prefs.edit().putBoolean("photos_gallery", value).apply()
 
+    var videoPositions: String
+        get() = prefs.getString("video_positions", "").orEmpty()
+        set(value) = prefs.edit().putString("video_positions", value).apply()
+
+    fun videoPosition(path: String, name: String): Long {
+        val key = "$path|$name"
+        return videoPositions.lineSequence()
+            .mapNotNull { line ->
+                val parts = line.split("|")
+                if (parts.size >= 3 && parts[0] == path && parts[1] == name) parts[2].toLongOrNull() else null
+            }
+            .lastOrNull() ?: 0L
+    }
+
+    fun saveVideoPosition(path: String, name: String, positionMs: Long) {
+        val key = "$path|$name"
+        val kept = videoPositions.lineSequence()
+            .filter { it.isNotBlank() }
+            .filterNot { it.startsWith("$key|") }
+            .toList()
+            .takeLast(300)
+        videoPositions = (kept + "$key|$positionMs").joinToString("\n")
+    }
+
     var themeMode: String
         get() = prefs.getString("theme", "auto").orEmpty()
         set(value) = prefs.edit().putString("theme", value).apply()
