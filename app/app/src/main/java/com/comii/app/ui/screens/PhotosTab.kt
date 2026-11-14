@@ -55,6 +55,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -119,6 +120,15 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         initialFirstVisibleItemIndex = state.photosScrollIndex,
         initialFirstVisibleItemScrollOffset = state.photosScrollOffset,
     )
+
+    DisposableEffect(Unit) {
+        onDispose {
+            if (items.isNotEmpty()) {
+                state.photosScrollIndex = if (galleryMode) staggerState.firstVisibleItemIndex else gridState.firstVisibleItemIndex
+                state.photosScrollOffset = if (galleryMode) 0 else gridState.firstVisibleItemScrollOffset
+            }
+        }
+    }
 
     LaunchedEffect(gridState) {
         snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
@@ -188,10 +198,13 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
             .collect { last -> if (last >= items.size - 12) loadMore() }
     }
 
-    LaunchedEffect(items.size) {
-        if (items.isNotEmpty() && state.photosScrollIndex in items.indices) {
+    var anchorRestored by remember { mutableStateOf(false) }
+    LaunchedEffect(items.size, galleryMode) {
+        if (!anchorRestored && items.isNotEmpty() && state.photosScrollIndex in items.indices) {
+            anchorRestored = true
             runCatching {
-                gridState.scrollToItem(state.photosScrollIndex, state.photosScrollOffset)
+                if (galleryMode) staggerState.scrollToItem(state.photosScrollIndex)
+                else gridState.scrollToItem(state.photosScrollIndex, state.photosScrollOffset)
             }
         }
     }
