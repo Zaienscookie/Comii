@@ -148,7 +148,18 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                         if (item.kind == "video") {
                                             nav.navigate(Routes.player(item.series_path, item.name))
                                         } else {
-                                            nav.navigate(Routes.reader(item.series_path, item.index))
+                                            // 「照片」是整库相册：按全局图片序号打开，不能退回单系列
+                                            val imageIndex = items
+                                                .takeWhile { !(it.series_path == item.series_path && it.name == item.name) }
+                                                .count { it.kind != "video" }
+                                            nav.navigate(
+                                                Routes.reader(
+                                                    path = item.series_path,
+                                                    page = imageIndex,
+                                                    all = true,
+                                                    name = item.name,
+                                                )
+                                            )
                                         }
                                     }
                                 }

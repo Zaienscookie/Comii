@@ -52,6 +52,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.comii.app.data.ComiiRepository
 import com.comii.app.data.CrashLog
 import com.comii.app.ui.AppState
@@ -70,7 +74,7 @@ import com.comii.app.ui.screens.TrashScreen
 import com.comii.app.ui.screens.UploadScreen
 import com.comii.app.ui.theme.ComiiTheme
 
-class ComiiApplication : Application() {
+class ComiiApplication : Application(), ImageLoaderFactory {
     lateinit var repository: ComiiRepository
         private set
     lateinit var aiRepository: com.comii.app.data.ai.AiRepository
@@ -82,6 +86,23 @@ class ComiiApplication : Application() {
         repository = ComiiRepository(this)
         aiRepository = com.comii.app.data.ai.AiRepository(this)
     }
+
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .memoryCache {
+            MemoryCache.Builder(this)
+                .maxSizePercent(0.20)
+                .build()
+        }
+        .diskCache {
+            DiskCache.Builder()
+                .directory(cacheDir.resolve("comii-image-cache"))
+                .maxSizeBytes(2L * 1024 * 1024 * 1024)
+                .build()
+        }
+        // 媒体接口没有强缓存头，强制使用磁盘缓存，退出重进不再重新下载
+        .respectCacheHeaders(false)
+        .crossfade(false)
+        .build()
 }
 
 class MainActivity : ComponentActivity() {

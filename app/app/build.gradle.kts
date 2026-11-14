@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -30,8 +30,8 @@ android {
         applicationId = "com.comii.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 36
-        versionName = "2.27.0"
+        versionCode = 37
+        versionName = "2.28.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -108,6 +108,7 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
+
 
 
 

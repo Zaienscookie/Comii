@@ -1,7 +1,9 @@
 package com.comii.app.ui.screens
 
+import android.content.Intent
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.rememberScrollState
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,9 +26,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -33,8 +38,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBackIosNew
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -43,6 +50,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -81,6 +89,8 @@ import com.comii.app.ui.theme.ComiiTheme
 import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private const val ALL_PROGRESS_KEY = "__comii_all__"
 
 @Composable
 fun ReaderScreen(
@@ -140,7 +150,14 @@ fun ReaderScreen(
     var initializing by remember { mutableStateOf(allMode) }
 
     val listState = rememberLazyListState()
+    val filmState = androidx.compose.foundation.lazy.rememberLazyListState()
     val pagerState = rememberPagerState(pageCount = { names.size })
+
+    LaunchedEffect(current, allMode) {
+        if (allMode && names.isNotEmpty()) {
+            runCatching { filmState.scrollToItem((current - 2).coerceAtLeast(0)) }
+        }
+    }
 
     fun model(name: String): Any? {
         val dir = localDir
@@ -167,6 +184,48 @@ fun ReaderScreen(
         current = target
     }
 
+    fun currentRelativePath(): String? {
+        if (allMode) {
+            val item = allItems.getOrNull(current) ?: return null
+            return "${item.series_path}/${item.name}"
+        }
+        val name = names.getOrNull(current) ?: return null
+        return if (path.isBlank()) name else "$path/$name"
+    }
+
+    fun shareCurrent() {
+        val url = if (allMode) {
+            allItems.getOrNull(current)?.let { serverBase?.imageUrl(it.series_path, it.name) }
+        } else {
+            serverBase?.imageUrl(path, names.getOrNull(current) ?: return)
+        }
+        if (url.isNullOrBlank()) {
+            state.showToast("离线图片暂不支持分享")
+            return
+        }
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, url)
+        }
+        context.startActivity(Intent.createChooser(intent, "分享图片"))
+    }
+
+    fun deleteCurrent() {
+        val target = currentRelativePath() ?: return
+        if (target.startsWith("comic/R18/") || target.startsWith("video/R18/")) {
+            state.showToast("R18 是只读资源，不能删除")
+            return
+        }
+        scope.launch {
+            runCatching { repository.delete(listOf(target)) }
+                .onSuccess {
+                    state.showToast("已移入回收站")
+                    nav.popBackStack()
+                }
+                .onFailure { state.showToast("删除失败：${it.message}") }
+        }
+    }
+
     LaunchedEffect(allMode, path, initialName) {
         if (!allMode) return@LaunchedEffect
         initializing = true
@@ -190,12 +249,12 @@ fun ReaderScreen(
         val found = items.indexOfFirst {
             it.series_path == path && (initialName.isEmpty() || it.name == initialName)
         }
-        current = if (initialPage >= 0) {
-            initialPage.coerceIn(0, items.lastIndex)
-        } else if (found >= 0) {
-            found
-        } else {
-            0
+        val savedAll = settings.localPage(ALL_PROGRESS_KEY)
+        current = when {
+            initialPage >= 0 -> initialPage.coerceIn(0, items.lastIndex)
+            savedAll > 0 -> savedAll.coerceIn(0, items.lastIndex)
+            found >= 0 -> found
+            else -> 0
         }
         title = items.getOrNull(current)?.series_name ?: "全部"
         loading = false
@@ -289,10 +348,7 @@ fun ReaderScreen(
         }
         delay(500)
         if (allMode) {
-            val item = allItems.getOrNull(current) ?: return@LaunchedEffect
-            val series = allItems.filter { it.series_path == item.series_path }
-            val local = series.indexOfFirst { it.name == item.name }.coerceAtLeast(0)
-            repository.saveProgress(item.series_path, local, series.size)
+            repository.saveProgress(ALL_PROGRESS_KEY, current, allItems.size)
         } else {
             repository.saveProgress(path, current, names.size)
         }
@@ -416,6 +472,70 @@ fun ReaderScreen(
                             .fillMaxHeight()
                             .background(palette.accent),
                     )
+                }
+            }
+        }
+        if (allMode && showBar && names.isNotEmpty()) {
+            Column(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .background(Color.Black.copy(alpha = 0.62f)),
+            ) {
+                LazyRow(
+                    state = filmState,
+                    contentPadding = PaddingValues(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(66.dp),
+                ) {
+                    items(names.size) { index ->
+                        val item = allItems.getOrNull(index)
+                        val thumb = item?.let { serverBase?.thumbUrl(it.series_path, it.name) }
+                        Box(
+                            Modifier
+                                .width(42.dp)
+                                .fillMaxHeight()
+                                .padding(vertical = 5.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(
+                                    if (index == current) palette.accent.copy(alpha = 0.45f)
+                                    else Color.White.copy(alpha = 0.08f)
+                                )
+                                .clickable { goTo(index) },
+                        ) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(thumb)
+                                    .crossfade(false)
+                                    .build(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .padding(horizontal = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { shareCurrent() }) {
+                        Icon(Icons.Rounded.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("分享", color = Color.White, fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { deleteCurrent() }) {
+                        Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = Color.White, modifier = Modifier.size(19.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("删除", color = Color.White, fontSize = 12.sp)
+                    }
                 }
             }
         }
