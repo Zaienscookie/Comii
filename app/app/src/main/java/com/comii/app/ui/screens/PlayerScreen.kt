@@ -397,7 +397,12 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                 }
             }
         }
-        AnimatedVisibility(visible = showChrome, modifier = Modifier.align(Alignment.TopCenter)) {
+        AnimatedVisibility(
+            visible = showChrome,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = androidx.compose.animation.slideInVertically(initialOffsetY = { -it }) + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { -it }) + androidx.compose.animation.fadeOut(),
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

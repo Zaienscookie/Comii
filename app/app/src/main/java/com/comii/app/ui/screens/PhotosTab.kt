@@ -417,11 +417,9 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     staggeredItems(items, key = { "${it.series_path}/${it.name}" }) { item ->
-                        var ratio by remember(item.series_path, item.name) { mutableFloatStateOf(0f) }
                         Box(
                             Modifier
                                 .fillMaxWidth()
-                                .then(if (ratio > 0f) Modifier.aspectRatio(ratio) else Modifier.aspectRatio(0.75f))
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
                                 .pointerInput(item.series_path, item.name, editing) {
@@ -433,12 +431,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                             AsyncImage(
                                 model = state.repository.mediaUrl(item.thumb),
                                 contentDescription = item.name,
-                                contentScale = ContentScale.Fit,
-                                onSuccess = { result ->
-                                    val w = result.result.drawable.intrinsicWidth
-                                    val h = result.result.drawable.intrinsicHeight
-                                    if (w > 0 && h > 0) ratio = w.toFloat() / h
-                                },
+                                contentScale = ContentScale.FillWidth,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             if (item.kind == "video") {
@@ -572,60 +565,6 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     }
                 }
             }
-            // 右侧快速滚动条：上下拖动按比例定位
-            var scrubbing by remember { mutableStateOf(false) }
-            var scrubProgress by remember { mutableFloatStateOf(0f) }
-            if (items.size > 60 && !editing) {
-                androidx.compose.foundation.layout.BoxWithConstraints(
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight(0.84f)
-                        .width(26.dp)
-                        .padding(end = 2.dp)
-                        .pointerInput(items.size) {
-                            detectVerticalDragGestures(
-                                onDragStart = { scrubbing = true },
-                                onDragEnd = { scrubbing = false },
-                                onDragCancel = { scrubbing = false },
-                            ) { change, _ ->
-                                val ratio = (change.position.y / size.height.toFloat()).coerceIn(0f, 1f)
-                                scrubProgress = ratio
-                                val index = (ratio * (items.size - 1)).toInt().coerceIn(0, items.size - 1)
-                                scope.launch {
-                                    if (galleryMode) staggerState.scrollToItem(index) else gridState.scrollToItem(index)
-                                }
-                            }
-                        },
-                ) {
-                    Box(
-                        Modifier
-                            .align(Alignment.Center)
-                            .width(4.dp)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(palette.textTertiary.copy(alpha = 0.25f))
-                    )
-                    val thumbH = if (scrubbing) 40.dp else 22.dp
-                    Box(
-                        Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth(0.6f)
-                            .height(thumbH)
-                            .offset(y = ((maxHeight - thumbH) * scrubProgress.coerceIn(0f, 1f)))
-                            .clip(RoundedCornerShape(thumbH / 2))
-                            .background(palette.accent.copy(alpha = if (scrubbing) 0.95f else 0.65f))
-                    )
-                    if (scrubbing) {
-                        Text(
-                            "${(scrubProgress * (items.size - 1)).toInt() + 1} / ${items.size}",
-                            color = palette.accent,
-                            fontSize = 10.sp,
-                            modifier = Modifier.align(Alignment.TopCenter).offset(y = (-18).dp),
-                        )
-                    }
-                }
-            }
-
             androidx.compose.animation.AnimatedVisibility(
                 visible = editing,
                 enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it },
