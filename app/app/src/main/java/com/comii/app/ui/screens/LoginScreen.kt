@@ -40,6 +40,7 @@ fun LoginScreen(state: AppState) {
     val palette = ComiiTheme.palette
     val scope = rememberCoroutineScope()
     var server by remember { mutableStateOf(state.serverUrl) }
+    var accessToken by remember { mutableStateOf(state.repository.settings.accessToken) }
     var token by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -75,6 +76,15 @@ fun LoginScreen(state: AppState) {
             singleLine = true,
             label = { Text("服务器地址") },
             placeholder = { Text("http://100.74.140.98:8001") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        TextField(
+            value = accessToken,
+            onValueChange = { accessToken = it },
+            singleLine = true,
+            label = { Text("服务器访问令牌") },
+            placeholder = { Text("comii_access_...") },
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(14.dp))
@@ -132,10 +142,14 @@ fun LoginScreen(state: AppState) {
                         error = "请填写 Token"
                     } else if (mode == 1 && (username.isBlank() || password.isBlank())) {
                         error = "请填写用户名和密码"
-                    } else if (mode == 0) {
-                        run { state.loginWithToken(server, token) }
                     } else {
-                        run { state.loginWithPassword(server, username, password) }
+                        state.repository.settings.accessToken = accessToken.trim()
+                        com.comii.app.data.AuthTokenProvider.accessToken = accessToken.trim()
+                        if (mode == 0) {
+                            run { state.loginWithToken(server, token) }
+                        } else {
+                            run { state.loginWithPassword(server, username, password) }
+                        }
                     }
                 },
             )
@@ -169,5 +183,6 @@ fun LoginScreen(state: AppState) {
         )
     }
 }
+
 
 
