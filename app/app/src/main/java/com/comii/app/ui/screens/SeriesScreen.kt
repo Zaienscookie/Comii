@@ -116,10 +116,7 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
                     state = state,
                     path = path,
                     nav = nav,
-                    series = series,
                     media = media,
-                    tags = tags,
-                    onEditTags = { editingTags = true },
                     downloadProgress = downloadProgress,
                 )
             }
@@ -167,71 +164,84 @@ private fun SeriesContent(
     state: AppState,
     path: String,
     nav: NavHostController,
-    series: SeriesDetail,
     media: List<SeriesMedia>,
-    tags: List<String>,
-    onEditTags: () -> Unit,
     downloadProgress: Pair<Int, Int>?,
 ) {
     val palette = ComiiTheme.palette
     val context = LocalContext.current
     val api = state.repository.apiOrNull()
-    val downloaded = state.repository.offline.find(path)
 
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(state.repository.mediaUrl(series.cover))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .width(112.dp)
-                    .aspectRatio(0.68f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(palette.card),
-            )
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    series.name,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.textPrimary,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    buildString {
-                        if (series.images.isNotEmpty()) append("${series.images.size} 页")
-                        if (series.images.isNotEmpty() && series.videos.isNotEmpty()) append(" · ")
-                        if (series.videos.isNotEmpty()) append("${series.videos.size} 个视频")
-                    },
-                    fontSize = 13.sp,
-                    color = palette.textSecondary,
-                )
-                Spacer(Modifier.height(14.dp))
-                if (series.images.isNotEmpty()) {
-                    val page = series.progress?.page ?: 0
-                    PrimaryButton(
-                        text = if (page > 0) "继续阅读 · 第 ${page + 1} 页" else "开始阅读",
-                        onClick = { nav.navigate(Routes.reader(path)) },
-                        modifier = Modifier.height(44.dp),
-                    )
+    Box(Modifier.fillMaxSize().background(palette.background)) {
+        if (media.isEmpty()) {
+            EmptyState(Icons.Rounded.PlayCircle, "没有内容", "这个文件夹里没有图片或视频")
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(media, key = { "${it.isVideo}:${it.name}" }) { entry ->
+                    val model = if (entry.isVideo) {
+                        api?.videoThumbUrl(path, entry.name)
+                    } else {
+                        api?.thumbUrl(path, entry.name)
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(palette.card)
+                            .pointerInput(entry.name, entry.isVideo) {
+                                detectTapGestures {
+                                    if (entry.isVideo) {
+                                        nav.navigate(Routes.player(path, entry.name))
+                                    } else {
+                                        nav.navigate(Routes.reader(path, entry.imageIndex))
+                                    }
+                                }
+                            },
+                    ) {
+                        AsyncImage(
+                            model = model,
+                            contentDescription = entry.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        if (entry.isVideo) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.Center)
+                                    .size(26.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.45f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.PlayCircle,
+                                    contentDescription = "视频",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        SeriesTagRow(tags = tags, onEdit = onEditTags)
-        Spacer(Modifier.height(8.dp))
-
         if (downloadProgress != null) {
             val (done, total) = downloadProgress
-            Column(Modifier.padding(horizontal = 20.dp)) {
-                Text("正在下载 ${done}/${total.coerceAtLeast(1)}", fontSize = 12.sp, color = palette.textSecondary)
+            Column(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.75f))
+                    .padding(16.dp),
+            ) {
+                Text("正在下载 ${done}/${total.coerceAtLeast(1)}", color = Color.White, fontSize = 12.sp)
                 Spacer(Modifier.height(6.dp))
                 LinearProgressIndicator(
                     progress = { if (total > 0) done.toFloat() / total else 0f },
@@ -239,72 +249,7 @@ private fun SeriesContent(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-        } else {
-            Text(
-                if (downloaded != null) "已离线 · ${formatBytes(downloaded.totalBytes)}"
-                else "下载后可离线阅读（含视频）",
-                fontSize = 11.5.sp,
-                color = palette.textTertiary,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
-        }
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
-            contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 10.dp, bottom = 40.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-            modifier = Modifier.weight(1f),
-        ) {
-            items(media, key = { "${it.isVideo}:${it.name}" }) { entry ->
-                val model = if (entry.isVideo) {
-                    api?.videoThumbUrl(path, entry.name)
-                } else {
-                    api?.thumbUrl(path, entry.name)
-                }
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(palette.card)
-                        .pointerInput(entry.name, entry.isVideo) {
-                            detectTapGestures {
-                                if (entry.isVideo) {
-                                    nav.navigate(Routes.player(path, entry.name))
-                                } else {
-                                    nav.navigate(Routes.reader(path, entry.imageIndex))
-                                }
-                            }
-                        },
-                ) {
-                    AsyncImage(
-                        model = model,
-                        contentDescription = entry.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    if (entry.isVideo) {
-                        Box(
-                            Modifier
-                                .align(Alignment.Center)
-                                .size(26.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.45f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Rounded.PlayCircle,
-                                contentDescription = "视频",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
-
 
