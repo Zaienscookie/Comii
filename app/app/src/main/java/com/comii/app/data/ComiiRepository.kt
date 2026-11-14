@@ -82,14 +82,18 @@ class ComiiRepository(private val context: Context) {
         val queue = ArrayDeque<Pair<String, Int>>()
         queue.add("" to 0)
         var guard = 0
-        while (queue.isNotEmpty() && guard < 400) {
+        while (queue.isNotEmpty() && guard < 2000) {
             val (path, depth) = queue.removeFirst()
             guard++
             val response = runCatching { api.browse(path) }.getOrNull() ?: continue
-            response.items.filter { it.kind == NodeKind.FOLDER }.forEach { node ->
-                result.add(FolderEntry(node.path, node.name, depth + 1))
-                queue.add(node.path to (depth + 1))
-            }
+            // browse 返回的目录可能是 folder / album / manga / video / mixed；
+            // 移动目标需要展示所有真实目录，不能只看 kind == folder。
+            response.items
+                .filterNot { it.name == "#recycle" || it.name == "@eaDir" || it.name == "#snapshot" }
+                .forEach { node ->
+                    result.add(FolderEntry(node.path, node.name, depth + 1))
+                    queue.add(node.path to (depth + 1))
+                }
         }
         result
     }
