@@ -118,7 +118,7 @@ async def access_gate(request: Request, call_next):
         or path.startswith("/api/v1/app/update")
         or path == "/api/v1/auth/status"
     ):
-        supplied = request.headers.get("x-comii-token", "")
+        supplied = request.headers.get("x-comii-token", "") or request.cookies.get("comii_access", "")
         if not supplied or not secrets.compare_digest(token, supplied):
             return JSONResponse(status_code=401, content={"detail": "无效的服务器访问令牌"})
     return await call_next(request)
@@ -271,6 +271,7 @@ def create_web_app() -> FastAPI:
         openapi_url=None,
     )
     _add_middleware(web)
+    web.middleware("http")(access_gate)
     web.include_router(auth_router)
     web.include_router(legacy_router)
     web.include_router(ai_router)

@@ -37,6 +37,14 @@ let initialized = true;
 const next = new URLSearchParams(location.search).get('next') || '/';
 const savedAccess = localStorage.getItem('comii_access_token') || '';
 document.getElementById('accessToken').value = savedAccess;
+function saveAccessCookie(value) {
+  if (value) {
+    document.cookie = 'comii_access=' + encodeURIComponent(value) + '; path=/; max-age=31536000; SameSite=Lax';
+  } else {
+    document.cookie = 'comii_access=; path=/; max-age=0; SameSite=Lax';
+  }
+}
+saveAccessCookie(savedAccess);
 const originalFetch = window.fetch;
 window.fetch = (input, init = {}) => {
   const access = document.getElementById('accessToken')?.value?.trim() || localStorage.getItem('comii_access_token') || '';
@@ -67,6 +75,7 @@ form.addEventListener('submit', async (event) => {
   if (!initialized && password !== password2) { error.textContent = '两次密码不一致'; return; }
   const access = document.getElementById('accessToken').value.trim();
   localStorage.setItem('comii_access_token', access);
+  saveAccessCookie(access);
   const endpoint = initialized ? '/api/v1/auth/login' : '/api/v1/auth/setup';
   const body = {username, password, remember: document.getElementById('remember').checked};
   const response = await fetch(endpoint, {
