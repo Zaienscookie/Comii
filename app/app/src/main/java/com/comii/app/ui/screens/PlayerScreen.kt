@@ -241,13 +241,16 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     onDragStart = {
                         dragAccum = 0f
                         dragStartPos = player.currentPosition.coerceAtLeast(0L)
+                        seekTarget = null
                     },
                     onHorizontalDrag = { _, amount ->
                         dragAccum += amount
                         val duration = player.duration
-                        if (duration > 0L) {
-                            // 整屏宽度 ≈ 3 分钟，拖动时实时预览
-                            val deltaMs = (dragAccum / size.width.toFloat()) * 180_000f
+                        // 先走一小段死区，避免轻轻一划就跳很远；整屏约 75 秒，比之前弱一半
+                        val slop = viewConfiguration.touchSlop
+                        if (duration > 0L && kotlin.math.abs(dragAccum) > slop) {
+                            val effective = dragAccum - slop * kotlin.math.sign(dragAccum)
+                            val deltaMs = (effective / size.width.toFloat()) * 75_000f
                             val target = (dragStartPos + deltaMs.toLong()).coerceIn(0L, duration)
                             seekTarget = target
                             player.seekTo(target)
