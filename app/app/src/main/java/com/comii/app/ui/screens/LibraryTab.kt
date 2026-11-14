@@ -240,9 +240,12 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     }
 
     fun openNode(node: LibraryNode) {
+        // 任何自己含媒体的文件夹都先进平铺页，点图片后才进入阅读。
+        val hasMedia = node.image_count > 0 || node.video_count > 0 ||
+            node.kind == NodeKind.MANGA || node.kind == NodeKind.VIDEO
         when {
+            hasMedia -> nav.navigate(Routes.series(node.path))
             node.isAlbum || node.isFolder -> openAlbum(node)
-            node.kind == NodeKind.MANGA -> nav.navigate(Routes.reader(node.path))
             else -> nav.navigate(Routes.series(node.path))
         }
     }
