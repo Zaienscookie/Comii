@@ -1,4 +1,4 @@
-﻿package com.comii.app.ui.screens
+package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -15,23 +15,19 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.comii.app.ui.AppState
 import com.comii.app.ui.components.PrimaryButton
-import com.comii.app.ui.components.SegmentControl
 import com.comii.app.ui.theme.ComiiTheme
 import kotlinx.coroutines.launch
 
@@ -41,10 +37,8 @@ fun LoginScreen(state: AppState) {
     val scope = rememberCoroutineScope()
     var server by remember { mutableStateOf(state.serverUrl) }
     var accessToken by remember { mutableStateOf(state.repository.settings.accessToken) }
-    var token by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var mode by remember { mutableStateOf(1) } // 0 token, 1 password
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -59,6 +53,11 @@ fun LoginScreen(state: AppState) {
         }
     }
 
+    fun saveAccess() {
+        state.repository.settings.accessToken = accessToken.trim()
+        com.comii.app.data.AuthTokenProvider.accessToken = accessToken.trim()
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -70,6 +69,7 @@ fun LoginScreen(state: AppState) {
         Text("Comii", color = palette.textPrimary, fontSize = 38.sp, fontWeight = FontWeight.Bold)
         Text("登录媒体库", color = palette.textSecondary, fontSize = 14.sp)
         Spacer(Modifier.height(26.dp))
+
         TextField(
             value = server,
             onValueChange = { server = it },
@@ -87,50 +87,38 @@ fun LoginScreen(state: AppState) {
             placeholder = { Text("comii_access_...") },
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(14.dp))
-        SegmentControl(
-            options = listOf("访问令牌", "账号密码"),
-            selectedIndex = mode,
-            onSelect = { mode = it },
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "这是服务器白名单 Token；局域网或 neko 没有开启时留空即可。",
+            color = palette.textTertiary,
+            fontSize = 11.sp,
         )
-        Spacer(Modifier.height(14.dp))
-        if (mode == 0) {
-            TextField(
-                value = token,
-                onValueChange = { token = it },
-                singleLine = true,
-                label = { Text("Token") },
-                placeholder = { Text("在 WebUI 用户管理里生成") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "WebUI → 用户与权限 → API Token；也可以填账号登录后使用。",
-                color = palette.textTertiary,
-                fontSize = 11.sp,
-            )
-        } else {
-            TextField(
-                value = username,
-                onValueChange = { username = it },
-                singleLine = true,
-                label = { Text("用户名") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(8.dp))
-            TextField(
-                value = password,
-                onValueChange = { password = it },
-                singleLine = true,
-                label = { Text("密码") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+
+        Spacer(Modifier.height(20.dp))
+        TextField(
+            value = username,
+            onValueChange = { username = it },
+            singleLine = true,
+            label = { Text("用户名") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        TextField(
+            value = password,
+            onValueChange = { password = it },
+            singleLine = true,
+            label = { Text("密码") },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
         Spacer(Modifier.height(18.dp))
         if (busy) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                CircularProgressIndicator(color = palette.accent, modifier = Modifier.width(22.dp).height(22.dp))
+                CircularProgressIndicator(
+                    color = palette.accent,
+                    modifier = Modifier.width(22.dp).height(22.dp),
+                )
             }
         } else {
             PrimaryButton(
@@ -138,18 +126,11 @@ fun LoginScreen(state: AppState) {
                 onClick = {
                     if (server.isBlank()) {
                         error = "请填写服务器地址"
-                    } else if (mode == 0 && token.isBlank()) {
-                        error = "请填写 Token"
-                    } else if (mode == 1 && (username.isBlank() || password.isBlank())) {
+                    } else if (username.isBlank() || password.isBlank()) {
                         error = "请填写用户名和密码"
                     } else {
-                        state.repository.settings.accessToken = accessToken.trim()
-                        com.comii.app.data.AuthTokenProvider.accessToken = accessToken.trim()
-                        if (mode == 0) {
-                            run { state.loginWithToken(server, token) }
-                        } else {
-                            run { state.loginWithPassword(server, username, password) }
-                        }
+                        saveAccess()
+                        run { state.loginWithPassword(server, username, password) }
                     }
                 },
             )
@@ -158,31 +139,27 @@ fun LoginScreen(state: AppState) {
             Spacer(Modifier.height(10.dp))
             Text(it, color = palette.danger, fontSize = 12.sp)
         }
-        Spacer(Modifier.height(16.dp))
-        if (mode == 1) {
-            TextButton(
-                onClick = {
-                    if (server.isBlank() || username.isBlank() || password.isBlank()) {
-                        error = "先填写服务器、用户名和密码"
-                    } else {
-                        run {
-                            state.repository.authSetup(server, username, password)
-                            state.loginWithPassword(server, username, password)
-                        }
+        Spacer(Modifier.height(14.dp))
+        TextButton(
+            onClick = {
+                if (server.isBlank() || username.isBlank() || password.isBlank()) {
+                    error = "先填写服务器、用户名和密码"
+                } else {
+                    saveAccess()
+                    run {
+                        state.repository.authSetup(server, username, password)
+                        state.loginWithPassword(server, username, password)
                     }
-                },
-            ) {
-                Text("首次使用？创建 Owner 账号", color = palette.accent, fontSize = 12.sp)
-            }
+                }
+            },
+        ) {
+            Text("首次使用？创建 Owner 账号", color = palette.accent, fontSize = 12.sp)
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(18.dp))
         Text(
-            "服务端 8001 现在需要登录。旧版 App 会提示 401，请使用 3.1.0 以上版本。",
+            "账号登录成功后才进入 App。旧版 3.0.7 需要更新。",
             color = palette.textTertiary,
             fontSize = 10.sp,
         )
     }
 }
-
-
-
