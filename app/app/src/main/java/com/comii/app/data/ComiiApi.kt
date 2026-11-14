@@ -223,6 +223,11 @@ class ComiiApi(val baseUrl: String) {
         decode(execute(request))
     }
 
+    fun pdfPageUrl(path: String, page: Int, width: Int): String =
+        api("/media/pdf?path=${encode(path)}&page=$page&w=$width")
+
+    suspend fun pdfInfo(path: String): PdfInfo = decode(get("/pdf/info?path=${encode(path)}"))
+
     fun imageUrl(path: String, name: String): String =
         api("/media/image?path=${encode(path)}&name=${encode(name)}")
 

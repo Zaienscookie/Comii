@@ -306,6 +306,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         val hasMedia = leaf && (node.image_count > 0 || node.video_count > 0 ||
             node.kind == NodeKind.MANGA || node.kind == NodeKind.VIDEO)
         when {
+            node.kind == NodeKind.PDF -> nav.navigate(Routes.pdf(node.path))
             hasMedia -> nav.navigate(Routes.series(node.path))
             node.isAlbum || node.isFolder -> openAlbum(node)
             else -> nav.navigate(Routes.series(node.path))
@@ -1077,6 +1078,7 @@ private fun nodeSubtitle(node: LibraryNode): String = when {
         }
         if (isEmpty()) append("空相册")
     }
+    node.kind == NodeKind.PDF -> "PDF · 点击阅读"
     node.kind == NodeKind.VIDEO -> "${node.video_count} 个视频"
     node.kind == NodeKind.MIXED -> "${node.image_count} 图 · ${node.video_count} 视频"
     else -> "${node.image_count} 页"

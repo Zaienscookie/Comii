@@ -18,7 +18,7 @@ from starlette.background import BackgroundTask
 
 from ..config import settings
 from ..models import NodeKind
-from ..services import archive, importers, library, manage, media, media_trash, tags, thumbs, trash
+from ..services import pdfs, archive, importers, library, manage, media, media_trash, tags, thumbs, trash
 
 router = APIRouter(prefix="/api", tags=["legacy-web"])
 
@@ -44,6 +44,24 @@ def _series_kind(images: list[Path], videos: list[Path]) -> str:
 
 def _build_tree(directory: Path, prefix: str = "") -> list[dict]:
     items: list[dict] = []
+    try:
+        pdf_files = [p for p in directory.iterdir() if p.is_file() and p.name.lower().endswith(".pdf")]
+    except OSError:
+        pdf_files = []
+    for pdf in sorted(pdf_files, key=lambda p: p.name.lower()):
+        rel = f"{prefix}/{pdf.name}".lstrip("/")
+        from urllib.parse import quote
+        items.append(
+            {
+                "name": pdf.stem,
+                "path": rel,
+                "kind": "pdf",
+                "subkind": "pdf",
+                "images": 0,
+                "videos": 0,
+                "cover": f"/api/pdf/page?path={quote(rel)}&page=0&w=480",
+            }
+        )
     for entry in library.visible_directories(directory):
         rel = f"{prefix}/{entry.name}".lstrip("/")
         images, videos = library.list_media(entry)
@@ -412,6 +430,17 @@ async def import_pdf(
         "pages": result.pages,
         "path": result.path,
     }
+
+
+@router.get("/pdf/info")
+def pdf_info(path: str):
+    return pdfs.info(path)
+
+
+@router.get("/pdf/page")
+def pdf_page(path: str, page: int = 0, w: int = 1440):
+    from fastapi import Response
+    return Response(content=pdfs.page_bytes(path, page, w), media_type="image/png")
 
 
 @router.get("/tags")

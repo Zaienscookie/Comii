@@ -14,6 +14,7 @@ class NodeKind(str, Enum):
     manga = "manga"
     video = "video"
     mixed = "mixed"
+    pdf = "pdf"
 
 
 class LibraryNode(BaseModel):

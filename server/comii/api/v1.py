@@ -1,4 +1,4 @@
-﻿"""Comii v1 API used by the native app (and any other client)."""
+"""Comii v1 API used by the native app (and any other client)."""
 
 from __future__ import annotations
 
@@ -57,6 +57,7 @@ from ..services import (
     trash,
     updates,
 )
+from ..services import pdfs
 
 router = APIRouter(prefix=settings.api_prefix, tags=["comii"])
 
@@ -549,6 +550,28 @@ def set_album_cover(request: Request, payload: AlbumCoverRequest) -> ActionResul
     auth.require_path(request, payload.path, "manage")
     library.set_album_cover(payload.path, payload.series)
     return ActionResult(status="ok", path=payload.path)
+
+
+# -------------------------------------------------------------------- pdf
+@router.get("/pdf/info")
+def pdf_info(request: Request, path: str) -> dict:
+    user = auth.require_user(request)
+    if not auth.can_see_path(user, path):
+        raise HTTPException(status_code=403, detail="没有查看权限")
+    return pdfs.info(path)
+
+
+@router.get("/media/pdf")
+def pdf_page(request: Request, path: str, page: int = 0, w: int = 1440) -> Response:
+    user = auth.require_user(request)
+    if not auth.can_see_path(user, path):
+        raise HTTPException(status_code=403, detail="没有查看权限")
+    payload = pdfs.page_bytes(path, page, w)
+    return Response(
+        content=payload,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # ------------------------------------------------------------------- tags

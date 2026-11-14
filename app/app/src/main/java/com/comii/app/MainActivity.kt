@@ -67,6 +67,7 @@ import com.comii.app.ui.screens.AiChatScreen
 import com.comii.app.ui.screens.AiPersonaScreen
 import com.comii.app.ui.screens.AiSettingsScreen
 import com.comii.app.ui.screens.HomeScreen
+import com.comii.app.ui.screens.PdfScreen
 import com.comii.app.ui.screens.PlayerScreen
 import com.comii.app.ui.screens.ReaderScreen
 import com.comii.app.ui.screens.SeriesScreen
@@ -104,6 +105,10 @@ class ComiiApplication : Application(), ImageLoaderFactory {
         }
         // 媒体接口没有强缓存头，强制使用磁盘缓存，退出重进不再重新下载
         .respectCacheHeaders(false)
+        .components {
+            add(coil.decode.ImageDecoderDecoder.Factory())
+            add(coil.decode.GifDecoder.Factory())
+        }
         .callFactory(com.comii.app.data.Http.client)
         .crossfade(false)
         .build()
@@ -318,6 +323,10 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
                 all = all,
                 nav = nav,
             )
+        }
+        composable("pdf/{path}") { entry ->
+            val path = Routes.decode(entry.arguments?.getString("path").orEmpty())
+            PdfScreen(state = state, path = path, nav = nav)
         }
         composable("player/{path}/{name}") { entry ->
             val path = Routes.decode(entry.arguments?.getString("path").orEmpty())

@@ -266,6 +266,7 @@ object Routes {
         return if (query.isEmpty()) base else "$base?$query"
     }
     fun series(path: String) = "series/${encode(path)}"
+    fun pdf(path: String) = "pdf/${encode(path)}"
     fun player(path: String, name: String) = "player/${encode(path)}/${encode(name)}"
     fun upload(folder: String) = "upload/${encode(folder)}"
 }

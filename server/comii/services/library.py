@@ -12,6 +12,7 @@ from fastapi import HTTPException
 
 from ..config import settings
 from ..models import BrowseResponse, LibraryNode, NodeKind, SeriesDetail
+from . import pdfs
 
 IMAGE_EXTENSIONS = frozenset(
     {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif", ".svg"}
@@ -385,6 +386,19 @@ def browse(raw_path: str = "") -> BrowseResponse:
         )
 
     parent = "/".join(parts[:-1]) if parts else None
+    # 目录里的 PDF：当成一本「小画册」，封面用第一页
+    for pdf in pdfs.pdf_nodes(base, normalized):
+        items.append(
+            LibraryNode(
+                name=pdf["name"],
+                path=pdf["path"],
+                kind=NodeKind.pdf,
+                cover=pdf["cover"],
+                updated_at=pdf["updated_at"],
+                size=pdf["size"],
+            )
+        )
+
     return BrowseResponse(path=normalized, parent=parent, items=items, total=len(items))
 
 
@@ -488,6 +502,20 @@ def node_for_path(raw_path: str) -> Optional[LibraryNode]:
     if not parts:
         return None
     normalized = "/".join(parts)
+    if pdfs.is_pdf(parts[-1]):
+        target = pdfs.resolve_pdf(normalized)
+        try:
+            stat = target.stat()
+        except OSError:
+            return None
+        return LibraryNode(
+            name=target.stem,
+            path=normalized,
+            kind=NodeKind.pdf,
+            cover=pdfs.cover_url(normalized),
+            updated_at=stat.st_mtime,
+            size=stat.st_size,
+        )
     try:
         directory = resolve_directory(normalized)
     except HTTPException:

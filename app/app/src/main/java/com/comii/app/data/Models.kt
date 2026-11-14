@@ -13,6 +13,7 @@ object NodeKind {
     const val MANGA = "manga"
     const val VIDEO = "video"
     const val MIXED = "mixed"
+    const val PDF = "pdf"
 }
 
 @Serializable
@@ -30,6 +31,7 @@ data class LibraryNode(
 ) {
     val isAlbum: Boolean get() = kind == NodeKind.ALBUM
     val isFolder: Boolean get() = kind == NodeKind.FOLDER || kind == NodeKind.ALBUM
+    val isPdf: Boolean get() = kind == NodeKind.PDF
 }
 
 @Serializable
@@ -248,3 +250,11 @@ data class DeleteBody(val paths: List<String>)
 
 @Serializable
 data class ProgressBody(val path: String, val page: Int, val total: Int)
+
+@Serializable
+data class PdfInfo(
+    val path: String = "",
+    val name: String = "",
+    val pages: Int = 0,
+    val size: Long = 0,
+)

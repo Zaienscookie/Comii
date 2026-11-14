@@ -56,6 +56,8 @@ class ComiiRepository(private val context: Context) {
     /** How many pages ahead the reader pre-downloads into the Coil cache. */
     fun prefetchPages(): Int = settings.prefetchPages.coerceIn(0, 12)
 
+    suspend fun pdfInfo(path: String): PdfInfo = requireApi().pdfInfo(path)
+
     suspend fun tags(): TagsResponse = requireApi().tags()
 
     suspend fun seriesTags(path: String): List<String> = requireApi().seriesTags(path).tags

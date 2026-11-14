@@ -247,6 +247,7 @@ function matches(item) {
 }
 
 function render() {
+  refreshBackBtn();
   document.body.classList.remove("gallery-mode");
   grid.classList.remove("gallery-grid");
   const items = query ? (searchResults || []) : (tagResults || libraryData.series);
@@ -259,6 +260,8 @@ function render() {
   items.forEach((item, i) => {
     if (item.kind === "folder") {
       grid.appendChild(renderFolderCard(item, i));
+    } else if (item.kind === "pdf") {
+      grid.appendChild(renderPdfCard(item, i));
     } else {
       grid.appendChild(renderSeriesCard(item, i));
     }
@@ -522,6 +525,28 @@ document.addEventListener("dragend", () => {
   _dragItem = null;
 });
 
+function renderPdfCard(item, i) {
+  const card = document.createElement("div");
+  card.className = "card pdf-card";
+  card.dataset.name = item.name;
+  card.dataset.path = item.path || "";
+  card.style.animationDelay = `${Math.min(i * 30, 400)}ms`;
+  card.innerHTML = `
+    <div class="card-cover">
+      ${item.cover ? `<img src="${item.cover}" alt="${escapeHtml(item.name)}" loading="lazy">` : ""}
+      <span class="card-badge">PDF</span>
+      <div class="card-play"><span>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </span></div>
+    </div>
+    <div class="card-body">
+      <div class="card-title">${escapeHtml(item.name)}</div>
+      <div class="card-meta">PDF · 点击阅读</div>
+    </div>`;
+  card.addEventListener("click", () => openItem(item));
+  return card;
+}
+
 function renderSeriesCard(item, i) {
   const sub = item.subkind || (item.videos ? "video" : "manga");
   const card = document.createElement("div");
@@ -677,7 +702,11 @@ function openItem(item) {
   const base = KomiConfig.serverBase();
   // 使用完整多级路径 (移入文件夹后的漫画/视频需要完整路径)
   const target = item.path || item.name;
-  const kind = item.subkind || (item.videos ? "video" : "manga");
+  const kind = item.kind === "pdf" ? "pdf" : (item.subkind || (item.videos ? "video" : "manga"));
+  if (kind === "pdf") {
+    location.href = base + `/pdf.html?p=${encodeURIComponent(target)}`;
+    return;
+  }
   if (kind === "manga") {
     location.href = base + `/reader.html?s=${encodeURIComponent(target)}`;
   } else {
@@ -707,7 +736,10 @@ function refreshBackBtn() {
   const btn = document.getElementById("backBtn");
   if (!btn) return;
   const show = Boolean(currentPath) || Boolean(tagResults) || Boolean(query);
-  btn.style.display = show ? "flex" : "none";
+  btn.style.display = show ? "inline-flex" : "none";
+  // 根目录时整行不占位，避免顶部多出一条空白
+  const row = btn.closest(".crumb-row");
+  if (row) row.style.display = show ? "flex" : "none";
 }
 
 function openFolder(path) {
@@ -743,6 +775,7 @@ function renderBreadcrumb() {
       const d = parseInt(a.dataset.depth, 10);
       const targetParts = parts.slice(0, d + 1);
       currentPath = targetParts.join("/");
+      refreshBackBtn();
       loadLibrary();
     });
   });
