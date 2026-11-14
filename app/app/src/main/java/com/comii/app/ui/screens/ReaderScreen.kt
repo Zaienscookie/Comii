@@ -642,10 +642,20 @@ fun ReaderScreen(
                 Text("${current + 1} / ${names.size}", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
                 if (state.can("manage", currentPair()?.first ?: "")) {
                     IconButton(onClick = {
+                        val pair = currentPair()
+                        if (favoriteMark && pair != null) {
+                            scope.launch {
+                                runCatching { repository.removeFavorite(pair.first, pair.second) }
+                                    .onSuccess { favoriteMark = false; state.showToast("已取消收藏") }
+                                    .onFailure { state.showToast("取消失败：${it.message}") }
+                            }
+                            return@IconButton
+                        }
                         showFavoritePicker = true
                         scope.launch {
-                            runCatching { repository.favoriteStatus(currentPair()?.first ?: "", currentPair()?.second ?: "") }
-                                .onSuccess { (_, collections) ->
+                            runCatching { repository.favoriteStatus(pair?.first ?: "", pair?.second ?: "") }
+                                .onSuccess { (favorited, collections) ->
+                                    favoriteMark = favorited
                                     if (collections.isNotEmpty()) favoriteCollections = collections
                                 }
                         }
