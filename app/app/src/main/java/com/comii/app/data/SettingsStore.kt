@@ -96,6 +96,10 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean("video_pitch_follow", false)
         set(value) = prefs.edit().putBoolean("video_pitch_follow", value).apply()
 
+    var videoBassPreset: String
+        get() = prefs.getString("video_bass_preset", "原声") ?: "原声"
+        set(value) = prefs.edit().putString("video_bass_preset", value).apply()
+
     var videoBassUltra: Float
         get() = prefs.getFloat("video_bass_ultra", 0f)
         set(value) = prefs.edit().putFloat("video_bass_ultra", value).apply()
@@ -139,4 +143,5 @@ class SettingsStore(context: Context) {
 
     fun markRead(path: String) = prefs.edit().putLong("read_at_$path", System.currentTimeMillis()).apply()
 }
+
 

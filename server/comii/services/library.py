@@ -257,6 +257,22 @@ def _cover_for(
     return None
 
 
+def safe_mtime(path: Path) -> float:
+    """Archive extraction sometimes leaves mtimes in 2036; fall back to ctime."""
+    try:
+        stat = path.stat()
+        mtime = stat.st_mtime
+        now = time.time()
+        if mtime < 946684800 or mtime > now + 86400:
+            fallback = stat.st_ctime
+            if 946684800 <= fallback <= now + 86400:
+                return fallback
+            return 0.0
+        return mtime
+    except OSError:
+        return 0.0
+
+
 def _latest_mtime(directory: Path) -> Optional[float]:
     try:
         return max((entry.stat().st_mtime for entry in directory.iterdir()), default=None)
@@ -565,10 +581,7 @@ def list_gallery(
         series_name = directory.name
         if wanted in ("all", "image"):
             for index, item in enumerate(images):
-                try:
-                    mtime = item.stat().st_mtime
-                except OSError:
-                    mtime = 0
+                mtime = safe_mtime(item)
                 rows.append(
                     {
                         "series_path": rel,
@@ -582,10 +595,7 @@ def list_gallery(
                 )
         if wanted in ("all", "video"):
             for index, item in enumerate(videos):
-                try:
-                    mtime = item.stat().st_mtime
-                except OSError:
-                    mtime = 0
+                mtime = safe_mtime(item)
                 rows.append(
                     {
                         "series_path": rel,

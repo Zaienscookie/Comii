@@ -58,6 +58,7 @@ import androidx.navigation.NavHostController
 import com.comii.app.data.BassEffectController
 import com.comii.app.ui.AppState
 import com.comii.app.ui.components.BottomSheet
+import com.comii.app.ui.components.SegmentControl
 import com.comii.app.ui.theme.ComiiTheme
 import java.util.Locale
 
@@ -74,6 +75,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     var speed by remember { mutableFloatStateOf(1f) }
     var pitch by remember { mutableFloatStateOf(1f) }
     var pitchFollows by remember { mutableStateOf(settings.videoPitchFollowsSpeed) }
+    var bassPreset by remember { mutableStateOf(settings.videoBassPreset) }
     var bassUltra by remember { mutableFloatStateOf(settings.videoBassUltra) }
     var bassLow by remember { mutableFloatStateOf(settings.videoBassLow) }
     var bassMid by remember { mutableFloatStateOf(settings.videoBassMid) }
@@ -127,6 +129,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     }
     LaunchedEffect(bassUltra, bassLow, bassMid) {
         bassController.update(bassMid, bassLow, bassUltra)
+        settings.videoBassPreset = bassPreset
         settings.videoBassUltra = bassUltra
         settings.videoBassLow = bassLow
         settings.videoBassMid = bassMid
@@ -300,9 +303,9 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                 )
                 Slider(
                     value = speed,
-                    onValueChange = { speed = it },
+                    onValueChange = { speed = (it * 20f).toInt() / 20f },
                     valueRange = 0.5f..5f,
-                    steps = 89,
+                    steps = 0,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("降速 0.50", color = palette.textTertiary, fontSize = 10.sp)
@@ -335,23 +338,40 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     enabled = !pitchFollows,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("降速 0.50", color = palette.textTertiary, fontSize = 10.sp)
+                    Text("低沉 0.50", color = palette.textTertiary, fontSize = 10.sp)
                     Text("原音 1.00", color = palette.textTertiary, fontSize = 10.sp)
-                    Text("加速 5.00", color = palette.textTertiary, fontSize = 10.sp)
+                    Text("偏高 2.00", color = palette.textTertiary, fontSize = 10.sp)
                 }
                 Spacer(Modifier.height(16.dp))
                 Text("低音增强", color = palette.textPrimary, fontSize = 15.sp)
-                Text("从左到右：中重低音、重低音、超重低音", color = palette.textSecondary, fontSize = 11.sp)
+                Text("选择音效，不是手动调三段", color = palette.textSecondary, fontSize = 11.sp)
                 Spacer(Modifier.height(10.dp))
-                BassSlider("中重低音", bassMid) { bassMid = it }
-                BassSlider("重低音", bassLow) { bassLow = it }
-                BassSlider("超重低音", bassUltra) { bassUltra = it }
+                SegmentControl(
+                    options = listOf("原声", "重低音", "极重低音"),
+                    selectedIndex = when (bassPreset) {
+                        "重低音" -> 1
+                        "极重低音" -> 2
+                        else -> 0
+                    },
+                    onSelect = { index ->
+                        bassPreset = listOf("原声", "重低音", "极重低音")[index]
+                        val values = when (bassPreset) {
+                            "重低音" -> Triple(35f, 55f, 40f)
+                            "极重低音" -> Triple(55f, 85f, 75f)
+                            else -> Triple(0f, 0f, 0f)
+                        }
+                        bassMid = values.first
+                        bassLow = values.second
+                        bassUltra = values.third
+                    },
+                )
 
                 Spacer(Modifier.height(10.dp))
                 TextButton(onClick = {
                     speed = 1f
                     pitch = 1f
                     pitchFollows = false
+                    bassPreset = "原声"
                     bassMid = 0f
                     bassLow = 0f
                     bassUltra = 0f
@@ -363,20 +383,3 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
         }
     }
 }
-
-
-@Composable
-private fun BassSlider(label: String, value: Float, onChange: (Float) -> Unit) {
-    val palette = ComiiTheme.palette
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = palette.textSecondary, fontSize = 12.sp, modifier = Modifier.width(78.dp))
-        Slider(
-            value = value,
-            onValueChange = onChange,
-            valueRange = 0f..100f,
-            modifier = Modifier.weight(1f),
-        )
-        Text("${value.toInt()}", color = palette.textTertiary, fontSize = 11.sp, modifier = Modifier.width(30.dp))
-    }
-}
-

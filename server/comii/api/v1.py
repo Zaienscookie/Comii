@@ -242,7 +242,7 @@ def media_info(path: str, name: str) -> dict:
         "path": path,
         "name": name,
         "size": stat.st_size,
-        "mtime": stat.st_mtime,
+        "mtime": library.safe_mtime(source),
         "kind": "video" if library.is_video(source) else "image",
         "width": None,
         "height": None,
