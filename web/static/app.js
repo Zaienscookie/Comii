@@ -704,7 +704,7 @@ function openItem(item) {
   const target = item.path || item.name;
   const kind = item.kind === "pdf" ? "pdf" : (item.subkind || (item.videos ? "video" : "manga"));
   if (kind === "pdf") {
-    location.href = base + `/pdf.html?p=${encodeURIComponent(target)}`;
+    location.href = base + `/static/pdf.html?p=${encodeURIComponent(target)}`;
     return;
   }
   if (kind === "manga") {
