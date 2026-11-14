@@ -9,6 +9,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +39,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,6 +66,7 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
     var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+    val aiUnread by state.ai.unread.collectAsState()
 
     // 每次启动都检查更新；有新版本直接弹窗，用户点更新即可
     LaunchedEffect(Unit) {
@@ -84,7 +91,7 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
         containerColor = palette.background,
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
-            ComiiTabBar(selected = tab, onSelect = { tab = it })
+            ComiiTabBar(selected = tab, onSelect = { tab = it }, aiUnread = aiUnread)
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -126,7 +133,7 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
 }
 
 @Composable
-private fun ComiiTabBar(selected: Int, onSelect: (Int) -> Unit) {
+private fun ComiiTabBar(selected: Int, onSelect: (Int) -> Unit, aiUnread: Int) {
     val palette = ComiiTheme.palette
     val tabs = listOf(
         Triple("照片", Icons.Rounded.PhotoLibrary, 0),
@@ -150,14 +157,19 @@ private fun ComiiTabBar(selected: Int, onSelect: (Int) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tabs.forEach { (label, icon, index) ->
-                TabItem(label = label, icon = icon, selected = selected == index) { onSelect(index) }
+                TabItem(
+                    label = label,
+                    icon = icon,
+                    selected = selected == index,
+                    badge = if (index == 3) aiUnread else 0,
+                ) { onSelect(index) }
             }
         }
     }
 }
 
 @Composable
-private fun TabItem(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+private fun TabItem(label: String, icon: ImageVector, selected: Boolean, badge: Int = 0, onClick: () -> Unit) {
     val palette = ComiiTheme.palette
     Column(
         modifier = Modifier
@@ -165,12 +177,33 @@ private fun TabItem(label: String, icon: ImageVector, selected: Boolean, onClick
             .padding(horizontal = 18.dp, vertical = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = if (selected) palette.accent else palette.textTertiary,
-            modifier = Modifier.size(24.dp),
-        )
+        Box {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = if (selected) palette.accent else palette.textTertiary,
+                modifier = Modifier.size(24.dp),
+            )
+            if (badge > 0) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 9.dp, y = (-6).dp)
+                        .defaultMinSize(minWidth = 16.dp, minHeight = 16.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(palette.accent)
+                        .padding(horizontal = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        if (badge > 99) "99+" else "$badge",
+                        color = androidx.compose.ui.graphics.Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(3.dp))
         Text(
             label,

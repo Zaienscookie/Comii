@@ -168,17 +168,18 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         }
         val target = path
         var failure: Throwable? = null
-        repeat(3) { attempt ->
+        for (attempt in 0 until 3) {
             val result = runCatching { state.repository.browse(target) }
-            result.onSuccess {
-                browseData = it
+            if (result.isSuccess) {
+                browseData = result.getOrNull()
                 failure = null
-            }.onFailure {
-                failure = it
-                if (attempt < 2) delay(400L * (attempt + 1))
+                break
             }
-            if (failure == null) return@repeat
+            failure = result.exceptionOrNull()
+            delay(300L * (attempt + 1))
         }
+        // 期间用户已经返回/切走：这次结果作废，不要弹「找不到」也不要改路径
+        if (path != target) return
         if (failure != null) {
             browseData = null
             media = emptyList()
@@ -192,6 +193,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
             loading = false
             return
         }
+        if (path != target) return
         media = if (target.isEmpty()) emptyList() else {
             val detail = runCatching { state.repository.series(target) }.getOrNull()
             buildList {

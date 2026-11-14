@@ -50,6 +50,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -108,6 +109,27 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
     var showSessions by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableIntStateOf(0) }
     val listState = rememberLazyListState()
+
+    // 进入 AI 页：清未读；退出后仍允许后台把回复写完
+    DisposableEffect(ai) {
+        ai.chatVisible = true
+        ai.markRead()
+        onDispose { ai.chatVisible = false }
+    }
+
+    // 页面在前台时定期从本地会话同步（后台写完的回复、别处产生的消息都能补上）
+    LaunchedEffect(personaId, conversation?.id) {
+        while (true) {
+            kotlinx.coroutines.delay(1200)
+            val id = activeConversationId ?: continue
+            val fresh = runCatching { ai.conversation(id) }.getOrNull() ?: continue
+            if (fresh.messages.size != messages.size || fresh.messages.lastOrNull()?.content != messages.lastOrNull()?.content) {
+                messages = fresh.messages
+                conversation = fresh
+                if (ai.chatVisible) ai.markRead()
+            }
+        }
+    }
     val imeVisible = WindowInsets.isImeVisible
 
     LaunchedEffect(imeVisible) {
@@ -252,9 +274,7 @@ fun AiChatScreen(state: AppState, personaId: String, nav: NavHostController) {
         val message = ChatMessage("user", text, System.currentTimeMillis(), image)
         // 先上屏 + 立刻写入会话，保证发出去就一直在
         messages = messages + message
-        scope.launch {
-            runCatching { ai.appendMessage(current.id, message) }
-        }
+        ai.appendMessageAsync(current.id, message)
         if (pendingBatch.isEmpty()) pendingConversationId = current.id
         pendingBatch = pendingBatch + message
         if (!streaming) scheduleBatch()

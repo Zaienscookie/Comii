@@ -3,6 +3,9 @@ package com.comii.app.data.ai
 import android.content.Context
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -24,6 +27,24 @@ class AiRepository(context: Context) {
     private val client = AiClient()
     /** 独立于页面的后台作用域：退出聊天页也继续生成并写回。 */
     private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** AI 页面是否在前台；不在前台时收到回复就累加未读角标 */
+    var chatVisible = false
+
+    private val _unread = MutableStateFlow(0)
+    val unread: StateFlow<Int> = _unread.asStateFlow()
+
+    fun markRead() {
+        _unread.value = 0
+    }
+
+    private fun noteAssistantMessage() {
+        if (!chatVisible) _unread.value = _unread.value + 1
+    }
+
+    /** 用后台作用域写消息，页面退出也不会丢 */
+    fun appendMessageAsync(conversationId: String, message: ChatMessage): Job =
+        backgroundScope.launch { runCatching { appendMessage(conversationId, message) } }
     private val lock = Any()
     private var state: AiState = store.load().let { loaded ->
         if (loaded.seeded) {
@@ -277,6 +298,7 @@ class AiRepository(context: Context) {
             val message = ChatMessage("assistant", part, now() + index)
             current = current.copy(messages = current.messages + message, updatedAt = now())
             replaceConversation(current)
+            noteAssistantMessage()
             onMessage(message)
             last = message
             if (answers.size > 1 && index != answers.lastIndex) delay(650)
@@ -336,6 +358,7 @@ class AiRepository(context: Context) {
             val message = ChatMessage("assistant", part, now() + index)
             current = current.copy(messages = current.messages + message, updatedAt = now())
             replaceConversation(current)
+            noteAssistantMessage()
             onMessage(message)
             last = message
             if (answers.size > 1 && index != answers.lastIndex) delay(650)

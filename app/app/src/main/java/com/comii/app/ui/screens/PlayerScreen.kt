@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -383,7 +386,12 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
 
     if (showTuning) {
         BottomSheet(onDismiss = { showTuning = false }) {
-            Column(Modifier.padding(horizontal = 22.dp)) {
+            Column(
+                Modifier
+                    .padding(horizontal = 22.dp)
+                    .heightIn(max = 540.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
                 Text("播放速度与音调", color = palette.textPrimary, fontSize = 18.sp)
                 Spacer(Modifier.height(14.dp))
                 Text(
@@ -392,9 +400,9 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     fontSize = 12.sp,
                 )
                 Slider(
-                    value = speed,
-                    onValueChange = { speed = (it * 20f).toInt() / 20f },
-                    valueRange = 0.5f..5f,
+                    value = speedToSlider(speed),
+                    onValueChange = { speed = (sliderToSpeed(it) * 20f).toInt() / 20f },
+                    valueRange = 0f..1f,
                     steps = 0,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -421,10 +429,10 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                     fontSize = 12.sp,
                 )
                 Slider(
-                    value = pitch,
-                    onValueChange = { pitch = it },
-                    valueRange = 0.5f..2f,
-                    steps = 149,
+                    value = valueToSlider(pitch, 0.5f, 2f),
+                    onValueChange = { pitch = (sliderToValue(it, 0.5f, 2f) * 100f).toInt() / 100f },
+                    valueRange = 0f..1f,
+                    steps = 0,
                     enabled = !pitchFollows,
                 )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -482,3 +490,20 @@ private fun formatClock(ms: Long): String {
     return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, sec)
     else String.format(Locale.US, "%d:%02d", m, sec)
 }
+
+/** 对称滑杆：1.0 永远在正中间（0.5x 与 5x 分列两侧）。 */
+private fun valueToSlider(value: Float, min: Float, max: Float): Float {
+    val v = value.coerceIn(min, max)
+    return if (v <= 1f) 0.5f * (v - min) / (1f - min)
+    else 0.5f + 0.5f * (v - 1f) / (max - 1f)
+}
+
+private fun sliderToValue(pos: Float, min: Float, max: Float): Float {
+    val p = pos.coerceIn(0f, 1f)
+    return if (p <= 0.5f) min + (p / 0.5f) * (1f - min)
+    else 1f + ((p - 0.5f) / 0.5f) * (max - 1f)
+}
+
+private fun speedToSlider(speed: Float): Float = valueToSlider(speed, 0.5f, 5f)
+
+private fun sliderToSpeed(pos: Float): Float = sliderToValue(pos, 0.5f, 5f)
