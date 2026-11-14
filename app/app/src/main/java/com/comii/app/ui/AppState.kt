@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.comii.app.data.ComiiRepository
 import com.comii.app.data.GalleryItem
+import kotlinx.serialization.encodeToString
 
 /** App-wide UI state: theme choice, server address and transient toast text. */
 class AppState(
@@ -17,11 +18,28 @@ class AppState(
     var themeMode by mutableStateOf(repository.settings.themeMode)
         private set
 
+    init {
+        com.comii.app.data.AuthTokenProvider.token = repository.settings.authToken
+    }
+
     var serverUrl by mutableStateOf(repository.settings.serverUrl)
         private set
 
     var serverName by mutableStateOf(repository.settings.serverName)
         private set
+
+    var authUsername by mutableStateOf(repository.settings.authUsername)
+        private set
+    var authRole by mutableStateOf(repository.settings.authRole)
+        private set
+    var authGrants by mutableStateOf(
+        runCatching {
+            com.comii.app.data.ComiiJson.decodeFromString<List<com.comii.app.data.AuthGrant>>(repository.settings.authGrantsJson)
+        }.getOrDefault(emptyList()),
+    )
+        private set
+
+    val isLoggedIn: Boolean get() = repository.settings.authToken.isNotBlank()
 
     /** 切换服务器时递增，让照片/相册/系列界面强制丢弃旧服务器的数据与图片地址。 */
     var serverGeneration by mutableIntStateOf(0)
@@ -63,6 +81,75 @@ class AppState(
     fun setTheme(mode: String) {
         themeMode = mode
         repository.settings.themeMode = mode
+    }
+
+    suspend fun loginWithPassword(url: String, username: String, password: String): Unit {
+        repository.settings.serverUrl = url.trim()
+        serverUrl = url.trim()
+        val response = repository.authLogin(url, username, password)
+        authUsername = response.user.username
+        authRole = response.user.role
+        authGrants = response.grants
+        serverGeneration++
+        photosLoaded = false
+        photosItems = emptyList()
+    }
+
+    suspend fun loginWithToken(url: String, token: String): Unit {
+        repository.settings.serverUrl = url.trim()
+        serverUrl = url.trim()
+        com.comii.app.data.AuthTokenProvider.token = token.trim()
+        val me = repository.authMe()
+        repository.settings.authToken = token.trim()
+        repository.settings.authUsername = me.user.username
+        repository.settings.authRole = me.user.role
+        repository.settings.authGrantsJson = com.comii.app.data.ComiiJson.encodeToString(me.grants)
+        authUsername = me.user.username
+        authRole = me.user.role
+        authGrants = me.grants
+        serverGeneration++
+        photosLoaded = false
+        photosItems = emptyList()
+    }
+
+    suspend fun logout() {
+        repository.authLogout()
+        authUsername = ""
+        authRole = ""
+        authGrants = emptyList()
+        photosItems = emptyList()
+        photosLoaded = false
+    }
+
+    fun can(action: String, path: String): Boolean {
+        return when (authRole) {
+            "owner", "admin" -> true
+            "viewer" -> action == "view"
+            "custom" -> {
+                val normalized = path.trim('/')
+                var best: com.comii.app.data.AuthGrant? = null
+                var bestLen = -1
+                authGrants.forEach { grant ->
+                    val prefix = grant.path_prefix.trim('/')
+                    val matches = prefix.isEmpty() || normalized == prefix || normalized.startsWith("$prefix/")
+                    if (matches && prefix.length >= bestLen) {
+                        best = grant
+                        bestLen = prefix.length
+                    }
+                }
+                when (action) {
+                    "view" -> best?.view == true
+                    "download" -> best?.download == true
+                    "upload" -> best?.upload == true
+                    "create" -> best?.create == true
+                    "delete" -> best?.delete == true
+                    "move" -> best?.move == true
+                    "manage" -> best?.manage == true
+                    else -> false
+                }
+            }
+            else -> false
+        }
     }
 
     fun setServer(url: String, name: String = "") {
@@ -136,4 +223,5 @@ object Routes {
     fun player(path: String, name: String) = "player/${encode(path)}/${encode(name)}"
     fun upload(folder: String) = "upload/${encode(folder)}"
 }
+
 

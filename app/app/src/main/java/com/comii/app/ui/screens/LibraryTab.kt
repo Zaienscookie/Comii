@@ -392,14 +392,18 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     Text("粘贴", color = palette.accent, fontWeight = FontWeight.Medium)
                 }
             }
-            TextButton(onClick = {
-                editing = !editing
-                if (!editing) selected = emptySet()
-            }) {
-                Text(if (editing) "完成" else "编辑", color = palette.accent, fontWeight = FontWeight.Medium)
+            if (state.can("delete", path) || state.can("move", path) || state.can("manage", path)) {
+                TextButton(onClick = {
+                    editing = !editing
+                    if (!editing) selected = emptySet()
+                }) {
+                    Text(if (editing) "完成" else "编辑", color = palette.accent, fontWeight = FontWeight.Medium)
+                }
             }
-            IconButton(onClick = { dialog = LibraryDialog.NewAlbum }) {
-                Icon(Icons.Rounded.Add, contentDescription = "新建相册", tint = palette.accent, modifier = Modifier.size(24.dp))
+            if (state.can("create", path)) {
+                IconButton(onClick = { dialog = LibraryDialog.NewAlbum }) {
+                    Icon(Icons.Rounded.Add, contentDescription = "新建相册", tint = palette.accent, modifier = Modifier.size(24.dp))
+                }
             }
             IconButton(onClick = { menuOpen = true }) {
                 Icon(Icons.Rounded.MoreVert, contentDescription = "更多", tint = palette.accent, modifier = Modifier.size(22.dp))
@@ -1456,6 +1460,7 @@ private suspend fun shareMedia(
     }
     context.startActivity(android.content.Intent.createChooser(intent, "分享"))
 }
+
 
 
 

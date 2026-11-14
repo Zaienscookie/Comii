@@ -1,4 +1,4 @@
-package com.comii.app.data
+﻿package com.comii.app.data
 
 import android.content.ContentResolver
 import android.content.Context
@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody
@@ -124,6 +125,39 @@ class ComiiRepository(private val context: Context) {
         name: String = "",
         collection: String = "默认",
     ): ActionResult = requireApi().addFavorite(path, name, collection)
+
+    suspend fun authLogin(base: String, username: String, password: String): AuthResponse {
+        val api = ComiiApi(base.trim().trimEnd('/'))
+        val response = api.authLogin(username, password)
+        settings.authToken = response.token
+        settings.authUsername = response.user.username
+        settings.authRole = response.user.role
+        settings.authGrantsJson = ComiiJson.encodeToString(response.grants)
+        AuthTokenProvider.token = response.token
+        return response
+    }
+
+    suspend fun authSetup(base: String, username: String, password: String): AuthResponse {
+        val api = ComiiApi(base.trim().trimEnd('/'))
+        val response = api.authSetup(username, password)
+        settings.authToken = response.token
+        settings.authUsername = response.user.username
+        settings.authRole = response.user.role
+        settings.authGrantsJson = ComiiJson.encodeToString(response.grants)
+        AuthTokenProvider.token = response.token
+        return response
+    }
+
+    suspend fun authMe(): AuthMe = requireApi().authMe()
+
+    suspend fun authLogout() {
+        runCatching { requireApi().authLogout() }
+        settings.authToken = ""
+        settings.authUsername = ""
+        settings.authRole = ""
+        settings.authGrantsJson = "[]"
+        AuthTokenProvider.token = ""
+    }
 
     suspend fun mediaInfo(path: String, name: String): MediaInfo = requireApi().mediaInfo(path, name)
 
@@ -408,3 +442,5 @@ class ComiiRepository(private val context: Context) {
         }
     }
 }
+
+

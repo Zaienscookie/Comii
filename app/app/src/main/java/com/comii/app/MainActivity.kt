@@ -1,4 +1,4 @@
-package com.comii.app
+﻿package com.comii.app
 
 import android.app.Activity
 import android.app.Application
@@ -102,6 +102,7 @@ class ComiiApplication : Application(), ImageLoaderFactory {
         }
         // 媒体接口没有强缓存头，强制使用磁盘缓存，退出重进不再重新下载
         .respectCacheHeaders(false)
+        .callFactory(com.comii.app.data.Http.client)
         .crossfade(false)
         .build()
 }
@@ -216,6 +217,11 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
             onConfirm = { entered = true },
             onQuit = { },
         )
+        return
+    }
+
+    if (!state.isLoggedIn) {
+        com.comii.app.ui.screens.LoginScreen(state)
         return
     }
 
@@ -369,4 +375,5 @@ private fun EntryGate(onConfirm: () -> Unit, onQuit: () -> Unit) {
         )
     }
 }
+
 

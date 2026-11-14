@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comii · 登录</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg,#0b0b0d);color:var(--text,#fff);font-family:system-ui,sans-serif}
+.login{width:min(92vw,380px);padding:28px;border-radius:22px;background:var(--card,#17171a);box-shadow:0 20px 60px #0008}
+h1{margin:0 0 6px;font-size:30px}
+p.sub{color:#8e8e93;font-size:13px;margin:0 0 22px}
+input{width:100%;box-sizing:border-box;padding:13px 14px;margin:8px 0;border:0;border-radius:12px;background:#242428;color:#fff;font-size:15px}
+button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:12px;background:#0a84ff;color:#fff;font-size:16px;font-weight:600}
+.error{color:#ff453a;font-size:13px;min-height:18px;margin-top:8px}
+.hint{color:#8e8e93;font-size:12px;margin-top:14px}
+</style>
+</head>
+<body>
+<form class="login" id="form">
+  <h1>Comii<span style="color:#0a84ff">.</span></h1>
+  <p class="sub" id="sub">登录后访问媒体库</p>
+  <input id="username" placeholder="用户名" autocomplete="username" autofocus>
+  <input id="password" type="password" placeholder="密码" autocomplete="current-password">
+  <input id="password2" type="password" placeholder="确认密码" autocomplete="new-password" style="display:none">
+  <label style="display:flex;gap:8px;align-items:center;color:#8e8e93;font-size:13px"><input id="remember" type="checkbox" checked style="width:auto;margin:0"> 记住登录</label>
+  <button id="submit" type="submit">登录</button>
+  <div class="error" id="error"></div>
+  <div class="hint" id="hint"></div>
+</form>
+<script>
+const form = document.getElementById('form');
+const error = document.getElementById('error');
+const hint = document.getElementById('hint');
+let initialized = true;
+const next = new URLSearchParams(location.search).get('next') || '/';
+async function boot(){
+  try {
+    const status = await fetch('/api/v1/auth/status', {credentials:'same-origin'}).then(r=>r.json());
+    initialized = !!status.initialized;
+    if (!initialized) {
+      document.getElementById('sub').textContent = '首次使用，创建 Owner 账号';
+      document.getElementById('password2').style.display = 'block';
+      document.getElementById('submit').textContent = '创建并登录';
+      hint.textContent = '创建后可在 WebUI 管理用户和目录权限';
+    }
+  } catch(e) { hint.textContent = '无法连接服务器'; }
+}
+boot();
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  error.textContent = '';
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const password2 = document.getElementById('password2').value;
+  if (!username || !password) { error.textContent = '请输入用户名和密码'; return; }
+  if (!initialized && password !== password2) { error.textContent = '两次密码不一致'; return; }
+  const endpoint = initialized ? '/api/v1/auth/login' : '/api/v1/auth/setup';
+  const body = {username, password, remember: document.getElementById('remember').checked};
+  const response = await fetch(endpoint, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    credentials: 'same-origin', body: JSON.stringify(body)
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(()=>({}));
+    error.textContent = data.detail || '登录失败';
+    return;
+  }
+  location.href = next;
+});
+</script>
+</body>
+</html>

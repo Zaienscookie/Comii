@@ -99,11 +99,15 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
             title = detail?.name ?: "系列",
             onBack = { nav.popBackStack() },
             actions = {
+                if (state.can("upload", path)) {
                 IconButton(onClick = { nav.navigate(Routes.upload(path)) }) {
                     Icon(Icons.Rounded.Upload, contentDescription = "导入内容", tint = palette.accent)
                 }
+                }
+                if (state.can("download", path)) {
                 IconButton(onClick = { askDownload = true }) {
                     Icon(Icons.Rounded.Download, contentDescription = "下载", tint = palette.accent)
+                }
                 }
                 IconButton(onClick = { showMore = true }) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = "更多", tint = palette.accent)
@@ -286,4 +290,5 @@ private fun SeriesContent(
         }
     }
 }
+
 

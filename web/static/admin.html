@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comii · 用户管理</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+body{background:var(--bg,#0b0b0d);color:var(--text,#fff);font-family:system-ui,sans-serif;margin:0}
+.wrap{max-width:980px;margin:0 auto;padding:24px}
+h1{font-size:28px;margin:0 0 4px}.sub{color:#8e8e93;font-size:13px;margin-bottom:20px}
+.card{background:#17171a;border-radius:16px;padding:18px;margin:14px 0}
+input,select,button{padding:10px 12px;border:0;border-radius:10px;background:#242428;color:#fff;font-size:14px;margin:4px 4px 4px 0}
+button{background:#0a84ff;font-weight:600;cursor:pointer}
+button.danger{background:#ff453a}
+button.ghost{background:#2c2c31}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;padding:8px;border-bottom:1px solid #2c2c31}
+.grant{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:6px 0;color:#c7c7cc}
+.grant label{font-size:12px}
+.token{font-family:ui-monospace,monospace;font-size:12px;background:#0d0d0f;padding:10px;border-radius:8px;word-break:break-all;user-select:all}
+a{color:#0a84ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>用户与权限</h1>
+  <div class="sub">Owner 可以管理用户、分配角色和目录权限。<a href="/">返回媒体库</a></div>
+
+  <div class="card">
+    <h3>新建用户</h3>
+    <input id="newName" placeholder="用户名">
+    <input id="newPass" type="password" placeholder="密码（至少 6 位）">
+    <select id="newRole">
+      <option value="viewer">Viewer · 只读</option>
+      <option value="admin">Admin · 管理内容</option>
+      <option value="custom">Custom · 自定义权限</option>
+      <option value="owner">Owner · 全部权限</option>
+    </select>
+    <button onclick="createUser()">创建</button>
+    <span id="createMsg"></span>
+  </div>
+
+  <div class="card">
+    <h3>用户列表</h3>
+    <table><thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>操作</th></tr></thead><tbody id="users"></tbody></table>
+  </div>
+
+  <div class="card">
+    <h3>目录权限</h3>
+    <div class="sub">选择用户，填写目录前缀（留空表示整个媒体库），勾选能力后保存。</div>
+    <select id="grantUser" onchange="loadGrants()"></select>
+    <input id="grantPath" placeholder="目录前缀，例如 neko 或 本子/某作者">
+    <div class="grant">
+      <label><input type="checkbox" id="g_view"> 浏览</label>
+      <label><input type="checkbox" id="g_download"> 下载/分享</label>
+      <label><input type="checkbox" id="g_upload"> 上传</label>
+      <label><input type="checkbox" id="g_create"> 新建文件夹</label>
+      <label><input type="checkbox" id="g_delete"> 删除</label>
+      <label><input type="checkbox" id="g_move"> 移动</label>
+      <label><input type="checkbox" id="g_manage"> 管理封面/标签</label>
+    </div>
+    <button onclick="saveGrant()">保存权限</button>
+    <span id="grantMsg"></span>
+    <div id="grantList" style="margin-top:12px;font-size:12px;color:#8e8e93"></div>
+  </div>
+
+  <div class="card">
+    <h3>API Token</h3>
+    <div class="sub">给 App 或 Cloudflare 外部访问用，只显示一次。</div>
+    <select id="tokenUser"></select>
+    <input id="tokenName" placeholder="Token 名称，例如 手机 / CF">
+    <input id="tokenDays" type="number" value="30" style="width:90px"> 天
+    <button onclick="createToken()">生成 Token</button>
+    <div id="tokenOut"></div>
+  </div>
+</div>
+<script>
+let users = [];
+async function api(path, options={}) {
+  const r = await fetch(path, {credentials:'same-origin', headers:{'Content-Type':'application/json'}, ...options});
+  if (r.status === 401) { location.href = '/login.html?next=/admin.html'; throw new Error('unauthorized'); }
+  return r.json();
+}
+async function load() {
+  const data = await api('/api/v1/admin/users');
+  users = data.items || [];
+  document.getElementById('users').innerHTML = users.map(u =>
+    `<tr><td>${u.id}</td><td>${escapeHtml(u.username)}</td><td>${u.role}</td><td>${u.enabled ? '启用' : '禁用'}</td>
+    <td><button class="ghost" onclick="setRole(${u.id}, 'viewer')">Viewer</button>
+    <button class="ghost" onclick="setRole(${u.id}, 'admin')">Admin</button>
+    <button class="ghost" onclick="setRole(${u.id}, 'custom')">Custom</button>
+    <button class="danger" onclick="delUser(${u.id})">删除</button></td></tr>`).join('');
+  const options = users.map(u => `<option value="${u.id}">${escapeHtml(u.username)} (${u.role})</option>`).join('');
+  document.getElementById('grantUser').innerHTML = options;
+  document.getElementById('tokenUser').innerHTML = options;
+}
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+async function createUser(){
+  const body={username:newName.value.trim(),password:newPass.value,role:newRole.value};
+  try { await api('/api/v1/admin/users',{method:'POST',body:JSON.stringify(body)}); createMsg.textContent='已创建'; newName.value='';newPass.value=''; await load(); }
+  catch(e){ createMsg.textContent='创建失败：'+e.message; }
+}
+async function setRole(id, role){ await api('/api/v1/admin/users/'+id,{method:'PATCH',body:JSON.stringify({role})}); await load(); }
+async function delUser(id){ if(!confirm('确定删除这个用户？')) return; await api('/api/v1/admin/users/'+id,{method:'DELETE'}); await load(); }
+async function loadGrants(){
+  const id=grantUser.value; if(!id) return;
+  const data=await api('/api/v1/admin/users/'+id+'/grants');
+  const list=data.items||[];
+  grantList.innerHTML=list.length?list.map(g=>`<div>${escapeHtml(g.path_prefix||'(根目录)')} · ${['view','download','upload','create','delete','move','manage'].filter(k=>g[k]).join(', ')}</div>`).join(''):'暂无单独授权';
+}
+async function saveGrant(){
+  const id=grantUser.value; if(!id) return;
+  const item={path_prefix:grantPath.value.trim(),view:g_view.checked,download:g_download.checked,upload:g_upload.checked,create:g_create.checked,delete:g_delete.checked,move:g_move.checked,manage:g_manage.checked};
+  const existing=await api('/api/v1/admin/users/'+id+'/grants');
+  const items=(existing.items||[]).filter(g=>g.path_prefix!==item.path_prefix);
+  items.push(item);
+  await api('/api/v1/admin/users/'+id+'/grants',{method:'PUT',body:JSON.stringify({items})});
+  grantMsg.textContent='已保存'; await loadGrants();
+}
+async function createToken(){
+  const id=tokenUser.value; if(!id) return;
+  const data=await api('/api/v1/admin/users/'+id+'/tokens',{method:'POST',body:JSON.stringify({name:tokenName.value,days:Number(tokenDays.value)||30})});
+  tokenOut.innerHTML='<div class="sub">Token 只显示一次，请保存：</div><div class="token">'+escapeHtml(data.token)+'</div>';
+}
+load();
+</script>
+</body>
+</html>

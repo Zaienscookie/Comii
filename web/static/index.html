@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN" data-theme="auto">
 <head>
 <meta charset="UTF-8">
@@ -16,6 +16,7 @@
   <div class="nav-inner">
     <h1 class="logo">Comii<span class="dot">.</span></h1>
     <div class="nav-right">
+      <a href="/admin.html" class="icon-btn" title="用户与权限" aria-label="用户与权限" style="text-decoration:none;font-size:12px">用户</a>
       <button id="searchToggle" class="icon-btn" aria-label="搜索" title="搜索">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       </button>
@@ -211,6 +212,7 @@
   </div>
 </div>
 
+<script src="/static/auth-guard.js"></script>
 <script src="/static/config.js"></script>
 <script src="/static/app.js"></script>
 <div class="sheet-overlay" id="moreOverlay"></div>
@@ -232,4 +234,7 @@
 </nav>
 </body>
 </html>
+
+
+
 

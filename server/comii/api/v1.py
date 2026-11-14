@@ -1,4 +1,4 @@
-"""Comii v1 API used by the native app (and any other client)."""
+﻿"""Comii v1 API used by the native app (and any other client)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from starlette.background import BackgroundTask
 
+from .. import auth
 from ..config import settings
 from ..models import (
     ActionResult,
@@ -94,68 +95,89 @@ def ping() -> PingResponse:
 
 # ---------------------------------------------------------------- browsing
 @router.get("/browse", response_model=BrowseResponse)
-def browse(path: str = "") -> BrowseResponse:
-    return library.browse(path)
+def browse(request: Request, path: str = "") -> BrowseResponse:
+    user = auth.require_user(request)
+    if (path == "收藏夹" or path.startswith("收藏夹/")) and user["role"] not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="收藏夹仅管理员可用")
+    if not auth.can_see_path(user, path):
+        raise HTTPException(status_code=403, detail="没有查看权限")
+    data = library.browse(path)
+    items = [node for node in auth.filter_nodes(user, data.items) if node.name != "收藏夹" or user["role"] in ("owner", "admin")]
+    return BrowseResponse(path=data.path, parent=data.parent, items=items, total=len(items))
 
 
 @router.get("/series", response_model=SeriesDetail)
-def series(path: str) -> SeriesDetail:
+def series(request: Request, path: str) -> SeriesDetail:
+    auth.require_path(request, path, "view")
     detail = library.series_detail(path, progress_lookup=progress.get)
     detail.tags = tags.tags_for(detail.path)
     return detail
 
 
 @router.get("/search", response_model=SearchResponse)
-def search(q: str = "", limit: int = 200) -> SearchResponse:
-    items = library.search(q, limit=limit)
+def search(request: Request, q: str = "", limit: int = 200) -> SearchResponse:
+    user = auth.require_user(request)
+    items = auth.filter_nodes(user, library.search(q, limit=limit))
     return SearchResponse(query=q, items=items, total=len(items))
 
 
 @router.get("/collection", response_model=CollectionResponse)
-def collection(path: str = "") -> CollectionResponse:
+def collection(request: Request, path: str = "") -> CollectionResponse:
+    user = auth.require_user(request)
+    if not auth.can_see_path(user, path):
+        raise HTTPException(status_code=403, detail="没有查看权限")
     normalized = library.normalize_path(path)
-    items = library.collect_series(normalized)
+    items = auth.filter_nodes(user, library.collect_series(normalized))
     return CollectionResponse(path=normalized, items=items, total=len(items))
 
 
 @router.get("/folders")
-def folders() -> dict:
-    return {"items": library.folder_tree()}
+def folders(request: Request) -> dict:
+    user = auth.require_user(request)
+    items = [item for item in library.folder_tree() if auth.can_see_path(user, item["path"])]
+    return {"items": items}
 
 
 @router.get("/gallery", response_model=GalleryResponse)
 def gallery(
+    request: Request,
     kind: str = "all",
     limit: int = 120,
     offset: int = 0,
     path: str = "",
     sort: str = "recent",
 ) -> GalleryResponse:
+    user = auth.require_user(request)
+    if not auth.can_see_path(user, path):
+        raise HTTPException(status_code=403, detail="没有查看权限")
     rows, total = library.list_gallery(
         kind=kind, limit=limit, offset=offset, scope=path, sort=sort
     )
+    rows = [row for row in rows if auth.can(user, row["series_path"], "view")]
     return GalleryResponse(
         items=[GalleryItem(**row) for row in rows],
-        total=total,
+        total=len(rows) if offset == 0 else total,
         offset=offset,
         limit=limit,
     )
 
 
 @router.post("/cover", response_model=ActionResult)
-def set_cover(payload: SetCoverRequest) -> ActionResult:
+def set_cover(request: Request, payload: SetCoverRequest) -> ActionResult:
+    auth.require_path(request, payload.path, "manage")
     library.set_cover(payload.path, payload.name)
     return ActionResult(status="ok", path=payload.path)
 
 
 @router.post("/favorites", response_model=ActionResult)
-def add_favorite(payload: dict) -> ActionResult:
+def add_favorite(request: Request, payload: dict) -> ActionResult:
     """Create a symlink under <library>/收藏夹/<collection>/.
 
     Body: {"path": "album/or/series", "name": "optional file name", "collection": "默认"}
     """
     raw_path = str(payload.get("path") or "").strip()
     name = str(payload.get("name") or "").strip()
+    auth.require_path(request, raw_path, "view")
     collection = str(payload.get("collection") or "默认").strip() or "默认"
     collection = Path(collection).name
     root = library.library_root()
@@ -186,7 +208,10 @@ def add_favorite(payload: dict) -> ActionResult:
 
 
 @router.get("/favorites/status")
-def favorite_status(path: str = "", name: str = "") -> dict:
+def favorite_status(request: Request, path: str = "", name: str = "") -> dict:
+    user = auth.require_user(request)
+    if path:
+        auth.require_path(request, path, "view")
     root = library.library_root()
     favorite_root = root / "收藏夹"
     collections = []
@@ -227,6 +252,7 @@ def stats() -> StatsResponse:
 # ------------------------------------------------------------------ media
 @router.get("/media/image")
 def media_image(request: Request, path: str, name: str) -> Response:
+    auth.require_path(request, path, "download")
     source = library.resolve_file(path, name)
     if source.suffix.lower() == ".svg":
         return FileResponse(source, media_type="image/svg+xml")
@@ -234,8 +260,9 @@ def media_image(request: Request, path: str, name: str) -> Response:
 
 
 @router.get("/media/info")
-def media_info(path: str, name: str) -> dict:
+def media_info(request: Request, path: str, name: str) -> dict:
     """Basic file info + EXIF metadata for the app's detail sheet."""
+    auth.require_path(request, path, "view")
     source = library.resolve_file(path, name)
     stat = source.stat()
     payload = {
@@ -296,6 +323,7 @@ def media_info(path: str, name: str) -> dict:
 
 @router.get("/media/thumb")
 def media_thumb(request: Request, path: str, name: str) -> Response:
+    auth.require_path(request, path, "view")
     source = library.resolve_file(path, name)
     if source.suffix.lower() == ".svg":
         return FileResponse(source, media_type="image/svg+xml")
@@ -312,6 +340,7 @@ def media_thumb(request: Request, path: str, name: str) -> Response:
 @router.get("/media/view")
 def media_view(request: Request, path: str, name: str, w: int = 1080) -> Response:
     """Page image, optionally downscaled for slow links (Tailscale / mobile data)."""
+    auth.require_path(request, path, "view")
     source = library.resolve_file(path, name)
     if source.suffix.lower() == ".svg":
         return FileResponse(source, media_type="image/svg+xml")
@@ -326,20 +355,23 @@ def media_view(request: Request, path: str, name: str, w: int = 1080) -> Respons
 
 
 @router.post("/media/delete", response_model=ActionResult)
-def media_delete(payload: MediaDeleteRequest) -> ActionResult:
+def media_delete(request: Request, payload: MediaDeleteRequest) -> ActionResult:
     """删除单张 / 多张图片或视频（移入 data/trash/media，可人工找回）。"""
+    auth.require_path(request, payload.path, "delete")
     deleted = media_trash.delete_files(payload.path, payload.names)
     return ActionResult(status="ok", path=payload.path, message=f"已删除 {deleted} 项")
 
 
 @router.get("/media/video")
 def media_video(request: Request, path: str, name: str) -> Response:
+    auth.require_path(request, path, "view")
     source = library.resolve_file(path, name)
     return media.file_response(source, request)
 
 
 @router.get("/media/video_thumb")
-def media_video_thumb(path: str, name: str) -> Response:
+def media_video_thumb(request: Request, path: str, name: str) -> Response:
+    auth.require_path(request, path, "view")
     source = library.resolve_file(path, name)
     thumbnail = thumbs.video_thumbnail(source, path, name)
     if thumbnail is not None:
@@ -353,13 +385,15 @@ def media_video_thumb(path: str, name: str) -> Response:
 
 # ---------------------------------------------------------------- folders
 @router.post("/folders", response_model=ActionResult)
-def create_folder(payload: CreateFolderRequest) -> ActionResult:
+def create_folder(request: Request, payload: CreateFolderRequest) -> ActionResult:
+    auth.require_path(request, payload.parent, "create")
     created = manage.create_folder(payload.parent, payload.name, payload.kind)
     return ActionResult(status="ok", path=created)
 
 
 @router.post("/folders/kind", response_model=ActionResult)
-def set_folder_kind(payload: SetFolderKindRequest) -> ActionResult:
+def set_folder_kind(request: Request, payload: SetFolderKindRequest) -> ActionResult:
+    auth.require_path(request, payload.path, "manage")
     manage.set_kind(payload.path, payload.kind)
     return ActionResult(status="ok", path=payload.path)
 
@@ -371,23 +405,28 @@ def rename(payload: RenameRequest) -> ActionResult:
 
 
 @router.post("/move", response_model=BatchResult)
-def move(payload: MoveRequest) -> BatchResult:
+def move(request: Request, payload: MoveRequest) -> BatchResult:
+    for source in payload.paths:
+        auth.require_path(request, source, "move")
+    auth.require_path(request, payload.to, "move")
     return manage.move(payload.paths, payload.to)
 
 
 # ----------------------------------------------------------------- delete
 @router.delete("/items", response_model=ActionResult)
-def delete_item(path: str) -> ActionResult:
+def delete_item(request: Request, path: str) -> ActionResult:
+    auth.require_path(request, path, "delete")
     entry = trash.soft_delete(path)
     return ActionResult(status="ok", path=entry.original_path, message="已移入回收站")
 
 
 @router.post("/items/delete", response_model=BatchResult)
-def delete_items(payload: dict) -> BatchResult:
+def delete_items(request: Request, payload: dict) -> BatchResult:
     paths = payload.get("paths") or []
     result = BatchResult()
     for raw in paths:
         try:
+            auth.require_path(request, str(raw), "delete")
             entry = trash.soft_delete(raw)
             result.succeeded.append(entry.original_path)
         except HTTPException as exc:
@@ -460,6 +499,7 @@ async def upload(
     direct: bool = Form(False),
 ) -> ImportResult:
     _check_content_length(request)
+    auth.require_path(request, folder, "upload")
     return importers.import_uploads(files, folder, name, direct)
 
 
@@ -515,13 +555,15 @@ def tags_all() -> TagsResponse:
 
 
 @router.post("/tags/create", response_model=TagCount)
-def tags_create(payload: TagCreateRequest) -> TagCount:
+def tags_create(request: Request, payload: TagCreateRequest) -> TagCount:
+    auth.require_user(request)
     created = tags.create_tag(payload.name, payload.group)
     return TagCount(name=created["name"], count=0, group=created["group"])
 
 
 @router.delete("/tags/{name}", response_model=ActionResult)
-def tags_delete(name: str) -> ActionResult:
+def tags_delete(request: Request, name: str) -> ActionResult:
+    auth.require_user(request)
     removed = tags.delete_tag(name)
     return ActionResult(status="ok", message=f"已从 {removed} 个相册移除标签")
 
@@ -533,11 +575,12 @@ def tags_series(path: str) -> SeriesTagsResponse:
 
 
 @router.put("/tags", response_model=SeriesTagsResponse)
-def tags_update(payload: TagsUpdateRequest) -> SeriesTagsResponse:
+def tags_update(request: Request, payload: TagsUpdateRequest) -> SeriesTagsResponse:
     """给一个或多个路径加 / 删 / 替换标签（多选批量打标签）。"""
     raw_paths = list(payload.paths) if payload.paths else ([payload.path] if payload.path else [])
     normalized: list[str] = []
     for raw in raw_paths:
+        auth.require_path(request, str(raw), "manage")
         path = library.normalize_path(raw)
         if not path:
             continue
@@ -591,3 +634,6 @@ def logs(lines: int = 100) -> dict:
         return {"logs": [], "error": str(exc)}
     tail = content[-max(0, lines):] if lines else content
     return {"logs": list(reversed(tail))}
+
+
+

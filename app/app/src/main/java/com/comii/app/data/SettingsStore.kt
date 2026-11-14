@@ -11,6 +11,22 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("server_url", "").orEmpty()
         set(value) = prefs.edit().putString("server_url", value.trim()).apply()
 
+    var authToken: String
+        get() = prefs.getString("auth_token", "").orEmpty()
+        set(value) = prefs.edit().putString("auth_token", value).apply()
+
+    var authUsername: String
+        get() = prefs.getString("auth_username", "").orEmpty()
+        set(value) = prefs.edit().putString("auth_username", value).apply()
+
+    var authRole: String
+        get() = prefs.getString("auth_role", "").orEmpty()
+        set(value) = prefs.edit().putString("auth_role", value).apply()
+
+    var authGrantsJson: String
+        get() = prefs.getString("auth_grants", "[]").orEmpty()
+        set(value) = prefs.edit().putString("auth_grants", value).apply()
+
     var serverName: String
         get() = prefs.getString("server_name", "").orEmpty()
         set(value) = prefs.edit().putString("server_name", value).apply()
@@ -143,5 +159,6 @@ class SettingsStore(context: Context) {
 
     fun markRead(path: String) = prefs.edit().putLong("read_at_$path", System.currentTimeMillis()).apply()
 }
+
 
 

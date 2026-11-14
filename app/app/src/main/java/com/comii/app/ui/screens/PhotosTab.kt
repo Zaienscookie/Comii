@@ -313,7 +313,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     color = palette.textSecondary,
                 )
             }
-            if (items.isNotEmpty()) {
+            if (items.isNotEmpty() && state.authRole in setOf("owner", "admin")) {
                 TextButton(onClick = {
                     editing = !editing
                     if (!editing) selected = emptySet()
@@ -517,5 +517,6 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         )
     }
 }
+
 
 

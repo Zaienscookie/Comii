@@ -1,4 +1,4 @@
-package com.comii.app.data
+﻿package com.comii.app.data
 
 import java.net.URLEncoder
 import org.json.JSONObject
@@ -23,6 +23,15 @@ object Http {
             .readTimeout(90, TimeUnit.SECONDS)
             .writeTimeout(300, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            .addInterceptor { chain ->
+                val token = AuthTokenProvider.token
+                if (token.isBlank()) chain.proceed(chain.request())
+                else chain.proceed(
+                    chain.request().newBuilder()
+                        .header("Authorization", "Bearer $token")
+                        .build()
+                )
+            }
             .build()
     }
 
@@ -144,6 +153,20 @@ class ComiiApi(val baseUrl: String) {
         return decode(post("/favorites", body))
     }
 
+    suspend fun authLogin(username: String, password: String, remember: Boolean = true): AuthResponse {
+        val body = JSONObject().put("username", username).put("password", password).put("remember", remember).toString()
+        return decode(post("/auth/login", body))
+    }
+
+    suspend fun authSetup(username: String, password: String): AuthResponse {
+        val body = JSONObject().put("username", username).put("password", password).toString()
+        return decode(post("/auth/setup", body))
+    }
+
+    suspend fun authMe(): AuthMe = decode(get("/auth/me"))
+
+    suspend fun authLogout(): ActionResult = decode(post("/auth/logout", "{}"))
+
     suspend fun folders(): FolderResponse = decode(get("/folders"))
 
     suspend fun mediaInfo(path: String, name: String): MediaInfo =
@@ -260,3 +283,5 @@ class ComiiApi(val baseUrl: String) {
         return builder.build()
     }
 }
+
+

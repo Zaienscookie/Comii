@@ -1,4 +1,4 @@
-"""Comii FastAPI applications.
+﻿"""Comii FastAPI applications.
 
 Two apps are exposed:
 
@@ -25,8 +25,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.ai import router as ai_router
+from .api.auth import router as auth_router
 from .api.legacy import router as legacy_router
 from .api.v1 import router
+from . import auth
 from .config import settings
 from .models import ServiceInfo
 from .services import trash
@@ -74,6 +76,7 @@ async def _sweep_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings.ensure_directories()
+    auth.ensure_schema()
     _configure_logging()
     try:
         trash.sweep()
@@ -103,6 +106,25 @@ async def access_log(request: Request, call_next):
     return response
 
 
+
+
+async def auth_gate(request: Request, call_next):
+    path = request.url.path
+    if auth.public_path(path):
+        return await call_next(request)
+    if path.startswith("/api/"):
+        auth.ensure_schema()
+        user = auth.user_from_request(request)
+        if user is None:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "请先登录"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        request.state.user = user
+    return await call_next(request)
+
+
 async def unhandled_error(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("unhandled error on %s", request.url.path)
     return JSONResponse(status_code=500, content={"detail": "服务器内部错误"})
@@ -118,6 +140,7 @@ def _add_middleware(app: FastAPI) -> None:
         expose_headers=["Content-Range", "Accept-Ranges", "Content-Disposition"],
     )
     app.middleware("http")(access_log)
+    app.middleware("http")(auth_gate)
     app.add_exception_handler(Exception, unhandled_error)
 
 
@@ -144,6 +167,7 @@ def create_api_app() -> FastAPI:
         openapi_url=f"{settings.api_prefix}/openapi.json",
     )
     _add_middleware(api)
+    api.include_router(auth_router)
     api.include_router(router)
     api.include_router(ai_router)
     if STATIC_ROOT.is_dir():
@@ -181,6 +205,20 @@ def _add_web_pages(app: FastAPI) -> None:
             return HTMLResponse(index.read_text(encoding="utf-8"))
         return HTMLResponse("<h3>WebUI 未安装</h3>", status_code=404)
 
+    @app.get("/login.html", include_in_schema=False, response_model=None)
+    def login_page():
+        page = STATIC_ROOT / "login.html"
+        if page.is_file():
+            return HTMLResponse(page.read_text(encoding="utf-8"))
+        return HTMLResponse("<h3>login.html missing</h3>", status_code=404)
+
+    @app.get("/admin.html", include_in_schema=False, response_model=None)
+    def admin_page():
+        page = STATIC_ROOT / "admin.html"
+        if page.is_file():
+            return HTMLResponse(page.read_text(encoding="utf-8"))
+        return HTMLResponse("<h3>admin.html missing</h3>", status_code=404)
+
     @app.get("/reader.html", include_in_schema=False, response_model=None)
     def reader_page():
         page = STATIC_ROOT / "reader.html"
@@ -213,6 +251,7 @@ def create_web_app() -> FastAPI:
         openapi_url=None,
     )
     _add_middleware(web)
+    web.include_router(auth_router)
     web.include_router(legacy_router)
     web.include_router(ai_router)
     _add_web_pages(web)
@@ -237,6 +276,7 @@ def create_app() -> FastAPI:
         openapi_url=f"{settings.api_prefix}/openapi.json",
     )
     _add_middleware(combined)
+    combined.include_router(auth_router)
     combined.include_router(router)
     combined.include_router(ai_router)
     combined.include_router(legacy_router)
@@ -257,3 +297,4 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
