@@ -1,4 +1,4 @@
-﻿package com.comii.app.ui.screens
+package com.comii.app.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -123,6 +123,7 @@ private data class DownloadProgress(
     val unit: String,
 )
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun LibraryTab(state: AppState, nav: NavHostController) {
     val palette = ComiiTheme.palette
@@ -226,6 +227,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         delay(260)
         searching = true
         searchResults = runCatching { state.repository.search(keyword) }.getOrDefault(emptyList())
+        if (searchResults.isNotEmpty()) state.rememberSearch(keyword)
         searching = false
     }
 
@@ -415,6 +417,30 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         AnimatedVisibility(visible = showSearch) {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
                 SearchField(query, { query = it }, placeholder = "搜索相册、系列或文件名")
+                if (query.isBlank()) {
+                    val history = state.recentSearches()
+                    if (history.isNotEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        androidx.compose.foundation.layout.FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            history.forEach { term ->
+                                Box(
+                                    Modifier
+                                        .clip(RoundedCornerShape(999.dp))
+                                        .background(palette.card)
+                                        .pointerInput(term) {
+                                            detectTapGestures { query = term }
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                                ) {
+                                    Text(term, color = palette.textPrimary, fontSize = 12.5.sp, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -530,7 +556,7 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                                 if (editing && !showingSearch) {
                                     selected = if (selected.contains(node.path)) selected - node.path else selected + node.path
                                 } else {
-                                    if (showingSearch) query = ""
+                                    // 保留 query：从阅读器返回时还在搜索结果页
                                     openNode(node)
                                 }
                             },

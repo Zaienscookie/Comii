@@ -31,6 +31,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getString("auth_grants", "[]").orEmpty()
         set(value) = prefs.edit().putString("auth_grants", value).apply()
 
+    /** 最近搜索，用换行分隔，最多 10 条 */
+    var searchHistory: String
+        get() = prefs.getString("search_history", "").orEmpty()
+        set(value) = prefs.edit().putString("search_history", value).apply()
+
     var serverName: String
         get() = prefs.getString("server_name", "").orEmpty()
         set(value) = prefs.edit().putString("server_name", value).apply()

@@ -157,6 +157,16 @@ class AppState(
         photosLoaded = false
     }
 
+    fun recentSearches(): List<String> =
+        repository.settings.searchHistory.split("\n").map { it.trim() }.filter { it.isNotEmpty() }.take(10)
+
+    fun rememberSearch(term: String) {
+        val value = term.trim()
+        if (value.isEmpty()) return
+        val list = (listOf(value) + recentSearches().filter { it != value }).take(10)
+        repository.settings.searchHistory = list.joinToString("\n")
+    }
+
     fun can(action: String, path: String): Boolean {
         return when (authRole) {
             "owner", "admin" -> true

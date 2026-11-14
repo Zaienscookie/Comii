@@ -36,6 +36,91 @@ function initTheme() {
 let libraryData = { series: [] };
 let filter = "all";
 let query = "";
+
+// ---------- 搜索历史（最近 10 条，localStorage） ----------
+const SEARCH_KEY = "comii_search_history";
+const SEARCH_STATE_KEY = "comii_search_state";
+
+function loadHistory() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SEARCH_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter(x => typeof x === "string" && x) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveHistory(text) {
+  const value = String(text || "").trim();
+  if (!value) return;
+  const list = [value, ...loadHistory().filter(x => x !== value)].slice(0, 10);
+  try { localStorage.setItem(SEARCH_KEY, JSON.stringify(list)); } catch (_) {}
+}
+
+function clearHistory() {
+  try { localStorage.removeItem(SEARCH_KEY); } catch (_) {}
+  renderHistory();
+}
+
+function renderHistory() {
+  const box = document.getElementById("searchHistory");
+  if (!box) return;
+  const list = loadHistory();
+  if (query || list.length === 0) {
+    box.classList.add("hidden");
+    box.innerHTML = "";
+    return;
+  }
+  box.classList.remove("hidden");
+  box.innerHTML = "";
+  const label = document.createElement("span");
+  label.className = "history-label";
+  label.textContent = "最近搜索";
+  box.appendChild(label);
+  list.forEach(text => {
+    const chip = document.createElement("button");
+    chip.className = "history-chip";
+    chip.type = "button";
+    chip.textContent = text;
+    chip.addEventListener("click", () => {
+      if (search) search.value = text;
+      query = text;
+      saveHistory(text);
+      renderHistory();
+      runSearch(text);
+    });
+    box.appendChild(chip);
+  });
+  const clear = document.createElement("button");
+  clear.className = "history-clear";
+  clear.type = "button";
+  clear.textContent = "清空";
+  clear.addEventListener("click", clearHistory);
+  box.appendChild(clear);
+}
+
+async function runSearch(value) {
+  const keyword = String(value || "").trim();
+  query = keyword;
+  if (!keyword) {
+    searchResults = null;
+    renderHistory();
+    render();
+    return;
+  }
+  const seq = ++searchSeq;
+  try {
+    const res = await KomiConfig.fetch("/api/search?q=" + encodeURIComponent(keyword));
+    const data = await res.json();
+    if (seq !== searchSeq) return;
+    searchResults = data.items || [];
+  } catch (err) {
+    if (seq !== searchSeq) return;
+    searchResults = [];
+  }
+  refreshBackBtn();
+  render();
+}
 let searchResults = null;   // 服务端递归搜索结果
 let searchSeq = 0;
 let gallery = null;         // 「全部」相册网格
@@ -583,6 +668,12 @@ function timeAgo(ts) {
 }
 
 function openItem(item) {
+  if (query) {
+    saveHistory(query);
+    try {
+      sessionStorage.setItem(SEARCH_STATE_KEY, JSON.stringify({ query, scrollY: window.scrollY }));
+    } catch (_) {}
+  }
   const base = KomiConfig.serverBase();
   // 使用完整多级路径 (移入文件夹后的漫画/视频需要完整路径)
   const target = item.path || item.name;
@@ -615,7 +706,7 @@ function applyReadOnly() {
 function refreshBackBtn() {
   const btn = document.getElementById("backBtn");
   if (!btn) return;
-  const show = Boolean(currentPath) || Boolean(tagResults);
+  const show = Boolean(currentPath) || Boolean(tagResults) || Boolean(query);
   btn.style.display = show ? "flex" : "none";
 }
 
@@ -1653,6 +1744,15 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("moreSheet")?.classList.remove("show");
   };
   document.getElementById("backBtn")?.addEventListener("click", () => {
+    if (query) {
+      query = "";
+      searchResults = null;
+      if (search) search.value = "";
+      renderHistory();
+      refreshBackBtn();
+      render();
+      return;
+    }
     if (tagResults) { tagResults = null; refreshBackBtn(); loadLibrary(); return; }
     if (currentPath) {
       currentPath = currentPath.split("/").slice(0, -1).join("/");
@@ -1688,27 +1788,36 @@ document.addEventListener("DOMContentLoaded", () => {
   document.body.classList.remove("filter-all");
   if (search) {
     // 递归搜索：文件夹名、系列名、媒体文件名（由服务端 /api/search 匹配）
-    search.addEventListener("input", debounce(async e => {
-      query = e.target.value.trim();
-      if (!query) {
-        searchResults = null;
-        render();
-        return;
-      }
-      const seq = ++searchSeq;
-      try {
-        const res = await KomiConfig.fetch("/api/search?q=" + encodeURIComponent(query));
-        const data = await res.json();
-        if (seq !== searchSeq) return;
-        searchResults = data.items || [];
-      } catch (err) {
-        if (seq !== searchSeq) return;
-        searchResults = [];
-      }
-      render();
+    search.addEventListener("input", debounce(e => {
+      const value = e.target.value.trim();
+      runSearch(value);
     }, 260));
+    search.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && query) {
+        saveHistory(query);
+        renderHistory();
+        search.blur();
+      }
+    });
+    search.addEventListener("focus", () => { if (!query) renderHistory(); });
+    renderHistory();
   }
   if (grid) loadLibrary();
+  // 从阅读器/视频页返回时，恢复上次的搜索结果和滚动位置
+  try {
+    const saved = sessionStorage.getItem(SEARCH_STATE_KEY);
+    if (saved) {
+      sessionStorage.removeItem(SEARCH_STATE_KEY);
+      const state = JSON.parse(saved);
+      if (state && state.query) {
+        if (search) search.value = state.query;
+        const restoreY = state.scrollY || 0;
+        runSearch(state.query).then(() => {
+          setTimeout(() => window.scrollTo(0, restoreY), 160);
+        });
+      }
+    }
+  } catch (_) {}
 });
 
 // 退出登录：撤销当前 cookie/session，回到登录页
