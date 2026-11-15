@@ -258,3 +258,11 @@ data class PdfInfo(
     val pages: Int = 0,
     val size: Long = 0,
 )
+
+@Serializable
+data class TunnelEdge(
+    val edge: String = "unknown",
+    val region: String = "unknown",
+    val advice: String = "",
+    val updated_at: Double = 0.0,
+)

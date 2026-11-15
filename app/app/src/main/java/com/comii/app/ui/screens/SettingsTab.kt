@@ -87,7 +87,13 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 3.6.4-beta")
+        LargeTitle("设置", "Comii 3.6.5-beta")
+        var edgeText by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+        androidx.compose.runtime.LaunchedEffect(state.serverUrl) {
+            edgeText = runCatching { state.repository.tunnelEdge() }.getOrNull()?.let { t ->
+                if (t.edge == "unknown") null else "${t.edge} · ${t.advice.take(16)}"
+            }
+        }
         Spacer(Modifier.height(18.dp))
 
         SettingsGroup("服务器") {
@@ -100,6 +106,15 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
         }
 
         Spacer(Modifier.height(18.dp))
+        edgeText?.let { text ->
+            androidx.compose.material3.Text(
+                "CF 边缘 $text",
+                fontSize = 10.5.sp,
+                color = palette.textTertiary,
+                modifier = androidx.compose.ui.Modifier.padding(start = 8.dp, top = 4.dp),
+            )
+        }
+
         SettingsGroup("账号") {
             SettingsRow(
                 title = state.authUsername.ifBlank { "未登录" },

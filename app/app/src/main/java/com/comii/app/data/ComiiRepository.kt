@@ -58,6 +58,8 @@ class ComiiRepository(private val context: Context) {
 
     suspend fun pdfInfo(path: String): PdfInfo = requireApi().pdfInfo(path)
 
+    suspend fun tunnelEdge(): TunnelEdge = requireApi().tunnelEdge()
+
     suspend fun tags(): TagsResponse = requireApi().tags()
 
     suspend fun seriesTags(path: String): List<String> = requireApi().seriesTags(path).tags

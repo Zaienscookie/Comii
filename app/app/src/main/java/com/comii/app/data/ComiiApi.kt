@@ -222,6 +222,8 @@ class ComiiApi(val baseUrl: String) {
 
     fun trashThumbUrl(entryId: String): String = api("/trash/thumb?entry_id=${encode(entryId)}")
 
+    suspend fun tunnelEdge(): TunnelEdge = decode(get("/tunnel/edge"))
+
     suspend fun trash(): TrashListResponse = decode(get("/trash"))
 
     suspend fun progressAll(): Map<String, ReadingProgress> = decode(get("/progress"))
