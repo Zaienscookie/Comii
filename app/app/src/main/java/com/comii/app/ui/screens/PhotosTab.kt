@@ -711,13 +711,18 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                     index?.let { key ->
                                         val idx = items.indexOfFirst { "${it.series_path}/${it.name}" == key }
                                         if (idx >= 0) {
-                                            if (lastAnchor >= 0 && lastAnchor != idx) {
+                                            if (selected.contains(key)) {
+                                                // 点已选中的：只取消它，不触发区间
+                                                selected = selected - key
+                                                lastAnchor = -1
+                                            } else if (lastAnchor >= 0 && lastAnchor != idx) {
                                                 val from = minOf(lastAnchor, idx); val to = maxOf(lastAnchor, idx)
-                                                selected = (from..to).map { items[it].let { i -> "${i.series_path}/${i.name}" } }.toSet()
+                                                selected = selected + (from..to).map { items[it].let { i -> "${i.series_path}/${i.name}" } }
+                                                lastAnchor = idx
                                             } else {
-                                                selected = setOf(key)
+                                                selected = selected + key
+                                                lastAnchor = idx
                                             }
-                                            lastAnchor = idx
                                         }
                                     }
                                 }

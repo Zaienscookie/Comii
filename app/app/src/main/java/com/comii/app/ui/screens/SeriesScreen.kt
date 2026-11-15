@@ -244,13 +244,17 @@ private fun SeriesContent(
                                     onTap = {
                                         if (editing) {
                                             val idx = media.indexOfFirst { it.name == entry.name }
-                                            if (anchor >= 0 && idx >= 0 && anchor != idx) {
+                                            if (selected.contains(entry.name)) {
+                                                selected = selected - entry.name
+                                                anchor = -1
+                                            } else if (anchor >= 0 && idx >= 0 && anchor != idx) {
                                                 val from = minOf(anchor, idx); val to = maxOf(anchor, idx)
-                                                selected = (from..to).map { media[it].name }.toSet()
+                                                selected = selected + (from..to).map { media[it].name }
+                                                anchor = idx
                                             } else {
-                                                selected = if (selected.contains(entry.name)) selected - entry.name else selected + entry.name
+                                                selected = selected + entry.name
+                                                if (idx >= 0) anchor = idx
                                             }
-                                            if (idx >= 0) anchor = idx
                                         } else if (entry.isVideo) {
                                             nav.navigate(Routes.player(path, entry.name))
                                         } else {
