@@ -671,10 +671,11 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                 Text("选择音效，不是手动调三段", color = palette.textSecondary, fontSize = 11.sp)
                 Spacer(Modifier.height(10.dp))
                 SegmentControl(
-                    options = listOf("原声", "重低音", "极重低音"),
+                    options = listOf("原声", "重低音", "极重低音", "超重低音"),
                     selectedIndex = when (bassPreset) {
                         "重低音" -> 1
                         "极重低音" -> 2
+                        "超重低音" -> 3
                         else -> 0
                     },
                     onSelect = { index ->
@@ -682,12 +683,30 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                         val values = when (bassPreset) {
                             "重低音" -> Triple(35f, 55f, 40f)
                             "极重低音" -> Triple(55f, 85f, 75f)
+                            "超重低音" -> Triple(75f, 100f, 100f)
                             else -> Triple(0f, 0f, 0f)
                         }
                         bassMid = values.first
                         bassLow = values.second
                         bassUltra = values.third
                     },
+                )
+                Spacer(Modifier.height(10.dp))
+                Text("超低频 ${bassUltra.toInt()} · 低频 ${bassLow.toInt()} · 中低 ${bassMid.toInt()}", color = palette.textSecondary, fontSize = 11.sp)
+                androidx.compose.material3.Slider(
+                    value = bassUltra,
+                    onValueChange = { bassUltra = it },
+                    valueRange = 0f..100f,
+                )
+                androidx.compose.material3.Slider(
+                    value = bassLow,
+                    onValueChange = { bassLow = it },
+                    valueRange = 0f..100f,
+                )
+                androidx.compose.material3.Slider(
+                    value = bassMid,
+                    onValueChange = { bassMid = it },
+                    valueRange = 0f..100f,
                 )
 
                 Spacer(Modifier.height(10.dp))

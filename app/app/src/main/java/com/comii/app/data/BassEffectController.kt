@@ -32,7 +32,7 @@ class BassEffectController {
             fun nearest(target: Int): Int? = bands.minByOrNull { kotlin.math.abs(it.second - target) }?.first
             fun level(value: Float): Short = (value.coerceIn(0f, 100f) * 15f).toInt().toShort()
             val used = mutableSetOf<Int>()
-            listOf(60 to ultraBass, 230 to bass, 900 to midBass).forEach { (target, value) ->
+            listOf(32 to ultraBass, 60 to ultraBass, 120 to bass, 230 to bass, 500 to midBass).forEach { (target, value) ->
                 val band = nearest(target) ?: return@forEach
                 if (!used.add(band)) return@forEach
                 runCatching { eq.setBandLevel(band.toShort(), level(value)) }
