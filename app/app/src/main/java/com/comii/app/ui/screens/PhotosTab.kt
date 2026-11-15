@@ -492,8 +492,16 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                     detectTapGestures(
                                         onTap = {
                                             if (editing) {
-                                                indexOf(item).takeIf { it >= 0 }?.let { lastAnchor = it }
-                                                toggleSelected(item)
+                                                val idx = indexOf(item)
+                                                if (idx >= 0 && lastAnchor >= 0 && lastAnchor != idx) {
+                                                    val from = minOf(lastAnchor, idx)
+                                                    val to = maxOf(lastAnchor, idx)
+                                                    selected = (from..to).map { i -> "${items[i].series_path}/${items[i].name}" }.toSet()
+                                                    lastAnchor = idx
+                                                } else if (idx >= 0) {
+                                                    lastAnchor = idx
+                                                    selected = setOf("${item.series_path}/${item.name}")
+                                                }
                                             } else {
                                                 openItem(item)
                                             }
@@ -655,12 +663,12 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
             }
             androidx.compose.animation.AnimatedVisibility(
                 visible = editing && selected.isNotEmpty(),
+                modifier = Modifier.align(Alignment.BottomCenter),
                 enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it },
                 exit = fadeOut(tween(150)) + slideOutVertically(tween(180)) { it },
             ) {
                 Column(
                     Modifier
-                        .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
                         .fillMaxWidth()
                         .background(palette.elevated)
