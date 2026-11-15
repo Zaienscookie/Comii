@@ -71,6 +71,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
@@ -489,21 +490,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     modifier = Modifier
                         .fillMaxSize()
                         .onGloballyPositioned { gridOrigin = it.positionInWindow() }
-                        .pointerInput(editing, items) {
-                            if (editing) {
-                                detectHorizontalDragGestures(
-                                    onDragStart = { position ->
-                                        val key = keyAt(position)
-                                        dragSelectOn = key != null && key !in selected
-                                        paintAt(position, dragSelectOn)
-                                    },
-                                    onHorizontalDrag = { change, _ ->
-                                        paintAt(change.position, dragSelectOn)
-                                        change.consume()
-                                    },
-                                )
-                            }
-                        },
+
                 ) {
                     timeline.forEach { (label, group) ->
                         item(key = "timeline:$label", span = { GridItemSpan(maxLineSpan) }) {
@@ -516,10 +503,17 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                             )
                         }
                         items(group, key = { "${it.series_path}/${it.name}" }) { item ->
+                        val isChosen = selected.contains("${item.series_path}/${item.name}")
+                        val selScale by androidx.compose.animation.core.animateFloatAsState(
+                            targetValue = if (isChosen) 0.92f else 1f,
+                            animationSpec = androidx.compose.animation.core.tween(140),
+                            label = "sel",
+                        )
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
+                                .graphicsLayer { scaleX = selScale; scaleY = selScale }
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
                                 .onGloballyPositioned { coords ->
