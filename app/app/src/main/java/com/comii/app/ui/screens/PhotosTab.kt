@@ -115,7 +115,6 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf(false) }
     var dragSelectOn by remember { mutableStateOf(true) }
-    var dragMode by remember { mutableStateOf(false) }
     var gridOrigin by remember { mutableStateOf(Offset.Zero) }
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
     val cellBounds = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
@@ -458,25 +457,6 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
-                                .pointerInput(item.series_path, item.name, editing, dragMode) {
-                                    if (editing && dragMode) {
-                                        val key = "${item.series_path}/${item.name}"
-                                        detectDragGestures(
-                                            onDragStart = { local ->
-                                                val rect = cellBounds[key] ?: return@detectDragGestures
-                                                val point = rect.topLeft + local
-                                                val hitKey = cellBounds.entries.firstOrNull { (_, r) -> r.contains(point) }?.key ?: key
-                                                dragSelectOn = hitKey !in selected
-                                                paintAtWindow(point, dragSelectOn)
-                                            },
-                                            onDrag = { change, _ ->
-                                                val rect = cellBounds[key] ?: return@detectDragGestures
-                                                paintAtWindow(rect.topLeft + change.position, dragSelectOn)
-                                                change.consume()
-                                            },
-                                        )
-                                    }
-                                }
                                 .pointerInput(item.series_path, item.name, editing) {
                                     detectTapGestures {
                                         if (editing) toggleSelected(item) else openItem(item)
@@ -509,7 +489,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = if (editing) 150.dp else 4.dp, bottom = 110.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
-                    userScrollEnabled = !dragMode,
+                    userScrollEnabled = true,
                     modifier = Modifier
                         .fillMaxSize()
                         .onGloballyPositioned { gridOrigin = it.positionInWindow() }
@@ -646,9 +626,6 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                         }) { Text(if (selected.size == items.size) "取消全选" else "全选", color = palette.accent) }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { dragMode = !dragMode }) {
-                            Text(if (dragMode) "退出拖选" else "拖选", color = palette.accent)
-                        }
                         TextButton(onClick = { shareSelected() }, enabled = selected.isNotEmpty() && !sharing) {
                             Text(if (sharing) "分享中…" else "分享原图", color = palette.accent)
                         }
