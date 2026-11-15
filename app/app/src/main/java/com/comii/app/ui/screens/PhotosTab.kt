@@ -220,19 +220,8 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     }
 
     fun paintAt(position: Offset, select: Boolean) {
-        val hit = gridState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
-            position.x >= item.offset.x && position.x <= item.offset.x + item.size.width &&
-                position.y >= item.offset.y && position.y <= item.offset.y + item.size.height
-        } ?: return
-        // vivo 式：手指所在这一行整行一起选中，横向划过也能连续选
-        val rowItems = gridState.layoutInfo.visibleItemsInfo.filter {
-            kotlin.math.abs(it.offset.y - hit.offset.y) <= 6
-        }
-        rowItems.forEach { item ->
-            val key = item.key?.toString() ?: return@forEach
-            if (key.startsWith("timeline:") || key.startsWith("loading")) return@forEach
-            selected = if (select) selected + key else selected - key
-        }
+        val key = keyAt(position) ?: return
+        selected = if (select) selected + key else selected - key
     }
 
     fun itemKey(item: GalleryItem): String = "${item.series_path}/${item.name}"
@@ -432,7 +421,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 galleryLayout -> LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(2),
                     state = staggerState,
-                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 110.dp),
+                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = if (editing) 88.dp else 4.dp, bottom = 110.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalItemSpacing = 4.dp,
                     modifier = Modifier.fillMaxSize(),
@@ -472,7 +461,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(4),
                     state = gridState,
-                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 110.dp),
+                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = if (editing) 88.dp else 4.dp, bottom = 110.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                     userScrollEnabled = true,
