@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -134,6 +135,7 @@ fun SeriesScreen(state: AppState, path: String, nav: NavHostController) {
                     nav = nav,
                     media = media,
                     downloadProgress = downloadProgress,
+                    onChanged = { refreshKey++ },
                 )
             }
         }
@@ -204,10 +206,15 @@ private fun SeriesContent(
     nav: NavHostController,
     media: List<SeriesMedia>,
     downloadProgress: Pair<Int, Int>?,
+    onChanged: () -> Unit,
 ) {
     val palette = ComiiTheme.palette
     val context = LocalContext.current
     val api = state.repository.apiOrNull()
+    val scope = rememberCoroutineScope()
+    var editing by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
+    var anchor by remember { mutableStateOf(-1) }
 
     Box(Modifier.fillMaxSize().background(palette.background)) {
         if (media.isEmpty()) {
@@ -232,14 +239,30 @@ private fun SeriesContent(
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(4.dp))
                             .background(palette.card)
-                            .pointerInput(entry.name, entry.isVideo) {
-                                detectTapGestures {
-                                    if (entry.isVideo) {
-                                        nav.navigate(Routes.player(path, entry.name))
-                                    } else {
-                                        nav.navigate(Routes.reader(path, entry.imageIndex))
-                                    }
-                                }
+                            .pointerInput(entry.name, entry.isVideo, editing, media.size) {
+                                detectTapGestures(
+                                    onTap = {
+                                        if (editing) {
+                                            val idx = media.indexOfFirst { it.name == entry.name }
+                                            if (anchor >= 0 && idx >= 0 && anchor != idx) {
+                                                val from = minOf(anchor, idx); val to = maxOf(anchor, idx)
+                                                selected = (from..to).map { media[it].name }.toSet()
+                                            } else {
+                                                selected = if (selected.contains(entry.name)) selected - entry.name else selected + entry.name
+                                            }
+                                            if (idx >= 0) anchor = idx
+                                        } else if (entry.isVideo) {
+                                            nav.navigate(Routes.player(path, entry.name))
+                                        } else {
+                                            nav.navigate(Routes.reader(path, entry.imageIndex))
+                                        }
+                                    },
+                                    onLongPress = {
+                                        editing = true
+                                        anchor = media.indexOfFirst { it.name == entry.name }
+                                        selected = setOf(entry.name)
+                                    },
+                                )
                             },
                     ) {
                         AsyncImage(
@@ -286,6 +309,49 @@ private fun SeriesContent(
                     color = palette.accent,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+        }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = editing && selected.isNotEmpty(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { it },
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { it },
+        ) {
+            Column(
+                Modifier
+                    .navigationBarsPadding()
+                    .fillMaxWidth()
+                    .background(palette.elevated)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("已选 ${selected.size} 项", color = palette.textSecondary, fontSize = 12.sp)
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = {
+                        selected = if (selected.size == media.size) emptySet() else media.map { it.name }.toSet()
+                    }) { Text(if (selected.size == media.size) "取消全选" else "全选", color = palette.accent) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            val names = selected.toList()
+                            scope.launch {
+                                runCatching { state.repository.deleteMedia(path, names) }
+                                    .onSuccess {
+                                        selected = emptySet(); editing = false
+                                        state.showToast("已删除 ${names.size} 项")
+                                        onChanged()
+                                    }
+                                    .onFailure { state.showToast("删除失败：${it.message}") }
+                            }
+                        },
+                    ) { Text("删除", color = palette.danger) }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { editing = false; selected = emptySet() }) {
+                        Text("取消", color = palette.textSecondary)
+                    }
+                }
             }
         }
     }
