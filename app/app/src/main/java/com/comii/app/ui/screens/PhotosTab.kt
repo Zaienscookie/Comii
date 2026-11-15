@@ -220,8 +220,19 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     }
 
     fun paintAt(position: Offset, select: Boolean) {
-        val key = keyAt(position) ?: return
-        selected = if (select) selected + key else selected - key
+        val hit = gridState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
+            position.x >= item.offset.x && position.x <= item.offset.x + item.size.width &&
+                position.y >= item.offset.y && position.y <= item.offset.y + item.size.height
+        } ?: return
+        // vivo 式：手指所在这一行整行一起选中，横向划过也能连续选
+        val rowItems = gridState.layoutInfo.visibleItemsInfo.filter {
+            kotlin.math.abs(it.offset.y - hit.offset.y) <= 6
+        }
+        rowItems.forEach { item ->
+            val key = item.key?.toString() ?: return@forEach
+            if (key.startsWith("timeline:") || key.startsWith("loading")) return@forEach
+            selected = if (select) selected + key else selected - key
+        }
     }
 
     fun itemKey(item: GalleryItem): String = "${item.series_path}/${item.name}"
@@ -260,8 +271,18 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                             val safe = (item.series_path.replace('/', '_') + "_" + item.name)
                                 .replace(Regex("[^A-Za-z0-9._-]"), "_")
                             val target = java.io.File(directory, safe)
-                            Http.client.newCall(okhttp3.Request.Builder().url(url).get().build()).execute().use { response ->
+                            val builder = okhttp3.Request.Builder().url(url).get()
+                            if (com.comii.app.data.AuthTokenProvider.accessToken.isNotBlank()) {
+                                builder.header("X-Comii-Token", com.comii.app.data.AuthTokenProvider.accessToken)
+                            }
+                            if (com.comii.app.data.AuthTokenProvider.token.isNotBlank()) {
+                                builder.header("Authorization", "Bearer ${com.comii.app.data.AuthTokenProvider.token}")
+                            }
+                            Http.client.newCall(builder.build()).execute().use { response ->
                                 if (!response.isSuccessful) return@use false
+                                val type = response.header("Content-Type").orEmpty()
+                                val expected = if (item.kind == "video") "video/" else "image/"
+                                if (!type.startsWith(expected)) return@use false
                                 response.body?.byteStream()?.use { input ->
                                     target.outputStream().use { output -> input.copyTo(output) }
                                 }
@@ -454,7 +475,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 110.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
-                    userScrollEnabled = !editing,
+                    userScrollEnabled = true,
                     modifier = Modifier
                         .fillMaxSize()
                         .pointerInput(editing, items) {
