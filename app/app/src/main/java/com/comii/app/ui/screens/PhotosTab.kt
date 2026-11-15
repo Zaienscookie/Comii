@@ -9,6 +9,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -35,6 +37,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -455,6 +458,34 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
                                 .pointerInput(item.series_path, item.name, editing) {
+                                    if (editing) {
+                                        val myKey = "${item.series_path}/${item.name}"
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                            val origin = cellBounds[myKey]?.topLeft
+                                            var dragging = false
+                                            do {
+                                                val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                                if (!dragging) {
+                                                    val dx = kotlin.math.abs(change.position.x - down.position.x)
+                                                    val dy = kotlin.math.abs(change.position.y - down.position.y)
+                                                    if (origin != null && dx > 12f && dx > dy) {
+                                                        dragging = true
+                                                        val point = origin + down.position
+                                                        val hit = cellBounds.entries.firstOrNull { (_, r) -> r.contains(point) }?.key ?: myKey
+                                                        dragSelectOn = hit !in selected
+                                                        paintAtWindow(point, dragSelectOn)
+                                                    }
+                                                } else if (origin != null) {
+                                                    paintAtWindow(origin + change.position, dragSelectOn)
+                                                    change.consume()
+                                                }
+                                            } while (change.pressed)
+                                        }
+                                    }
+                                }
+                                .pointerInput(item.series_path, item.name, editing) {
                                     detectTapGestures {
                                         if (editing) toggleSelected(item) else openItem(item)
                                     }
@@ -605,6 +636,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 Column(
                     Modifier
                         .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
                         .fillMaxWidth()
                         .background(palette.elevated)
                         .padding(horizontal = 20.dp, vertical = 10.dp),
