@@ -504,16 +504,18 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                         }
                         items(group, key = { "${it.series_path}/${it.name}" }) { item ->
                         val isChosen = selected.contains("${item.series_path}/${item.name}")
-                        val selScale by androidx.compose.animation.core.animateFloatAsState(
-                            targetValue = if (isChosen) 0.92f else 1f,
-                            animationSpec = androidx.compose.animation.core.tween(140),
-                            label = "sel",
-                        )
+                        val selScale = remember(item.series_path, item.name) { androidx.compose.animation.core.Animatable(1f) }
+                        LaunchedEffect(isChosen) {
+                            if (isChosen) {
+                                selScale.animateTo(0.88f, androidx.compose.animation.core.tween(90))
+                                selScale.animateTo(1f, androidx.compose.animation.core.tween(130))
+                            }
+                        }
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
-                                .graphicsLayer { scaleX = selScale; scaleY = selScale }
+                                .graphicsLayer { scaleX = selScale.value; scaleY = selScale.value }
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
                                 .onGloballyPositioned { coords ->
