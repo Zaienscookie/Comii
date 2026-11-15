@@ -213,10 +213,13 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     }
 
     fun keyAt(position: Offset): String? {
-        val info = gridState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
-            position.x >= item.offset.x && position.x <= item.offset.x + item.size.width &&
-                position.y >= item.offset.y && position.y <= item.offset.y + item.size.height
-        } ?: return null
+        val info = gridState.layoutInfo.visibleItemsInfo
+            .filter { it.key?.toString()?.startsWith("timeline:") != true }
+            .minByOrNull { item ->
+                val dx = position.x - (item.offset.x + item.size.width / 2f)
+                val dy = position.y - (item.offset.y + item.size.height / 2f)
+                dx * dx + dy * dy
+            } ?: return null
         val key = info.key?.toString() ?: return null
         if (key.startsWith("timeline:") || key.startsWith("loading")) return null
         return key
@@ -249,6 +252,12 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
 
     fun shareSelected() {
         val picked = selectedItems()
+        // 清理上次分享遗留文件，避免长期占用缓存
+        runCatching {
+            val dir = java.io.File(context.cacheDir, "share")
+            val cutoff = System.currentTimeMillis() - 6 * 3600_000L
+            dir.listFiles()?.forEach { if (it.lastModified() < cutoff) it.delete() }
+        }
         if (picked.isEmpty() || sharing) return
         sharing = true
         scope.launch {
