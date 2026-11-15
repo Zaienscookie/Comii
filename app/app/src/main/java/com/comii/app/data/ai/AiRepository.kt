@@ -296,8 +296,14 @@ class AiRepository(context: Context) {
         var last = ChatMessage("assistant", answers.last(), now())
         answers.forEachIndexed { index, part ->
             val message = ChatMessage("assistant", part, now() + index)
-            current = current.copy(messages = current.messages + message, updatedAt = now())
-            replaceConversation(current)
+            val duplicate = current.messages.lastOrNull()?.let {
+                it.role == "assistant" && it.content == message.content &&
+                    kotlin.math.abs(it.timestamp - message.timestamp) < 5000
+            } ?: false
+            if (!duplicate) {
+                current = current.copy(messages = current.messages + message, updatedAt = now())
+                replaceConversation(current)
+            }
             noteAssistantMessage()
             onMessage(message)
             last = message
@@ -356,8 +362,14 @@ class AiRepository(context: Context) {
         var last = ChatMessage("assistant", answers.last(), now())
         answers.forEachIndexed { index, part ->
             val message = ChatMessage("assistant", part, now() + index)
-            current = current.copy(messages = current.messages + message, updatedAt = now())
-            replaceConversation(current)
+            val duplicate = current.messages.lastOrNull()?.let {
+                it.role == "assistant" && it.content == message.content &&
+                    kotlin.math.abs(it.timestamp - message.timestamp) < 5000
+            } ?: false
+            if (!duplicate) {
+                current = current.copy(messages = current.messages + message, updatedAt = now())
+                replaceConversation(current)
+            }
             noteAssistantMessage()
             onMessage(message)
             last = message
