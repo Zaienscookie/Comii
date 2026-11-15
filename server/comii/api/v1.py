@@ -58,7 +58,7 @@ from ..services import (
     trash,
     updates,
 )
-from ..services import pdfs
+from ..services import pdfs, personas
 
 router = APIRouter(prefix=settings.api_prefix, tags=["comii"])
 
@@ -558,6 +558,33 @@ def trash_list(request: Request) -> TrashListResponse:
     return TrashListResponse(items=entries, total=len(entries))
 
 
+@router.get("/trash/thumb")
+def trash_thumb(request: Request, entry_id: str):
+    """回收站条目的预览图：媒体条目直接返回文件，系列条目取目录内第一张图。"""
+    auth.require_path(request, "", "delete")
+    from fastapi import Response as _Resp
+    if entry_id.startswith("media|"):
+        target = media_trash._resolve(entry_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="条目不存在")
+        payload = target.read_bytes()
+        media_type = "image/jpeg"
+        if target.suffix.lower() == ".png":
+            media_type = "image/png"
+        elif target.suffix.lower() == ".gif":
+            media_type = "image/gif"
+        elif target.suffix.lower() in {".mp4", ".webm", ".mov", ".mkv"}:
+            raise HTTPException(status_code=415, detail="视频暂不支持预览图")
+        return _Resp(content=payload, media_type=media_type)
+    root = settings.trash_root / entry_id / "data"
+    if not root.is_dir():
+        raise HTTPException(status_code=404, detail="条目不存在")
+    for path in sorted(root.rglob("*")):
+        if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif", ".webp"}:
+            return _Resp(content=path.read_bytes(), media_type="image/jpeg")
+    raise HTTPException(status_code=404, detail="没有预览图")
+
+
 @router.post("/trash/{entry_id}/restore", response_model=ActionResult)
 def trash_restore(request: Request, entry_id: str) -> ActionResult:
     auth.require_path(request, "", "delete")
@@ -664,6 +691,26 @@ def set_album_cover(request: Request, payload: AlbumCoverRequest) -> ActionResul
     auth.require_path(request, payload.path, "manage")
     library.set_album_cover(payload.path, payload.series)
     return ActionResult(status="ok", path=payload.path)
+
+
+# ---------------------------------------------------------------- personas
+@router.get("/personas")
+def personas_list(request: Request) -> dict:
+    user = auth.require_user(request)
+    return {"items": personas.list_for(int(user["id"]))}
+
+
+@router.post("/personas")
+def personas_upsert(request: Request, payload: dict) -> dict:
+    user = auth.require_user(request)
+    return personas.upsert(int(user["id"]), payload)
+
+
+@router.delete("/personas/{persona_id}")
+def personas_delete(request: Request, persona_id: str) -> dict:
+    user = auth.require_user(request)
+    ok = personas.delete(int(user["id"]), persona_id)
+    return {"status": "ok" if ok else "missing"}
 
 
 # -------------------------------------------------------------------- pdf

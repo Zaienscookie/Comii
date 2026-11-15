@@ -220,6 +220,8 @@ class ComiiApi(val baseUrl: String) {
     suspend fun deleteMedia(path: String, names: List<String>): ActionResult =
         decode(post("/media/delete", ComiiJson.encodeToString(MediaDeleteBody(path, names))))
 
+    fun trashThumbUrl(entryId: String): String = api("/trash/thumb?entry_id=${encode(entryId)}")
+
     suspend fun trash(): TrashListResponse = decode(get("/trash"))
 
     suspend fun progressAll(): Map<String, ReadingProgress> = decode(get("/progress"))
