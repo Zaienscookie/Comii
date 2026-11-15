@@ -30,8 +30,8 @@ android {
         applicationId = "com.comii.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 87
-        versionName = "3.4.3-beta"
+        versionCode = 88
+        versionName = "3.4.4-beta"
         vectorDrawables { useSupportLibrary = true }
     }
 

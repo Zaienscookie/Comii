@@ -180,6 +180,22 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
     DisposableEffect(Unit) {
         onDispose { player.release() }
     }
+    // 切到后台/锁屏：立刻暂停并取消自动播放，避免后台出声
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, player) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE ||
+                event == androidx.lifecycle.Lifecycle.Event.ON_STOP
+            ) {
+                runCatching {
+                    player.playWhenReady = false
+                    player.pause()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val bassController = remember { BassEffectController() }
     DisposableEffect(player) {
         onDispose { bassController.release() }
