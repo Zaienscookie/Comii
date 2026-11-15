@@ -427,13 +427,9 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
             }
         }
         Spacer(Modifier.height(8.dp))
-        androidx.compose.animation.Crossfade(
-            targetState = galleryMode,
-            animationSpec = androidx.compose.animation.core.tween(220),
-            label = "photo-layout",
-            modifier = Modifier.weight(1f),
-        ) { galleryLayout ->
-        Box(Modifier.weight(1f)) {
+        Box(modifier = Modifier.weight(1f)) {
+            val galleryLayout = galleryMode
+        Box(Modifier.fillMaxSize()) {
             when {
                 loading && items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = palette.accent)
@@ -606,7 +602,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 }
             }
             androidx.compose.animation.AnimatedVisibility(
-                visible = editing,
+                visible = editing && selected.isNotEmpty(),
                 enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it },
                 exit = fadeOut(tween(150)) + slideOutVertically(tween(180)) { it },
             ) {
@@ -626,7 +622,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                         }) { Text(if (selected.size == items.size) "取消全选" else "全选", color = palette.accent) }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { shareSelected() }, enabled = selected.isNotEmpty() && !sharing) {
+                        TextButton(onClick = { shareSelected() }, enabled = !sharing) {
                             Text(if (sharing) "分享中…" else "分享原图", color = palette.accent)
                         }
                         TextButton(onClick = {
