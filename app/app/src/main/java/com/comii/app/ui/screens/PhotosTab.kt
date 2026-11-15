@@ -120,6 +120,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     var editing by remember { mutableStateOf(false) }
     var dragSelectOn by remember { mutableStateOf(true) }
     var lastAnchor by remember { mutableStateOf(-1) }
+    var touchOrigin by remember { mutableStateOf(Offset.Zero) }
     var gridOrigin by remember { mutableStateOf(Offset.Zero) }
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
     val cellBounds = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
@@ -550,7 +551,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 110.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
-                    userScrollEnabled = true,
+                    userScrollEnabled = !editing,
                     modifier = Modifier
                         .fillMaxSize()
                         .onGloballyPositioned { gridOrigin = it.positionInWindow() }
@@ -661,6 +662,57 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     }
                 }
             }
+            if (editing) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .onGloballyPositioned { touchOrigin = it.positionInWindow() }
+                        .pointerInput(items.size, editing) {
+                            fun hit(point: Offset): String? =
+                                cellBounds.entries.firstOrNull { (_, r) -> r.contains(point) }?.key
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val start = down.position
+                                var index = hit(start + touchOrigin)
+                                var dragging = false
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    val dx = kotlin.math.abs(change.position.x - start.x)
+                                    val dy = kotlin.math.abs(change.position.y - start.y)
+                                    if (!dragging && (dx > 10f || dy > 10f)) {
+                                        dragging = true
+                                        val key = index
+                                        if (key != null) {
+                                            dragSelectOn = key !in selected
+                                            selected = if (dragSelectOn) selected + key else selected - key
+                                        }
+                                    } else if (dragging) {
+                                        hit(change.position + touchOrigin)?.let { key ->
+                                            selected = if (dragSelectOn) selected + key else selected - key
+                                        }
+                                        change.consume()
+                                    }
+                                } while (change.pressed)
+                                if (!dragging) {
+                                    index?.let { key ->
+                                        val idx = items.indexOfFirst { "${it.series_path}/${it.name}" == key }
+                                        if (idx >= 0) {
+                                            if (lastAnchor >= 0 && lastAnchor != idx) {
+                                                val from = minOf(lastAnchor, idx); val to = maxOf(lastAnchor, idx)
+                                                selected = (from..to).map { items[it].let { i -> "${i.series_path}/${i.name}" } }.toSet()
+                                            } else {
+                                                selected = setOf(key)
+                                            }
+                                            lastAnchor = idx
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                )
+            }
+
             androidx.compose.animation.AnimatedVisibility(
                 visible = editing && selected.isNotEmpty(),
                 modifier = Modifier.align(Alignment.BottomCenter),
