@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -673,28 +674,40 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 val start = down.position
+                                var lastY = start.y
                                 var index = hit(start + touchOrigin)
-                                var dragging = false
+                                var mode = 0 // 0 未定 1 选择 2 滚动
                                 do {
                                     val event = awaitPointerEvent()
                                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                     val dx = kotlin.math.abs(change.position.x - start.x)
                                     val dy = kotlin.math.abs(change.position.y - start.y)
-                                    if (!dragging && (dx > 10f || dy > 10f)) {
-                                        dragging = true
-                                        val key = index
-                                        if (key != null) {
-                                            dragSelectOn = key !in selected
-                                            selected = if (dragSelectOn) selected + key else selected - key
+                                    if (mode == 0 && (dx > 10f || dy > 10f)) {
+                                        mode = if (dx > dy) 1 else 2
+                                        if (mode == 1) {
+                                            val key = index
+                                            if (key != null) {
+                                                dragSelectOn = key !in selected
+                                                selected = if (dragSelectOn) selected + key else selected - key
+                                            }
                                         }
-                                    } else if (dragging) {
+                                    }
+                                    if (mode == 1) {
                                         hit(change.position + touchOrigin)?.let { key ->
                                             selected = if (dragSelectOn) selected + key else selected - key
                                         }
                                         change.consume()
+                                    } else if (mode == 2) {
+                                        val deltaY = change.position.y - lastY
+                                        lastY = change.position.y
+                                        scope.launch {
+                                            if (galleryMode) staggerState.scrollBy(-deltaY)
+                                            else gridState.scrollBy(-deltaY)
+                                        }
+                                        change.consume()
                                     }
                                 } while (change.pressed)
-                                if (!dragging) {
+                                if (mode == 0) {
                                     index?.let { key ->
                                         val idx = items.indexOfFirst { "${it.series_path}/${it.name}" == key }
                                         if (idx >= 0) {
