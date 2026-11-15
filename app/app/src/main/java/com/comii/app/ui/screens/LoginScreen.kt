@@ -61,13 +61,28 @@ fun LoginScreen(state: AppState) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(palette.background)
+            .background(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(palette.background, palette.elevated, palette.background)
+                )
+            )
             .statusBarsPadding()
             .padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Comii", color = palette.textPrimary, fontSize = 38.sp, fontWeight = FontWeight.Bold)
-        Text("登录媒体库", color = palette.textSecondary, fontSize = 14.sp)
+        Text(
+            "Comii",
+            color = palette.textPrimary,
+            fontSize = 46.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = (-1).sp,
+        )
+        Text(
+            "登录媒体库",
+            color = palette.textSecondary,
+            fontSize = 15.sp,
+            modifier = androidx.compose.ui.Modifier.padding(top = 2.dp),
+        )
         Spacer(Modifier.height(26.dp))
 
         TextField(
