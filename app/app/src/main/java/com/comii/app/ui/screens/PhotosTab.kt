@@ -234,6 +234,11 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
         return nearest?.first
     }
 
+    fun paintAtWindow(point: Offset, select: Boolean) {
+        val hit = cellBounds.entries.firstOrNull { (_, rect) -> rect.contains(point) }?.key ?: return
+        selected = if (select) selected + hit else selected - hit
+    }
+
     fun paintAt(position: Offset, select: Boolean) {
         val key = keyAt(position) ?: return
         selected = if (select) selected + key else selected - key
@@ -453,6 +458,25 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
+                                .pointerInput(item.series_path, item.name, editing, dragMode) {
+                                    if (editing && dragMode) {
+                                        val key = "${item.series_path}/${item.name}"
+                                        detectDragGestures(
+                                            onDragStart = { local ->
+                                                val rect = cellBounds[key] ?: return@detectDragGestures
+                                                val point = rect.topLeft + local
+                                                val hitKey = cellBounds.entries.firstOrNull { (_, r) -> r.contains(point) }?.key ?: key
+                                                dragSelectOn = hitKey !in selected
+                                                paintAtWindow(point, dragSelectOn)
+                                            },
+                                            onDrag = { change, _ ->
+                                                val rect = cellBounds[key] ?: return@detectDragGestures
+                                                paintAtWindow(rect.topLeft + change.position, dragSelectOn)
+                                                change.consume()
+                                            },
+                                        )
+                                    }
+                                }
                                 .pointerInput(item.series_path, item.name, editing) {
                                     detectTapGestures {
                                         if (editing) toggleSelected(item) else openItem(item)
@@ -601,30 +625,6 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     }
                 }
             }
-            if (editing && dragMode) {
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .onGloballyPositioned { overlayOrigin = it.positionInWindow() }
-                        .pointerInput(items.size) {
-                            fun toGrid(local: Offset): Offset =
-                                local + overlayOrigin - gridOrigin
-                            detectDragGestures(
-                                onDragStart = { position ->
-                                    val point = toGrid(position)
-                                    val key = keyAt(point)
-                                    dragSelectOn = key != null && key !in selected
-                                    paintAt(point, dragSelectOn)
-                                },
-                                onDrag = { change, _ ->
-                                    paintAt(toGrid(change.position), dragSelectOn)
-                                    change.consume()
-                                },
-                            )
-                        }
-                )
-            }
-
             androidx.compose.animation.AnimatedVisibility(
                 visible = editing,
                 enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it },
