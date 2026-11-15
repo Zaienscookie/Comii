@@ -421,7 +421,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 galleryLayout -> LazyVerticalStaggeredGrid(
                     columns = StaggeredGridCells.Fixed(2),
                     state = staggerState,
-                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = if (editing) 88.dp else 4.dp, bottom = 110.dp),
+                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = if (editing) 150.dp else 4.dp, bottom = 110.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalItemSpacing = 4.dp,
                     modifier = Modifier.fillMaxSize(),
@@ -461,7 +461,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 else -> LazyVerticalGrid(
                     columns = GridCells.Fixed(4),
                     state = gridState,
-                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = if (editing) 88.dp else 4.dp, bottom = 110.dp),
+                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = if (editing) 150.dp else 4.dp, bottom = 110.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                     userScrollEnabled = true,

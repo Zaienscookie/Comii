@@ -7,6 +7,14 @@ class SettingsStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("comii_settings", Context.MODE_PRIVATE)
 
+    var savedUsername: String
+        get() = prefs.getString("saved_username", "").orEmpty()
+        set(value) = prefs.edit().putString("saved_username", value.trim()).apply()
+
+    var savedPassword: String
+        get() = prefs.getString("saved_password", "").orEmpty()
+        set(value) = prefs.edit().putString("saved_password", value).apply()
+
     var serverUrl: String
         get() = prefs.getString("server_url", "").orEmpty()
         set(value) = prefs.edit().putString("server_url", value.trim()).apply()

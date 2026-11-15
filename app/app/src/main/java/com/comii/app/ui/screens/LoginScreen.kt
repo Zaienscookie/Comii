@@ -15,6 +15,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,8 +42,12 @@ fun LoginScreen(state: AppState) {
     val scope = rememberCoroutineScope()
     var server by remember { mutableStateOf(state.serverUrl) }
     var accessToken by remember { mutableStateOf(state.repository.settings.accessToken) }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var username by remember {
+        androidx.compose.runtime.mutableStateOf(state.repository.settings.savedUsername)
+    }
+    var showToken by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showPassword by remember { androidx.compose.runtime.mutableStateOf(false) }
+    var password by remember { mutableStateOf(state.repository.settings.savedPassword) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -145,6 +154,8 @@ fun LoginScreen(state: AppState) {
                         error = "请填写用户名和密码"
                     } else {
                         saveAccess()
+                        state.repository.settings.savedUsername = username
+                        state.repository.settings.savedPassword = password
                         run { state.loginWithPassword(server, username, password) }
                     }
                 },
@@ -163,6 +174,8 @@ fun LoginScreen(state: AppState) {
                     saveAccess()
                     run {
                         state.repository.authSetup(server, username, password)
+                        state.repository.settings.savedUsername = username
+                        state.repository.settings.savedPassword = password
                         state.loginWithPassword(server, username, password)
                     }
                 }

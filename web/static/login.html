@@ -90,5 +90,55 @@ form.addEventListener('submit', async (event) => {
   location.href = next;
 });
 </script>
+
+<script>
+(function () {
+  const KEYU = "comii_login_user", KEYP = "comii_login_pass";
+  function addEye(input) {
+    if (!input || input.dataset.eye) return;
+    input.dataset.eye = "1";
+    const wrap = document.createElement("div");
+    wrap.className = "login-eye";
+    wrap.style.cssText = "position:relative;display:block;width:100%";
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    input.style.paddingRight = "44px";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "👁";
+    btn.setAttribute("aria-label", "显示/隐藏");
+    btn.style.cssText = "position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:0;font-size:16px;opacity:.65;cursor:pointer;padding:6px";
+    btn.onclick = () => {
+      input.type = input.type === "password" ? "text" : "password";
+      btn.style.opacity = input.type === "password" ? ".65" : "1";
+    };
+    wrap.appendChild(btn);
+    if (input.type !== "password") input.type = "password";
+  }
+  addEye(document.getElementById("password"));
+  addEye(document.getElementById("password2"));
+  addEye(document.getElementById("accessToken"));
+  const remember = document.getElementById("remember");
+  const user = document.getElementById("username");
+  const pass = document.getElementById("password");
+  try {
+    const su = localStorage.getItem(KEYU), sp = localStorage.getItem(KEYP);
+    if (su && user && !user.value) user.value = su;
+    if (sp && pass && !pass.value) pass.value = sp;
+  } catch (_) {}
+  const form = document.getElementById("form");
+  form?.addEventListener("submit", () => {
+    try {
+      if (remember && remember.checked) {
+        localStorage.setItem(KEYU, user?.value || "");
+        localStorage.setItem(KEYP, pass?.value || "");
+      } else {
+        localStorage.removeItem(KEYU);
+        localStorage.removeItem(KEYP);
+      }
+    } catch (_) {}
+  });
+})();
+</script>
 </body>
 </html>
