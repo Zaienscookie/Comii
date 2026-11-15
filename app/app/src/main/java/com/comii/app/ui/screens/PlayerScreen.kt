@@ -293,10 +293,11 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                         dragAccum += amount
                         val duration = player.duration
                         // 先走一小段死区，避免轻轻一划就跳很远；整屏约 75 秒，比之前弱一半
-                        val slop = viewConfiguration.touchSlop
+                        // 死区加大到 2 倍 touchSlop，且整屏只对应 40 秒，滑动更“迟钝”
+                        val slop = viewConfiguration.touchSlop * 2f
                         if (duration > 0L && kotlin.math.abs(dragAccum) > slop) {
                             val effective = dragAccum - slop * kotlin.math.sign(dragAccum)
-                            val deltaMs = (effective / size.width.toFloat()) * 75_000f
+                            val deltaMs = (effective / size.width.toFloat()) * 40_000f
                             val target = (dragStartPos + deltaMs.toLong()).coerceIn(0L, duration)
                             seekTarget = target
                             player.seekTo(target)
