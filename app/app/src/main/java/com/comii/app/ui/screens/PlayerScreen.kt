@@ -683,7 +683,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                         val values = when (bassPreset) {
                             "重低音" -> Triple(35f, 55f, 40f)
                             "极重低音" -> Triple(55f, 85f, 75f)
-                            "超重低音" -> Triple(75f, 100f, 100f)
+                            "超重低音" -> Triple(100f, 100f, 100f)
                             else -> Triple(0f, 0f, 0f)
                         }
                         bassMid = values.first

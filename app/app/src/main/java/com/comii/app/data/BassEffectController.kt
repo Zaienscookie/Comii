@@ -1,10 +1,14 @@
 package com.comii.app.data
 
+import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
+import android.media.audiofx.LoudnessEnhancer
 
 /** Three-band bass shelf applied to the current ExoPlayer audio session. */
 class BassEffectController {
     private var equalizer: Equalizer? = null
+    private var bassBoost: BassBoost? = null
+    private var loudness: LoudnessEnhancer? = null
     private var midBass = 0f
     private var bass = 0f
     private var ultraBass = 0f
@@ -12,6 +16,8 @@ class BassEffectController {
     fun attach(sessionId: Int) {
         if (sessionId == -1 || equalizer != null) return
         equalizer = runCatching { Equalizer(0, sessionId) }.getOrNull()
+        bassBoost = runCatching { BassBoost(0, sessionId) }.getOrNull()
+        loudness = runCatching { LoudnessEnhancer(sessionId) }.getOrNull()
         apply()
     }
 
@@ -38,11 +44,38 @@ class BassEffectController {
                 runCatching { eq.setBandLevel(band.toShort(), level(value)) }
             }
             eq.enabled = ultraBass > 0f || bass > 0f || midBass > 0f
+
+            // 超出均衡器上限的“更重”：硬件 BassBoost + 整体增益补偿
+            runCatching {
+                bassBoost?.let { boost ->
+                    if (ultraBass <= 0f) {
+                        boost.enabled = false
+                    } else {
+                        boost.setStrength((ultraBass.coerceIn(0f, 100f) * 10f).toInt().toShort())
+                        boost.enabled = true
+                    }
+                }
+            }
+            runCatching {
+                loudness?.let { ln ->
+                    if (ultraBass > 55f) {
+                        // 55 → 0mB，100 → 1500mB（约 +15dB）额外推力
+                        ln.setTargetGain(((ultraBass - 55f) / 45f * 1500f).toInt())
+                        ln.enabled = true
+                    } else {
+                        ln.enabled = false
+                    }
+                }
+            }
         }
     }
 
     fun release() {
         runCatching { equalizer?.release() }
+        runCatching { bassBoost?.release() }
+        runCatching { loudness?.release() }
         equalizer = null
+        bassBoost = null
+        loudness = null
     }
 }
