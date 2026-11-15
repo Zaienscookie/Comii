@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -469,7 +470,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                         .fillMaxSize()
                         .pointerInput(editing, items) {
                             if (editing) {
-                                detectDragGestures(
+                                detectDragGesturesAfterLongPress(
                                     onDragStart = { position ->
                                         val key = keyAt(position)
                                         dragSelectOn = key != null && key !in selected
