@@ -112,6 +112,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf(false) }
     var dragSelectOn by remember { mutableStateOf(true) }
+    var dragMode by remember { mutableStateOf(false) }
     var galleryMode by remember { mutableStateOf(state.repository.settings.photosGallery) }
     val staggerState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
     var pendingAnchor by remember { mutableIntStateOf(-1) }
@@ -466,7 +467,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = if (editing) 150.dp else 4.dp, bottom = 110.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
-                    userScrollEnabled = true,
+                    userScrollEnabled = !dragMode,
                     modifier = Modifier
                         .fillMaxSize()
                         .pointerInput(editing, items) {
@@ -577,6 +578,26 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     }
                 }
             }
+            if (editing && dragMode) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(items.size) {
+                            detectDragGestures(
+                                onDragStart = { position ->
+                                    val key = keyAt(position)
+                                    dragSelectOn = key != null && key !in selected
+                                    paintAt(position, dragSelectOn)
+                                },
+                                onDrag = { change, _ ->
+                                    paintAt(change.position, dragSelectOn)
+                                    change.consume()
+                                },
+                            )
+                        }
+                )
+            }
+
             androidx.compose.animation.AnimatedVisibility(
                 visible = editing,
                 enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it },
@@ -598,6 +619,9 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                         }) { Text(if (selected.size == items.size) "取消全选" else "全选", color = palette.accent) }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { dragMode = !dragMode }) {
+                            Text(if (dragMode) "退出拖选" else "拖选", color = palette.accent)
+                        }
                         TextButton(onClick = { shareSelected() }, enabled = selected.isNotEmpty() && !sharing) {
                             Text(if (sharing) "分享中…" else "分享原图", color = palette.accent)
                         }
