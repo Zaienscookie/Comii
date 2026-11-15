@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -117,6 +118,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     var dragMode by remember { mutableStateOf(false) }
     var gridOrigin by remember { mutableStateOf(Offset.Zero) }
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
+    val cellBounds = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
     var galleryMode by remember { mutableStateOf(state.repository.settings.photosGallery) }
     val staggerState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
     var pendingAnchor by remember { mutableIntStateOf(-1) }
@@ -217,16 +219,19 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     }
 
     fun keyAt(position: Offset): String? {
-        val info = gridState.layoutInfo.visibleItemsInfo
-            .filter { it.key?.toString()?.startsWith("timeline:") != true }
-            .minByOrNull { item ->
-                val dx = position.x - (item.offset.x + item.size.width / 2f)
-                val dy = position.y - (item.offset.y + item.size.height / 2f)
-                dx * dx + dy * dy
-            } ?: return null
-        val key = info.key?.toString() ?: return null
-        if (key.startsWith("timeline:") || key.startsWith("loading")) return null
-        return key
+        val point = position + overlayOrigin
+        // 优先用每个格子真实的窗口矩形命中，避免任何留白/滚动导致的偏移
+        cellBounds.entries.firstOrNull { (_, rect) -> rect.contains(point) }?.let { return it.key }
+        // 兜底：取中心点最近的格子
+        val visible = gridState.layoutInfo.visibleItemsInfo
+            .mapNotNull { it.key?.toString()?.let { k -> k to it } }
+            .filterNot { it.first.startsWith("timeline:") }
+        val nearest = visible.minByOrNull { (_, item) ->
+            val dx = point.x - (gridOrigin.x + item.offset.x + item.size.width / 2f)
+            val dy = point.y - (gridOrigin.y + item.offset.y + item.size.height / 2f)
+            dx * dx + dy * dy
+        }
+        return nearest?.first
     }
 
     fun paintAt(position: Offset, select: Boolean) {
@@ -517,6 +522,10 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                 .aspectRatio(1f)
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
+                                .onGloballyPositioned { coords ->
+                                    cellBounds["${item.series_path}/${item.name}"] =
+                                        coords.boundsInWindow()
+                                }
                                 .pointerInput(item.series_path, item.name, editing) {
                                     detectTapGestures {
                                         if (editing) {
