@@ -72,6 +72,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -113,6 +115,8 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     var editing by remember { mutableStateOf(false) }
     var dragSelectOn by remember { mutableStateOf(true) }
     var dragMode by remember { mutableStateOf(false) }
+    var gridOrigin by remember { mutableStateOf(Offset.Zero) }
+    var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
     var galleryMode by remember { mutableStateOf(state.repository.settings.photosGallery) }
     val staggerState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
     var pendingAnchor by remember { mutableIntStateOf(-1) }
@@ -479,6 +483,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                     userScrollEnabled = !dragMode,
                     modifier = Modifier
                         .fillMaxSize()
+                        .onGloballyPositioned { gridOrigin = it.positionInWindow() }
                         .pointerInput(editing, items) {
                             if (editing) {
                                 detectHorizontalDragGestures(
@@ -591,15 +596,19 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                 Box(
                     Modifier
                         .fillMaxSize()
+                        .onGloballyPositioned { overlayOrigin = it.positionInWindow() }
                         .pointerInput(items.size) {
+                            fun toGrid(local: Offset): Offset =
+                                local + overlayOrigin - gridOrigin
                             detectDragGestures(
                                 onDragStart = { position ->
-                                    val key = keyAt(position)
+                                    val point = toGrid(position)
+                                    val key = keyAt(point)
                                     dragSelectOn = key != null && key !in selected
-                                    paintAt(position, dragSelectOn)
+                                    paintAt(point, dragSelectOn)
                                 },
                                 onDrag = { change, _ ->
-                                    paintAt(change.position, dragSelectOn)
+                                    paintAt(toGrid(change.position), dragSelectOn)
                                     change.consume()
                                 },
                             )
