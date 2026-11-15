@@ -679,7 +679,7 @@ fun PlayerScreen(state: AppState, path: String, startName: String, nav: NavHostC
                         else -> 0
                     },
                     onSelect = { index ->
-                        bassPreset = listOf("原声", "重低音", "极重低音")[index]
+                        bassPreset = listOf("原声", "重低音", "极重低音", "超重低音")[index]
                         val values = when (bassPreset) {
                             "重低音" -> Triple(35f, 55f, 40f)
                             "极重低音" -> Triple(55f, 85f, 75f)
