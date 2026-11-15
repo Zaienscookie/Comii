@@ -119,6 +119,7 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf(false) }
     var dragSelectOn by remember { mutableStateOf(true) }
+    var lastAnchor by remember { mutableStateOf(-1) }
     var gridOrigin by remember { mutableStateOf(Offset.Zero) }
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
     val cellBounds = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
@@ -485,10 +486,34 @@ fun PhotosTab(state: AppState, nav: NavHostController) {
                                         }
                                     }
                                 }
-                                .pointerInput(item.series_path, item.name, editing) {
-                                    detectTapGestures {
-                                        if (editing) toggleSelected(item) else openItem(item)
-                                    }
+                                .pointerInput(item.series_path, item.name, editing, items.size) {
+                                    fun indexOf(item: GalleryItem): Int =
+                                        items.indexOfFirst { it.series_path == item.series_path && it.name == item.name }
+                                    detectTapGestures(
+                                        onTap = {
+                                            if (editing) {
+                                                indexOf(item).takeIf { it >= 0 }?.let { lastAnchor = it }
+                                                toggleSelected(item)
+                                            } else {
+                                                openItem(item)
+                                            }
+                                        },
+                                        onLongPress = {
+                                            val idx = indexOf(item)
+                                            if (idx < 0) return@detectTapGestures
+                                            if (!editing) {
+                                                editing = true
+                                                lastAnchor = idx
+                                                selected = setOf("${item.series_path}/${item.name}")
+                                            } else {
+                                                val anchor = if (lastAnchor >= 0) lastAnchor else idx
+                                                val from = minOf(anchor, idx)
+                                                val to = maxOf(anchor, idx)
+                                                selected = (from..to).map { i -> "${items[i].series_path}/${items[i].name}" }.toSet()
+                                                lastAnchor = idx
+                                            }
+                                        },
+                                    )
                                 }
                         ) {
                             AsyncImage(
