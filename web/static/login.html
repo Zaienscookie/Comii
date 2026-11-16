@@ -97,27 +97,22 @@ form.addEventListener('submit', async (event) => {
   function addEye(input) {
     if (!input || input.dataset.eye) return;
     input.dataset.eye = "1";
-    const wrap = document.createElement("div");
-    wrap.className = "login-eye";
-    wrap.style.cssText = "position:relative;display:block;width:100%";
-    input.parentNode.insertBefore(wrap, input);
-    wrap.appendChild(input);
+    const parent = input.parentNode;
+    if (getComputedStyle(parent).position === "static") parent.style.position = "relative";
     input.style.paddingRight = "44px";
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = "👁";
-    btn.setAttribute("aria-label", "显示/隐藏");
-    btn.style.cssText = "position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:0;font-size:16px;opacity:.65;cursor:pointer;padding:6px";
+    btn.setAttribute("aria-label", "显示/隐藏密码");
+    btn.style.cssText = "position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;font-size:16px;line-height:1;opacity:.55;cursor:pointer;padding:6px;z-index:2";
     btn.onclick = () => {
       input.type = input.type === "password" ? "text" : "password";
-      btn.style.opacity = input.type === "password" ? ".65" : "1";
+      btn.style.opacity = input.type === "password" ? ".55" : "1";
     };
-    wrap.appendChild(btn);
-    if (input.type !== "password") input.type = "password";
+    parent.appendChild(btn);
   }
   addEye(document.getElementById("password"));
   addEye(document.getElementById("password2"));
-  addEye(document.getElementById("accessToken"));
   const remember = document.getElementById("remember");
   const user = document.getElementById("username");
   const pass = document.getElementById("password");
