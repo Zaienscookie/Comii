@@ -7,6 +7,7 @@ systemd unit without code changes.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -48,10 +49,43 @@ class Settings:
         self.port = _env_int("COMII_PORT", 8000)
         self.api_port = _env_int("COMII_API_PORT", 8001)
         self.log_level = os.environ.get("COMII_LOG_LEVEL", "info")
-        self.access_token = os.environ.get("COMII_ACCESS_TOKEN", "").strip()
+        # ---- 安全配置（令牌 / 是否开启登录验证）统一放在一个文件里 ----
+        # 默认路径：<数据目录>/server.conf，可用 COMII_CONFIG 覆盖
+        self.config_file = _env_path("COMII_CONFIG", self.data_root / "server.conf")
+        file_cfg = self._load_security_config(self.config_file)
+        # 环境变量优先级更高，便于临时覆盖；不设置时以配置文件为准
+        self.access_token = (
+            os.environ.get("COMII_ACCESS_TOKEN", "").strip()
+            or str(file_cfg.get("access_token", "")).strip()
+        )
+        env_auth = os.environ.get("COMII_AUTH_ENABLED")
+        if env_auth is not None:
+            self.auth_enabled = env_auth.strip().lower() not in {"0", "false", "no", "off"}
+        else:
+            self.auth_enabled = bool(file_cfg.get("auth_enabled", True))
         self.trash_ttl_seconds = _env_int("COMII_TRASH_TTL_DAYS", 3) * 24 * 3600
         self.max_upload_mb = _env_int("COMII_MAX_UPLOAD_MB", 512)
         self.allowed_origins = os.environ.get("COMII_CORS_ORIGINS", "*").split(",")
+
+    @staticmethod
+    def _load_security_config(path: Path) -> dict:
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError:
+            return {}
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def write_security_config(self) -> None:
+        """把当前令牌/登录开关写回配置文件，方便命令行或后台修改。"""
+        self.data_root.mkdir(parents=True, exist_ok=True)
+        payload = {"access_token": self.access_token, "auth_enabled": self.auth_enabled}
+        self.config_file.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
 
     def ensure_directories(self) -> None:
         for directory in (

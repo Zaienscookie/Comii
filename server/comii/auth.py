@@ -136,7 +136,7 @@ def _row_user(row: sqlite3.Row) -> dict[str, Any]:
 
 def enabled() -> bool:
     """Auth can be disabled for a trusted/local server (e.g. frp neko)."""
-    return os.environ.get("COMII_AUTH_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+    return getattr(settings, "auth_enabled", True)
 
 
 LOCAL_OWNER = {"id": 0, "username": "local", "role": "owner", "enabled": True, "created_at": 0, "last_login_at": 0}
