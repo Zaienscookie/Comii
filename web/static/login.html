@@ -10,8 +10,12 @@ body{min-height:100vh;display:flex;align-items:center;justify-content:center;bac
 .login{width:min(92vw,380px);padding:28px;border-radius:22px;background:var(--card,#17171a);box-shadow:0 20px 60px #0008}
 h1{margin:0 0 6px;font-size:30px}
 p.sub{color:#8e8e93;font-size:13px;margin:0 0 22px}
-input{width:100%;box-sizing:border-box;padding:13px 14px;margin:8px 0;border:0;border-radius:12px;background:#242428;color:#fff;font-size:15px}
-button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:12px;background:#0a84ff;color:#fff;font-size:16px;font-weight:600}
+.login input{width:100%;box-sizing:border-box;padding:13px 14px;margin:8px 0;border:0;border-radius:12px;background:#242428;color:#fff;font-size:15px}
+.field{position:relative;margin:8px 0}
+.field input{margin:0;padding-right:46px}
+.eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#8e8e93;font-size:16px;line-height:1;cursor:pointer;padding:0;border-radius:10px}
+.eye:hover{color:#fff}
+.login button[type=submit]{width:100%;padding:13px;margin-top:12px;border:0;border-radius:12px;background:#0a84ff;color:#fff;font-size:16px;font-weight:600}
 .error{color:#ff453a;font-size:13px;min-height:18px;margin-top:8px}
 .hint{color:#8e8e93;font-size:12px;margin-top:14px}
 </style>
@@ -21,13 +25,19 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:12px;backg
   <h1>Comii<span style="color:#0a84ff">.</span></h1>
   <p class="sub" id="sub">登录后访问媒体库</p>
   <input id="username" placeholder="用户名" autocomplete="username" autofocus>
-  <input id="password" type="password" placeholder="密码" autocomplete="current-password">
-  <input id="password2" type="password" placeholder="确认密码" autocomplete="new-password" style="display:none">
+  <div class="field">
+    <input id="password" type="password" placeholder="密码" autocomplete="current-password">
+    <button type="button" class="eye" data-for="password" aria-label="显示/隐藏密码">👁</button>
+  </div>
+  <div class="field" id="confirmWrap" style="display:none">
+    <input id="password2" type="password" placeholder="确认密码" autocomplete="new-password">
+    <button type="button" class="eye" data-for="password2" aria-label="显示/隐藏密码">👁</button>
+  </div>
   <input id="accessToken" placeholder="服务器访问令牌（可选，8001 白名单）" autocomplete="off">
   <label style="display:flex;gap:8px;align-items:center;color:#8e8e93;font-size:13px"><input id="remember" type="checkbox" checked style="width:auto;margin:0"> 记住登录</label>
   <button id="submit" type="submit">登录</button>
   <div class="error" id="error"></div>
-  <div class="hint" id="hint">WebUI 8000 登录不需要白名单 Token；App/8001 数据接口需要。</div>
+  <div class="hint" id="hint"></div>
 </form>
 <script>
 const form = document.getElementById('form');
@@ -58,7 +68,7 @@ async function boot(){
     initialized = !!status.initialized;
     if (!initialized) {
       document.getElementById('sub').textContent = '首次使用，创建 Owner 账号';
-      document.getElementById('password2').style.display = 'block';
+      document.getElementById('confirmWrap').style.display = 'block';
       document.getElementById('submit').textContent = '创建并登录';
       hint.textContent = '创建后可在 WebUI 管理用户和目录权限';
     }
@@ -94,25 +104,14 @@ form.addEventListener('submit', async (event) => {
 <script>
 (function () {
   const KEYU = "comii_login_user", KEYP = "comii_login_pass";
-  function addEye(input) {
-    if (!input || input.dataset.eye) return;
-    input.dataset.eye = "1";
-    const parent = input.parentNode;
-    if (getComputedStyle(parent).position === "static") parent.style.position = "relative";
-    input.style.paddingRight = "44px";
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = "👁";
-    btn.setAttribute("aria-label", "显示/隐藏密码");
-    btn.style.cssText = "position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;font-size:16px;line-height:1;opacity:.55;cursor:pointer;padding:6px;z-index:2";
-    btn.onclick = () => {
+  document.querySelectorAll(".eye").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const input = document.getElementById(btn.dataset.for);
+      if (!input) return;
       input.type = input.type === "password" ? "text" : "password";
-      btn.style.opacity = input.type === "password" ? ".55" : "1";
-    };
-    parent.appendChild(btn);
-  }
-  addEye(document.getElementById("password"));
-  addEye(document.getElementById("password2"));
+      btn.style.color = input.type === "password" ? "" : "#0a84ff";
+    });
+  });
   const remember = document.getElementById("remember");
   const user = document.getElementById("username");
   const pass = document.getElementById("password");
@@ -121,8 +120,7 @@ form.addEventListener('submit', async (event) => {
     if (su && user && !user.value) user.value = su;
     if (sp && pass && !pass.value) pass.value = sp;
   } catch (_) {}
-  const form = document.getElementById("form");
-  form?.addEventListener("submit", () => {
+  document.getElementById("form")?.addEventListener("submit", () => {
     try {
       if (remember && remember.checked) {
         localStorage.setItem(KEYU, user?.value || "");
