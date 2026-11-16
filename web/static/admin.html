@@ -7,36 +7,35 @@
 <link rel="stylesheet" href="/static/style.css">
 <style>
 body{background:var(--bg,#0b0b0d);color:var(--text,#fff);font-family:system-ui,sans-serif;margin:0}
-.wrap{max-width:980px;margin:0 auto;padding:24px}
+.wrap{max-width:960px;margin:0 auto;padding:24px}
 h1{font-size:28px;margin:0 0 4px}
 h3{margin:0 0 6px;font-size:17px}
-.sub{color:#8e8e93;font-size:13px;margin-bottom:14px;line-height:1.6}
+.sub{color:#8e8e93;font-size:13px;margin-bottom:14px;line-height:1.7}
 .card{background:#17171a;border-radius:16px;padding:18px;margin:14px 0}
 input,select,button{padding:10px 12px;border:0;border-radius:10px;background:#242428;color:#fff;font-size:14px;margin:4px 4px 4px 0}
 button{background:#0a84ff;font-weight:600;cursor:pointer}
 button.danger{background:#ff453a}
 button.ghost{background:#2c2c31}
-button.mini{padding:6px 10px;font-size:12px;margin:0 4px 0 0}
+button.mini{padding:6px 12px;font-size:12px;margin:0}
 table{width:100%;border-collapse:collapse;font-size:13px}
-td,th{text-align:left;padding:9px 8px;border-bottom:1px solid #2c2c31;vertical-align:middle}
+td,th{text-align:left;padding:10px 8px;border-bottom:1px solid #2c2c31;vertical-align:middle}
 th{color:#8e8e93;font-weight:500;font-size:12px}
-.role-pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;background:#2c2c31;color:#c7c7cc}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:#1d1d21}
+tbody tr.active{background:#0a84ff1a}
+.role-pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;background:#2c2c31;color:#c7c7cc}
 .role-pill.owner{background:#0a84ff22;color:#4da3ff}
 .role-pill.admin{background:#30d15822;color:#30d158}
 .role-pill.viewer{background:#8e8e9322;color:#c7c7cc}
 .role-pill.custom{background:#ffd60a22;color:#ffd60a}
-.caps{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.caps{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 .caps label{display:flex;align-items:center;gap:6px;font-size:12px;background:#202024;border:1px solid #2c2c31;padding:7px 10px;border-radius:10px;color:#c7c7cc;cursor:pointer}
 .caps label:hover{border-color:#0a84ff}
 .caps input{width:auto;margin:0}
-.grant-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #232326;font-size:13px;flex-wrap:wrap}
-.grant-row .path{font-family:ui-monospace,monospace;color:#fff}
-.grant-caps{color:#8e8e93;font-size:12px}
 .msg{font-size:12px;color:#30d158;margin-left:6px}
 .msg.err{color:#ff453a}
-.token{font-family:ui-monospace,monospace;font-size:13px;background:#0d0d0f;padding:12px;border-radius:10px;word-break:break-all;user-select:all;margin-top:8px;border:1px dashed #0a84ff55}
 a{color:#0a84ff}
-label.field{display:block;font-size:12px;color:#8e8e93;margin:10px 0 2px}
+.preset{color:#8e8e93;font-size:13px;padding:8px 0}
 </style>
 </head>
 <body>
@@ -46,14 +45,14 @@ label.field{display:block;font-size:12px;color:#8e8e93;margin:10px 0 2px}
 
   <div class="card">
     <h3>新建用户</h3>
-    <div class="sub">角色决定这个账号能做什么，创建后仍可在下面的表格里随时改。</div>
+    <div class="sub">Viewer / Admin / Owner 是预设角色；Custom 建好后点用户行勾选权限。</div>
     <input id="newName" placeholder="用户名">
     <input id="newPass" type="password" placeholder="密码（至少 6 位）">
-    <select id="newRole" title="选择角色">
-      <option value="viewer">Viewer · 只读</option>
-      <option value="admin">Admin · 管理内容</option>
-      <option value="custom">Custom · 自定义（配合下方目录权限）</option>
-      <option value="owner">Owner · 全部权限</option>
+    <select id="newRole">
+      <option value="viewer">Viewer · 只读（预设）</option>
+      <option value="admin">Admin · 管理内容（预设）</option>
+      <option value="custom" selected>Custom · 自定义权限</option>
+      <option value="owner">Owner · 全部权限（预设）</option>
     </select>
     <button onclick="createUser()">创建</button>
     <span id="createMsg" class="msg"></span>
@@ -61,53 +60,17 @@ label.field{display:block;font-size:12px;color:#8e8e93;margin:10px 0 2px}
 
   <div class="card">
     <h3>用户列表</h3>
-    <div class="sub">直接改下拉框就能切换角色，立即生效。删除用户不会删除他的文件。</div>
+    <div class="sub">点一行 = 选中这个用户，下方出现权限设置；「状态」点一下封禁，再点一下恢复。</div>
     <table>
-      <thead><tr><th style="width:56px">ID</th><th>用户名</th><th style="width:110px">当前角色</th><th style="width:190px">改为</th><th style="width:70px">状态</th><th style="width:80px"></th></tr></thead>
+      <thead><tr><th style="width:52px">ID</th><th>用户名</th><th style="width:100px">角色</th><th style="width:96px">状态</th><th style="width:170px">角色操作</th><th style="width:70px"></th></tr></thead>
       <tbody id="users"></tbody>
     </table>
-  </div>
-
-  <div class="card">
-    <h3>目录权限（Custom 用户必看）</h3>
-    <div class="sub">
-      用途：只让某个账号访问某个文件夹。<br>
-      <b>目录前缀</b>：填文件夹相对路径，例如 <code>neko</code>、<code>本子/某作者</code>；<b>留空 = 整个媒体库</b>。<br>
-      勾选这个前缀下允许的能力，保存后立即生效；同名前缀再保存会覆盖。
-    </div>
-    <label class="field">选择用户</label>
-    <select id="grantUser" onchange="loadGrants()"></select>
-
-    <label class="field">已生效的授权（点“删除”可撤销）</label>
-    <div id="grantList" class="sub" style="margin-bottom:6px">加载中…</div>
-
-    <label class="field">新增 / 覆盖授权</label>
-    <input id="grantPath" placeholder="目录前缀，留空表示整个媒体库">
-    <div class="caps" id="capsBox"></div>
-    <div>
-      <button class="ghost mini" onclick="capsAll(true)">全选</button>
-      <button class="ghost mini" onclick="capsAll(false)">清空</button>
-      <button onclick="saveGrant()">保存授权</button>
-      <span id="grantMsg" class="msg"></span>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>API Token</h3>
-    <div class="sub">
-      给 App、脚本或外部访问用。生成的串<b>只显示一次</b>，关掉就看不到了，请立刻复制。<br>
-      有效期到期后自动失效；不再使用请删除对应用户的 Token。
-    </div>
-    <select id="tokenUser"></select>
-    <input id="tokenName" placeholder="备注名，例如 手机 / Cloudflare">
-    <input id="tokenDays" type="number" value="30" style="width:90px" title="有效天数"> 天
-    <button onclick="createToken()">生成 Token</button>
-    <div id="tokenOut"></div>
+    <div id="permsPanel"></div>
   </div>
 
   <div class="card">
     <h3>审计日志</h3>
-    <div class="sub">登录、失败登录、修改操作，默认保留 30 天。最近 200 条。</div>
+    <div class="sub">登录、失败登录、修改操作，默认保留 30 天，最近 200 条。</div>
     <button onclick="loadAudit()">刷新日志</button>
     <table style="margin-top:10px">
       <thead><tr><th>时间</th><th>用户</th><th>动作</th><th>路径</th><th>状态</th><th>IP</th></tr></thead>
@@ -118,19 +81,24 @@ label.field{display:block;font-size:12px;color:#8e8e93;margin:10px 0 2px}
 
 <script>
 const CAPS = [
-  ['view', '浏览', '能看到并打开'],
-  ['download', '下载/分享', '保存到本地、分享给别人'],
-  ['upload', '上传', '上传文件到该目录'],
-  ['create', '新建文件夹', '新建目录'],
-  ['delete', '删除', '删除文件（进回收站）'],
-  ['move', '移动', '移动/重命名'],
-  ['manage', '管理封面/标签', '改封面、打标签'],
+  ['view', '浏览'],
+  ['download', '下载/分享'],
+  ['upload', '上传'],
+  ['create', '新建文件夹'],
+  ['delete', '删除'],
+  ['move', '移动/重命名'],
+  ['manage', '管理封面/标签'],
 ];
-const CAP_LABEL = Object.fromEntries(CAPS.map(([k, label]) => [k, label]));
 const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', viewer: 'Viewer', custom: 'Custom' };
+const PRESET_HINT = {
+  owner: '预设角色：拥有全部权限，不可修改。',
+  admin: '预设角色：可管理内容（浏览/下载/上传/新建/删除/移动/封面标签），不可修改。',
+  viewer: '预设角色：只读，只能浏览和下载，不可修改。',
+};
 
 let users = [];
-let grants = [];
+let me = null;
+let selectedId = null;
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -144,40 +112,80 @@ async function api(path, options = {}) {
   return data;
 }
 
-function buildCaps() {
-  document.getElementById('capsBox').innerHTML = CAPS.map(([k, label, hint]) =>
-    `<label title="${escapeHtml(hint)}"><input type="checkbox" data-cap="${k}">${escapeHtml(label)}</label>`).join('');
-}
-
-function capsAll(value) {
-  document.querySelectorAll('#capsBox input').forEach(i => { i.checked = value; });
-}
-
-function roleSelect(user) {
-  return `<select onchange="setRole(${user.id}, this.value)" title="切换角色">` +
-    ['owner', 'admin', 'viewer', 'custom'].map(r =>
-      `<option value="${r}"${r === user.role ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('') +
-    `</select>`;
+function grantOf(user) {
+  const list = user.grants || [];
+  return list.find(g => !g.path_prefix) || null;
 }
 
 async function load() {
   const data = await api('/api/v1/admin/users');
   users = data.items || [];
-  document.getElementById('users').innerHTML = users.map(u => `
-    <tr>
-      <td>${u.id}</td>
-      <td>${escapeHtml(u.username)}</td>
-      <td><span class="role-pill ${u.role}">${ROLE_LABEL[u.role] || u.role}</span></td>
-      <td>${roleSelect(u)}</td>
-      <td>${u.enabled ? '启用' : '禁用'}</td>
-      <td><button class="danger mini" onclick="delUser(${u.id}, '${escapeHtml(u.username)}')">删除</button></td>
-    </tr>`).join('');
+  const isMe = (u) => me && me.user && Number(me.user.id) === Number(u.id);
+  const ownerCount = users.filter(u => u.role === 'owner' && u.enabled).length;
 
-  const options = users.map(u => `<option value="${u.id}">${escapeHtml(u.username)} · ${ROLE_LABEL[u.role] || u.role}</option>`).join('');
-  const grantSel = document.getElementById('grantUser');
-  const tokenSel = document.getElementById('tokenUser');
-  if (grantSel.dataset.filled !== '1') { grantSel.innerHTML = options; grantSel.dataset.filled = '1'; }
-  if (tokenSel.dataset.filled !== '1') { tokenSel.innerHTML = options; tokenSel.dataset.filled = '1'; }
+  document.getElementById('users').innerHTML = users.map(u => {
+    const locked = isMe(u) || (u.role === 'owner' && ownerCount <= 1);
+    const roleOptions = ['owner', 'admin', 'viewer', 'custom'].map(r =>
+      `<option value="${r}"${r === u.role ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('');
+    return `<tr data-id="${u.id}" class="${selectedId === u.id ? 'active' : ''}" onclick="selectUser(${u.id})">
+      <td>${u.id}</td>
+      <td>${escapeHtml(u.username)}${isMe(u) ? ' <span class="role-pill">我</span>' : ''}</td>
+      <td><span class="role-pill ${u.role}">${ROLE_LABEL[u.role] || u.role}</span></td>
+      <td><button class="mini ${u.enabled ? 'ghost' : 'danger'}" onclick="event.stopPropagation();toggleEnabled(${u.id}, ${u.enabled ? 'false' : 'true'})">${u.enabled ? '启用' : '禁用'}</button></td>
+      <td onclick="event.stopPropagation()">
+        ${locked
+          ? `<span class="sub" style="margin:0">${isMe(u) ? '不能改自己' : '保留 Owner'}</span>`
+          : `<select onchange="setRole(${u.id}, this.value)">${roleOptions}</select>`}
+      </td>
+      <td><button class="danger mini" onclick="event.stopPropagation();delUser(${u.id}, '${escapeHtml(u.username)}')">删除</button></td>
+    </tr>`;
+  }).join('');
+
+  renderPerms();
+}
+
+function selectUser(id) {
+  selectedId = (selectedId === id) ? null : id;
+  load();
+}
+
+function renderPerms() {
+  const panel = document.getElementById('permsPanel');
+  const user = users.find(u => u.id === selectedId);
+  if (!user) { panel.innerHTML = ''; return; }
+  if (user.role !== 'custom') {
+    panel.innerHTML = `<div class="preset">「${escapeHtml(user.username)}」当前是 <b>${ROLE_LABEL[user.role]}</b>。${PRESET_HINT[user.role] || ''}</div>`;
+    return;
+  }
+  const g = grantOf(user) || {};
+  panel.innerHTML = `
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #2c2c31">
+      <div class="sub" style="margin-bottom:6px">「${escapeHtml(user.username)}」的权限（仅 Custom 可勾选）</div>
+      <div class="caps" id="capsBox">
+        ${CAPS.map(([k, label]) => `<label><input type="checkbox" data-cap="${k}"${g[k] ? ' checked' : ''}>${label}</label>`).join('')}
+      </div>
+      <button onclick="savePerms(${user.id})">保存权限</button>
+      <button class="ghost" onclick="document.querySelectorAll('#capsBox input').forEach(i=>i.checked=false)">清空</button>
+      <span id="permMsg" class="msg"></span>
+    </div>`;
+}
+
+async function savePerms(id) {
+  const item = { path_prefix: '' };
+  document.querySelectorAll('#capsBox input').forEach(i => { item[i.dataset.cap] = i.checked; });
+  try {
+    await api('/api/v1/admin/users/' + id + '/grants', { method: 'PUT', body: JSON.stringify({ items: [item] }) });
+    document.getElementById('permMsg').textContent = '已保存';
+    await load();
+  } catch (e) {
+    document.getElementById('permMsg').textContent = '保存失败：' + e.message;
+    document.getElementById('permMsg').className = 'msg err';
+  }
+}
+
+async function toggleEnabled(id, enabled) {
+  try { await api('/api/v1/admin/users/' + id, { method: 'PATCH', body: JSON.stringify({ enabled }) }); await load(); }
+  catch (e) { alert(e.message); }
 }
 
 async function createUser() {
@@ -189,84 +197,19 @@ async function createUser() {
     await api('/api/v1/admin/users', { method: 'POST', body: JSON.stringify(body) });
     msg.textContent = '已创建';
     newName.value = ''; newPass.value = '';
-    document.getElementById('grantUser').dataset.filled = '';
-    document.getElementById('tokenUser').dataset.filled = '';
     await load();
   } catch (e) { msg.textContent = '创建失败：' + e.message; msg.className = 'msg err'; }
 }
 
 async function setRole(id, role) {
   try { await api('/api/v1/admin/users/' + id, { method: 'PATCH', body: JSON.stringify({ role }) }); await load(); }
-  catch (e) { alert('改角色失败：' + e.message); }
+  catch (e) { alert(e.message); await load(); }
 }
 
 async function delUser(id, name) {
   if (!confirm('确定删除用户「' + name + '」？他的文件不会被删除。')) return;
-  await api('/api/v1/admin/users/' + id, { method: 'DELETE' });
-  document.getElementById('grantUser').dataset.filled = '';
-  document.getElementById('tokenUser').dataset.filled = '';
-  await load();
-}
-
-async function loadGrants() {
-  const id = document.getElementById('grantUser').value;
-  if (!id) return;
-  const data = await api('/api/v1/admin/users/' + id + '/grants');
-  grants = data.items || [];
-  const box = document.getElementById('grantList');
-  if (!grants.length) { box.innerHTML = '暂无单独授权（Custom 用户此时看不到任何目录）'; return; }
-  box.innerHTML = grants.map((g, i) => {
-    const caps = CAPS.filter(([k]) => g[k]).map(([, label]) => label);
-    return `<div class="grant-row">
-      <span class="path">${g.path_prefix ? escapeHtml(g.path_prefix) : '（整个媒体库）'}</span>
-      <span class="grant-caps">${caps.length ? caps.join('、') : '没有勾选任何能力'}</span>
-      <span style="flex:1"></span>
-      <button class="ghost mini" onclick="delGrant(${i})">删除</button>
-    </div>`;
-  }).join('');
-}
-
-async function delGrant(index) {
-  const id = document.getElementById('grantUser').value;
-  const item = grants[index];
-  if (!item) return;
-  if (!confirm('撤销「' + (item.path_prefix || '整个媒体库') + '」的授权？')) return;
-  const items = grants.filter((_, i) => i !== index);
-  await api('/api/v1/admin/users/' + id + '/grants', { method: 'PUT', body: JSON.stringify({ items }) });
-  document.getElementById('grantMsg').textContent = '已撤销';
-  await loadGrants();
-}
-
-async function saveGrant() {
-  const id = document.getElementById('grantUser').value;
-  if (!id) return;
-  const item = { path_prefix: document.getElementById('grantPath').value.trim() };
-  document.querySelectorAll('#capsBox input').forEach(i => { item[i.dataset.cap] = i.checked; });
-  if (!CAPS.some(([k]) => item[k])) {
-    document.getElementById('grantMsg').textContent = '至少勾选一个能力';
-    document.getElementById('grantMsg').className = 'msg err';
-    return;
-  }
-  const existing = await api('/api/v1/admin/users/' + id + '/grants');
-  const items = (existing.items || []).filter(g => g.path_prefix !== item.path_prefix);
-  items.push(item);
-  await api('/api/v1/admin/users/' + id + '/grants', { method: 'PUT', body: JSON.stringify({ items }) });
-  const msg = document.getElementById('grantMsg');
-  msg.textContent = '已保存'; msg.className = 'msg';
-  await loadGrants();
-}
-
-async function createToken() {
-  const id = document.getElementById('tokenUser').value;
-  if (!id) return;
-  const data = await api('/api/v1/admin/users/' + id + '/tokens', {
-    method: 'POST',
-    body: JSON.stringify({ name: document.getElementById('tokenName').value || 'token', days: Number(document.getElementById('tokenDays').value) || 30 })
-  });
-  document.getElementById('tokenOut').innerHTML =
-    '<div class="sub" style="margin-top:10px">只显示这一次，请现在复制保存：</div>' +
-    '<div class="token">' + escapeHtml(data.token) + '</div>' +
-    '<div class="sub" style="margin-top:6px">到期时间：' + (data.expires_at ? new Date(data.expires_at * 1000).toLocaleString() : '—') + '</div>';
+  try { await api('/api/v1/admin/users/' + id, { method: 'DELETE' }); selectedId = null; await load(); }
+  catch (e) { alert(e.message); }
 }
 
 async function loadAudit() {
@@ -278,14 +221,12 @@ async function loadAudit() {
 }
 
 (async () => {
-  buildCaps();
-  const me = await api('/api/v1/auth/me').catch(() => null);
+  me = await api('/api/v1/auth/me').catch(() => null);
   if (!me || me.user?.role !== 'owner') {
     document.body.innerHTML = '<div class="wrap"><h1>仅 Owner 可管理用户</h1><p class="sub">Admin 只能管理内容，不能创建用户或分配权限。</p><a href="/">← 返回媒体库</a></div>';
     return;
   }
   await load();
-  loadGrants();
   loadAudit();
 })();
 </script>

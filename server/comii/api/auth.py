@@ -124,10 +124,35 @@ def create_user(payload: dict, request: Request) -> dict:
 
 @router.patch("/admin/users/{user_id}")
 def update_user(user_id: int, payload: dict, request: Request) -> dict:
-    _owner(request)
+    owner = _owner(request)
     user = auth.user_by_id(user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
+    # 不能改自己的角色/状态，避免把自己锁在门外
+    if user_id == int(owner["id"]):
+        if "role" in payload and str(payload.get("role")) != user["role"]:
+            raise HTTPException(status_code=400, detail="不能修改自己的角色")
+        if payload.get("enabled") is False:
+            raise HTTPException(status_code=400, detail="不能封禁自己")
+    # 系统里至少要保留一个可用的 owner
+    if "role" in payload and str(payload.get("role")) != "owner" and user["role"] == "owner":
+        import sqlite3
+
+        with auth._connect() as db:
+            others = db.execute(
+                "SELECT COUNT(*) FROM users WHERE role='owner' AND enabled=1 AND id<>?", (user_id,)
+            ).fetchone()[0]
+        if others <= 0:
+            raise HTTPException(status_code=400, detail="至少要保留一个 Owner")
+    if payload.get("enabled") is False and user["role"] == "owner":
+        import sqlite3
+
+        with auth._connect() as db:
+            others = db.execute(
+                "SELECT COUNT(*) FROM users WHERE role='owner' AND enabled=1 AND id<>?", (user_id,)
+            ).fetchone()[0]
+        if others <= 0:
+            raise HTTPException(status_code=400, detail="不能封禁唯一的 Owner")
     fields = []
     values = []
     if "role" in payload:
