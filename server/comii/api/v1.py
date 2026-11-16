@@ -499,7 +499,10 @@ def media_video_thumb(request: Request, path: str, name: str) -> Response:
 @router.post("/folders", response_model=ActionResult)
 def create_folder(request: Request, payload: CreateFolderRequest) -> ActionResult:
     auth.require_path(request, payload.parent, "create")
-    created = manage.create_folder(payload.parent, payload.name, payload.kind)
+    try:
+        created = manage.create_folder(payload.parent, payload.name, payload.kind)
+    except OSError as exc:
+        raise HTTPException(status_code=400, detail=f"无法创建目录（只读或权限不足）：{exc.strerror or exc}") from exc
     return ActionResult(status="ok", path=created)
 
 
