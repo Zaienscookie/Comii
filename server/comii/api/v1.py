@@ -693,6 +693,17 @@ def set_album_cover(request: Request, payload: AlbumCoverRequest) -> ActionResul
     return ActionResult(status="ok", path=payload.path)
 
 
+@router.get("/tunnel/edge")
+def tunnel_edge(request: Request) -> dict:
+    """返回宿主机探针写下的 Cloudflare 边缘信息（用于给客户端网络建议）。"""
+    auth.require_user(request)
+    path = settings.data_root / "tunnel_edge.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"edge": "unknown", "region": "unknown", "advice": "暂时没有边缘信息"}
+
+
 # ---------------------------------------------------------------- personas
 @router.get("/personas")
 def personas_list(request: Request) -> dict:
