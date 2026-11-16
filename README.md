@@ -55,10 +55,10 @@ docker compose up -d --build
 docker compose logs comii | grep -E "Owner|令牌"
 ```
 
-日志会打印首次创建的 Owner 与自动生成的令牌：
+日志会打印首次创建的 Owner 与自动生成的令牌：(生成密钥均为示例, 不代表真实生产环境)
 
 ```
-已自动创建 Owner：用户名=admin 密码=Abcd@0000（请尽快修改；配置见 /data/server.conf）
+已自动创建 Owner：用户名=admin 密码=Abcd@0000 （请尽快修改；配置见 /data/server.conf）
 已自动生成服务器访问令牌：Hs6E3KbwYfx5nInSoma1MVUuCx1FBZVy（已写入 /data/server.conf）
 ```
 
