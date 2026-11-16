@@ -274,6 +274,34 @@ def user_from_request(request: Request) -> Optional[dict[str, Any]]:
     return user_from_token(bearer_token(request))
 
 
+def bootstrap() -> dict[str, str]:
+    """首次启动：自动创建 Owner 并生成访问令牌。返回 {username,password,token,created}。"""
+    import secrets as _secrets
+
+    ensure_schema()
+    result: dict[str, str] = {"created": "0"}
+    token = settings.access_token
+    if not token:
+        token = _secrets.token_urlsafe(24)
+        settings.access_token = token
+        result["token_generated"] = "1"
+    if enabled() and count_users() == 0:
+        username = settings.owner_user or "admin"
+        password = settings.owner_password or _secrets.token_urlsafe(9)
+        setup_owner(username, password)
+        settings.owner_password = password
+        result.update({"created": "1", "username": username, "password": password})
+    if result.get("token_generated") or result.get("created") == "1":
+        run_catching = getattr(settings, "write_security_config", None)
+        if callable(run_catching):
+            try:
+                settings.write_security_config()
+            except OSError:
+                pass
+    result["token"] = settings.access_token
+    return result
+
+
 def require_user(request: Request) -> dict[str, Any]:
     if not enabled():
         return dict(LOCAL_OWNER)

@@ -77,6 +77,20 @@ async def _sweep_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings.ensure_directories()
+    try:
+        info = auth.bootstrap()
+        if info.get("created") == "1":
+            logger.warning(
+                "已自动创建 Owner：用户名=%s 密码=%s（请尽快修改；配置见 %s）",
+                info.get("username"), info.get("password"), settings.config_file,
+            )
+        if info.get("token_generated") == "1":
+            logger.warning(
+                "已自动生成服务器访问令牌：%s（已写入 %s）",
+                info.get("token"), settings.config_file,
+            )
+    except Exception as exc:  # 启动阶段不能因为初始化失败而无法起来
+        logger.error("初始化账号/令牌失败：%s", exc)
     auth.ensure_schema()
     _configure_logging()
     try:
@@ -95,7 +109,11 @@ async def access_log(request: Request, call_next):
     response = await call_next(request)
     if request.url.path.startswith("/api/"):
         elapsed_ms = (time.perf_counter() - started_at) * 1000
-        client = request.client.host if request.client else "-"
+        # Cloudflare 隧道：用 CF-Connecting-IP 记录真实客户端
+        client = (
+            request.headers.get("cf-connecting-ip")
+            or (request.client.host if request.client else "-")
+        )
         logger.info(
             "%s %s -> %s (%.0fms) from %s",
             request.method,
@@ -110,6 +128,10 @@ async def access_log(request: Request, call_next):
 
 
 async def access_gate(request: Request, call_next):
+    # 反代/隧道场景：把真实来源写进 scope，审计与限流都能用
+    forwarded = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if forwarded:
+        request.scope["client"] = (forwarded, 0)
     """Shared server whitelist token for the 8001 data API."""
     token = settings.access_token
     path = request.url.path
@@ -121,7 +143,15 @@ async def access_gate(request: Request, call_next):
         supplied = request.headers.get("x-comii-token", "") or request.cookies.get("comii_access", "")
         if not supplied or not secrets.compare_digest(token, supplied):
             return JSONResponse(status_code=401, content={"detail": "无效的服务器访问令牌"})
-    return await call_next(request)
+    response = await call_next(request)
+    # 敏感媒体：只允许私有缓存（浏览器/App 本地），绝不允许 CDN/代理共享缓存
+    path_now = request.url.path
+    if request.method == "GET" and (
+        path_now.startswith(("/api/v1/media/", "/api/media/", "/api/img/", "/api/thumb/", "/api/video_thumb/"))
+    ):
+        response.headers["Cache-Control"] = "private, max-age=604800, immutable"
+        response.headers.setdefault("Vary", "X-Comii-Token, Cookie")
+    return response
 
 
 async def auth_gate(request: Request, call_next):

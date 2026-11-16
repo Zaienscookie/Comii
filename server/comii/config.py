@@ -63,6 +63,15 @@ class Settings:
             self.auth_enabled = env_auth.strip().lower() not in {"0", "false", "no", "off"}
         else:
             self.auth_enabled = bool(file_cfg.get("auth_enabled", True))
+        # 首次启动自动创建 Owner：用户名/密码可写在 server.conf 或环境变量
+        self.owner_user = (
+            os.environ.get("COMII_OWNER_USER", "").strip()
+            or str(file_cfg.get("owner_user", "") or "admin").strip()
+        )
+        self.owner_password = (
+            os.environ.get("COMII_OWNER_PASSWORD", "").strip()
+            or str(file_cfg.get("owner_password", "") or "").strip()
+        )
         self.trash_ttl_seconds = _env_int("COMII_TRASH_TTL_DAYS", 3) * 24 * 3600
         self.max_upload_mb = _env_int("COMII_MAX_UPLOAD_MB", 512)
         self.allowed_origins = os.environ.get("COMII_CORS_ORIGINS", "*").split(",")
@@ -82,7 +91,12 @@ class Settings:
     def write_security_config(self) -> None:
         """把当前令牌/登录开关写回配置文件，方便命令行或后台修改。"""
         self.data_root.mkdir(parents=True, exist_ok=True)
-        payload = {"access_token": self.access_token, "auth_enabled": self.auth_enabled}
+        payload = {
+            "access_token": self.access_token,
+            "auth_enabled": self.auth_enabled,
+            "owner_user": self.owner_user,
+            "owner_password": self.owner_password,
+        }
         self.config_file.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )

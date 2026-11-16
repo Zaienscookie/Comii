@@ -1,0 +1,20 @@
+services:
+  comii:
+    build: .
+    image: comii:latest
+    container_name: comii
+    restart: unless-stopped
+    ports:
+      - "8000:8000"   # WebUI
+      - "8001:8001"   # App / API
+    environment:
+      # 首次启动会自动创建 Owner（不填用户名默认 admin；密码留空则随机生成并打印在日志里）
+      COMII_OWNER_USER: "${COMII_OWNER_USER:-admin}"
+      COMII_OWNER_PASSWORD: "${COMII_OWNER_PASSWORD:-}"
+      # 留空则自动生成，并写进 ./data/server.conf
+      COMII_ACCESS_TOKEN: "${COMII_ACCESS_TOKEN:-}"
+      COMII_AUTH_ENABLED: "1"
+      COMII_MAX_UPLOAD_MB: "2048"
+    volumes:
+      - ./library:/library:ro   # 你的媒体目录，改成实际路径；要上传/删除就去掉 :ro
+      - ./data:/data            # 账号、缩略图、回收站、更新包都在这里
