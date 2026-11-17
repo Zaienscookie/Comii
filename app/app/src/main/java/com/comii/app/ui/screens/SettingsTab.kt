@@ -87,7 +87,7 @@ fun SettingsTab(state: AppState, nav: NavHostController) {
             .padding(horizontal = 20.dp),
     ) {
         Spacer(Modifier.height(14.dp))
-        LargeTitle("设置", "Comii 3.7.1-beta")
+        LargeTitle("设置", "Comii 3.7.2-beta")
         var edgeText by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
         androidx.compose.runtime.LaunchedEffect(state.serverUrl) {
             edgeText = runCatching { state.repository.tunnelEdge() }.getOrNull()?.let { t ->

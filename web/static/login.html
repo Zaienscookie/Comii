@@ -66,6 +66,8 @@ a{color:#0a84ff;text-decoration:none}
   <div class="hint" id="hint"></div>
 </form>
 <script>
+function sanitizeToken(v){ return String(v||'').replace(/[^\x21-\x7E]/g, ''); }
+
 const form = document.getElementById('form');
 const errorEl = document.getElementById('error');
 const hint = document.getElementById('hint');
@@ -75,7 +77,7 @@ const next = new URLSearchParams(location.search).get('next') || '/';
 const TOKEN_KEY = 'comii_token';
 const accessInput = document.getElementById('accessToken');
 const qsToken = new URLSearchParams(location.search).get('token') || '';
-accessInput.value = qsToken || sessionStorage.getItem(TOKEN_KEY) || '';
+accessInput.value = sanitizeToken(qsToken || sessionStorage.getItem(TOKEN_KEY) || '');
 function saveAccessCookie(value) {
   document.cookie = value
     ? 'comii_access=' + encodeURIComponent(value) + '; path=/; max-age=31536000; SameSite=Lax'
@@ -124,7 +126,7 @@ form.addEventListener('submit', async (event) => {
   const password2 = document.getElementById('password2').value;
   if (!username || !password) { showError('请输入用户名和密码'); return; }
   if (!initialized && password !== password2) { showError('两次密码不一致'); return; }
-  const token = accessInput.value.trim();
+  const token = sanitizeToken(accessInput.value);
   if (token) {
     sessionStorage.setItem(TOKEN_KEY, token);
     try { localStorage.setItem('comii_access_token', token); } catch (_) {}

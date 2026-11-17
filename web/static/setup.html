@@ -53,6 +53,8 @@ a{color:#0a84ff;text-decoration:none;display:inline-block;margin-top:16px}
   </div>
 </div>
 <script>
+function sanitizeToken(v){ return String(v||'').replace(/[^\x21-\x7E]/g, ''); }
+
 const errorEl = document.getElementById('error');
 const save = document.getElementById('save');
 function showError(text) {

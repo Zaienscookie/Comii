@@ -7,6 +7,10 @@ class SettingsStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("comii_settings", Context.MODE_PRIVATE)
 
+    /** 去掉粘贴时混进来的控制字符/换行/空格，避免 OkHttp 报 "Unexpected char" */
+    private fun String.sanitizeToken(): String =
+        filter { it.code in 0x21..0x7E }.trim()
+
     var savedUsername: String
         get() = prefs.getString("saved_username", "").orEmpty()
         set(value) = prefs.edit().putString("saved_username", value.trim()).apply()
@@ -21,7 +25,7 @@ class SettingsStore(context: Context) {
 
     var accessToken: String
         get() = prefs.getString("access_token", "").orEmpty()
-        set(value) = prefs.edit().putString("access_token", value.trim()).apply()
+        set(value) = prefs.edit().putString("access_token", value.sanitizeToken()).apply()
 
     var authToken: String
         get() = prefs.getString("auth_token", "").orEmpty()

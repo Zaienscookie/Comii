@@ -132,7 +132,7 @@ fun LoginScreen(state: AppState) {
                     LoginField(
                         label = "服务器访问令牌",
                         value = accessToken,
-                        onValueChange = { accessToken = it },
+                        onValueChange = { accessToken = it.filter { ch -> ch.code in 0x21..0x7E } },
                         placeholder = "留空表示该服务器未开启令牌",
                         palette = palette,
                         secret = true,
