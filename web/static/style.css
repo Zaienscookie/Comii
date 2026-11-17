@@ -1230,6 +1230,7 @@ body.view-photos .photo-tools { display: flex; gap: 8px; }
 }
 
 /* ---------- 顶部视图切换 ---------- */
+.view-tabs-wrap { display: flex; justify-content: center; margin: 2px 0 14px; }
 .view-tabs {
   display: inline-flex;
   gap: 4px;
