@@ -124,7 +124,10 @@ form.addEventListener('submit', async (event) => {
   if (!username || !password) { showError('请输入用户名和密码'); return; }
   if (!initialized && password !== password2) { showError('两次密码不一致'); return; }
   const token = accessInput.value.trim();
-  if (token) sessionStorage.setItem(TOKEN_KEY, token);
+  if (token) {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    try { localStorage.setItem('comii_access_token', token); } catch (_) {}
+  }
   saveAccessCookie(token);
   submit.classList.add('loading');
   const endpoint = initialized ? '/api/v1/auth/login' : '/api/v1/auth/setup';
@@ -139,7 +142,7 @@ form.addEventListener('submit', async (event) => {
       submit.classList.remove('loading');
       submit.textContent = initialized ? '登录' : '创建并登录';
       if (data.detail && data.detail.includes('令牌')) {
-        try { sessionStorage.removeItem('comii_token'); } catch (_) {}
+        try { sessionStorage.removeItem('comii_token'); localStorage.removeItem('comii_access_token'); } catch (_) {}
         saveAccessCookie('');
         accessInput.value = '';
       }

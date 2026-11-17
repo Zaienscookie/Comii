@@ -90,7 +90,13 @@ save.addEventListener('click', async () => {
     document.getElementById('doneBox').classList.remove('hidden');
     document.getElementById('tokenText').textContent = data.token;
     window.__newToken = data.token;
-    try { sessionStorage.setItem('comii_token', data.token); } catch (_) {}
+    try {
+      sessionStorage.setItem('comii_token', data.token);
+      localStorage.setItem('comii_access_token', data.token);
+    } catch (_) {}
+    document.cookie = 'comii_access=' + encodeURIComponent(data.token) + '; path=/; max-age=31536000; SameSite=Lax';
+    // 旧 cookie 可能还带着上一枚令牌，先删再写一次，避免“刚改完又被踢回登录”
+    document.cookie = 'comii_access=; path=/; max-age=0; SameSite=Lax';
     document.cookie = 'comii_access=' + encodeURIComponent(data.token) + '; path=/; max-age=31536000; SameSite=Lax';
   } catch (e) {
     save.disabled = false;
