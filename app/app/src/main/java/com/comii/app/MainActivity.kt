@@ -70,6 +70,7 @@ import com.comii.app.ui.screens.HomeScreen
 import com.comii.app.ui.screens.PdfScreen
 import com.comii.app.ui.screens.PlayerScreen
 import com.comii.app.ui.screens.ReaderScreen
+import com.comii.app.ui.screens.FolderGalleryScreen
 import com.comii.app.ui.screens.SeriesScreen
 import com.comii.app.ui.screens.SetupScreen
 import com.comii.app.ui.screens.TagsScreen
@@ -294,6 +295,10 @@ fun ComiiNavHost(state: AppState, nav: NavHostController = rememberNavController
         }
         composable("home") {
             HomeScreen(state = state, nav = nav)
+        }
+        composable("gallery/{path}") { entry ->
+            val path = Routes.decode(entry.arguments?.getString("path").orEmpty())
+            FolderGalleryScreen(state = state, path = path, nav = nav)
         }
         composable("series/{path}") { entry ->
             val path = Routes.decode(entry.arguments?.getString("path").orEmpty())
