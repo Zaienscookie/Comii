@@ -644,7 +644,14 @@ def list_gallery(
                 }
             )
 
-    for directory, rel in _iter_series(base, normalized):
+    # 目录自身也可能直接包含图片（最底层系列）：先把它自己算进来，
+    # 否则 path 指向叶子目录时 gallery 会是空的。
+    series_iter = list(_iter_series(base, normalized))
+    own_images, own_videos = list_media(base)
+    if own_images or own_videos:
+        series_iter.insert(0, (base, normalized))
+
+    for directory, rel in series_iter:
         # 收藏夹只是原图的软链接，不参与「全部」照片流，避免重复和位置错乱
         if not normalized.startswith("收藏夹") and (rel == "收藏夹" or rel.startswith("收藏夹/")):
             continue

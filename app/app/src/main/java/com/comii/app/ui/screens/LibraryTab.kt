@@ -717,10 +717,6 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     SheetAction("剪切") { sheetItem = null; cutSelection(listOf(node)) }
                 }
                 if (node.isAlbum || node.isFolder) {
-                    SheetAction("全部图片（画廊）") {
-                        sheetItem = null
-                        nav.navigate(Routes.folderGallery(node.path))
-                    }
                     if (state.can("manage", node.path)) {
                         SheetAction("设为相册封面") {
                             sheetItem = null
@@ -761,6 +757,10 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                     if (state.can("download", node.path)) {
                         SheetAction("下载到本地") { sheetItem = null; startDownload(node) }
                     }
+                }
+                SheetAction("全部图片（画廊）") {
+                    sheetItem = null
+                    nav.navigate(Routes.folderGallery(node.path))
                 }
                 if (state.can("manage", node.path)) {
                     SheetAction("标签…") { sheetItem = null; tagTargets = listOf(node.path) }
