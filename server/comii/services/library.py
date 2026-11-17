@@ -6,7 +6,7 @@ import re
 import time
 from pathlib import Path
 from typing import Iterable, Optional
-from urllib.parse import urlencode
+from urllib.parse import quote_from_bytes, urlencode
 
 from fastapi import HTTPException
 
@@ -94,8 +94,21 @@ def resolve_file(raw_directory: str, filename: str) -> Path:
     return target
 
 
+def clean_text(value: str) -> str:
+    """非 UTF-8 文件名会带 surrogateescape 代理字符，JSON 序列化会崩，这里替换掉。"""
+    try:
+        return str(value).encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+    except Exception:
+        return str(value).encode("utf-8", "replace").decode("utf-8", "replace")
+
+
+def _quote(value: str) -> str:
+    """文件名里可能有非 UTF-8 字节（surrogateescape），直接 urlencode 会崩。"""
+    return quote_from_bytes(str(value).encode("utf-8", "surrogateescape"))
+
+
 def media_url(kind: str, path: str, filename: str) -> str:
-    query = urlencode({"path": path, "name": filename})
+    query = f"path={_quote(path)}&name={_quote(filename)}"
     return f"{settings.api_prefix}/media/{kind}?{query}"
 
 
@@ -668,6 +681,11 @@ def list_gallery(
 
     if sort != "name":
         rows.sort(key=lambda row: row["mtime"], reverse=True)
+    for row in rows:
+        for key in ("series_path", "series_name", "name"):
+            value = row.get(key)
+            if isinstance(value, str):
+                row[key] = clean_text(value)
     total = len(rows)
     start = max(0, offset)
     end = start + max(1, min(limit, 500))
