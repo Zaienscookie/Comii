@@ -88,12 +88,9 @@ def rotate_credentials(payload: dict, request: Request, response: Response) -> d
         str(payload.get("username") or ""),
         str(payload.get("password") or ""),
     )
-    # 轮换会清掉所有会话，这里立刻给当前浏览器补一个新的，避免“改完就进不去”
-    session, expires = auth.create_session(
-        int(updated["id"]), True, request.headers.get("user-agent", "")
-    )
-    _cookie(response, request, session, True)
-    return {"status": "ok", "user": updated, "token": token, "expires_at": expires}
+    # 轮换后强制重新登录：清掉所有会话与旧 cookie，不自动建立新会话
+    response.delete_cookie(auth.COOKIE_NAME, path="/")
+    return {"status": "ok", "user": updated, "token": token, "relogin": True}
 
 
 # ---------------------------------------------------------------- admin users

@@ -74,7 +74,8 @@ let initialized = true;
 const next = new URLSearchParams(location.search).get('next') || '/';
 const TOKEN_KEY = 'comii_token';
 const accessInput = document.getElementById('accessToken');
-accessInput.value = sessionStorage.getItem(TOKEN_KEY) || '';
+const qsToken = new URLSearchParams(location.search).get('token') || '';
+accessInput.value = qsToken || sessionStorage.getItem(TOKEN_KEY) || '';
 function saveAccessCookie(value) {
   document.cookie = value
     ? 'comii_access=' + encodeURIComponent(value) + '; path=/; max-age=31536000; SameSite=Lax'

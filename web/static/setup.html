@@ -48,7 +48,8 @@ a{color:#0a84ff;text-decoration:none;display:inline-block;margin-top:16px}
     <div class="token" id="tokenText"></div>
     <button id="copy" style="margin-top:12px">复制令牌</button>
     <div class="ok" id="copied" style="color:#8e8e93"></div>
-    <a href="/">进入媒体库 →</a>
+    <button id="relogin" style="margin-top:14px">用新账号重新登录</button>
+    <div class="ok" id="reloginTip" style="color:#8e8e93"></div>
   </div>
 </div>
 <script>
@@ -116,6 +117,19 @@ function fallbackCopy(text) {
   document.body.removeChild(ta);
   return ok;
 }
+document.getElementById('relogin').addEventListener('click', () => {
+  const token = window.__newToken || '';
+  const name = document.getElementById('username').value.trim();
+  try {
+    localStorage.removeItem('comii_access_token');
+    sessionStorage.removeItem('comii_token');
+    localStorage.setItem('comii_login_user', name);
+    if (token) sessionStorage.setItem('comii_token', token);
+  } catch (_) {}
+  document.cookie = 'comii_access=; path=/; max-age=0; SameSite=Lax';
+  const url = '/login.html?next=/' + (token ? '&token=' + encodeURIComponent(token) : '');
+  location.href = url;
+});
 document.getElementById('copy').addEventListener('click', async () => {
   const text = window.__newToken || '';
   const tip = document.getElementById('copied');
