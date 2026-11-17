@@ -47,7 +47,7 @@ a{color:#0a84ff;text-decoration:none;display:inline-block;margin-top:16px}
     <p class="sub" style="margin-bottom:4px">设置完成。新的服务器令牌如下，<b>只显示这一次</b>：</p>
     <div class="token" id="tokenText"></div>
     <button id="copy" style="margin-top:12px">复制令牌</button>
-    <div class="ok" id="copied"></div>
+    <div class="ok" id="copied" style="color:#8e8e93"></div>
     <a href="/">进入媒体库 →</a>
   </div>
 </div>
@@ -98,13 +98,34 @@ save.addEventListener('click', async () => {
     showError(e.message);
   }
 });
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+  document.body.removeChild(ta);
+  return ok;
+}
 document.getElementById('copy').addEventListener('click', async () => {
   const text = window.__newToken || '';
-  try {
-    await navigator.clipboard.writeText(text);
-    document.getElementById('copied').textContent = '已复制到剪贴板';
-  } catch (_) {
-    document.getElementById('copied').textContent = '复制失败，请手动选中上面的令牌';
+  const tip = document.getElementById('copied');
+  let ok = false;
+  if (navigator.clipboard && window.isSecureContext) {
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (_) { ok = false; }
+  }
+  if (!ok) ok = fallbackCopy(text);
+  tip.textContent = ok ? '已复制' : '已选中，请按 Ctrl+C 复制';
+  if (!ok) {
+    const box = document.getElementById('tokenText');
+    const range = document.createRange();
+    range.selectNodeContents(box);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
   }
 });
 </script>

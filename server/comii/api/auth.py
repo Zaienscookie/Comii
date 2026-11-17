@@ -80,7 +80,7 @@ def me(request: Request) -> dict:
 
 
 @router.post("/auth/rotate")
-def rotate_credentials(payload: dict, request: Request) -> dict:
+def rotate_credentials(payload: dict, request: Request, response: Response) -> dict:
     """首次登录后强制重设账号密码，并轮换服务器令牌（明文只返回一次）。"""
     user = auth.require_user(request)
     updated, token = auth.rotate_credentials(
@@ -88,7 +88,12 @@ def rotate_credentials(payload: dict, request: Request) -> dict:
         str(payload.get("username") or ""),
         str(payload.get("password") or ""),
     )
-    return {"status": "ok", "user": updated, "token": token}
+    # 轮换会清掉所有会话，这里立刻给当前浏览器补一个新的，避免“改完就进不去”
+    session, expires = auth.create_session(
+        int(updated["id"]), True, request.headers.get("user-agent", "")
+    )
+    _cookie(response, request, session, True)
+    return {"status": "ok", "user": updated, "token": token, "expires_at": expires}
 
 
 # ---------------------------------------------------------------- admin users
