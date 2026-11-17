@@ -1774,8 +1774,11 @@ document.addEventListener("DOMContentLoaded", () => {
   bindMoveSheet();
   bindTrashSheet();
   bindPdfImport();
+  // 搜索框常驻：点图标只聚焦，不再隐藏（隐藏后很容易以为"搜索没了"）
   document.getElementById("searchToggle")?.addEventListener("click", () => {
-    document.querySelector(".search-wrap")?.classList.toggle("hidden");
+    const wrap = document.querySelector(".search-wrap");
+    wrap?.classList.remove("hidden");
+    document.getElementById("search")?.focus();
   });
   document.getElementById("addToggle")?.addEventListener("click", () => {
     document.getElementById("newFolderBtn")?.click();
