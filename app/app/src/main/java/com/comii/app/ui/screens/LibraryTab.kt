@@ -156,7 +156,6 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var tagTargets by remember { mutableStateOf<List<String>>(emptyList()) }
     var tagMediaTargets by remember { mutableStateOf<List<String>>(emptyList()) }
     val gridState = rememberLazyGridState()
-
     suspend fun reload() {
         loading = true
         error = null
@@ -247,6 +246,20 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         allItems
     }
     val albumCount = allItems.count { it.isAlbum || it.isFolder }
+    var anchorRestoredFor by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(path, gridItems.size) {
+        if (gridItems.isNotEmpty() && anchorRestoredFor != path) {
+            val saved = state.repository.settings.libraryScroll(path)
+            if (saved > 0) runCatching { gridState.scrollToItem(saved.coerceAtMost(gridItems.size - 1)) }
+            anchorRestoredFor = path
+        }
+    }
+    LaunchedEffect(path) {
+        androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }.collect { index ->
+            if (anchorRestoredFor == path) state.repository.settings.saveLibraryScroll(path, index)
+        }
+    }
+
     val mediaCount = media.size
 
     fun openAlbum(node: LibraryNode) {

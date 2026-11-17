@@ -266,4 +266,30 @@ class SettingsStore(context: Context) {
         prefs.edit().putString("server_tokens", obj.toString()).apply()
         addServerHistory(key)
     }
+
+    /** 每个目录记住上次浏览到第几个格子（滚动锚点）。 */
+    private fun scrollAnchors(): MutableMap<String, Int> {
+        val raw = prefs.getString("library_scroll", "").orEmpty()
+        val map = mutableMapOf<String, Int>()
+        runCatching {
+            val obj = org.json.JSONObject(raw)
+            obj.keys().forEach { key -> map[key] = obj.optInt(key, 0) }
+        }
+        return map
+    }
+
+    fun libraryScroll(path: String): Int = scrollAnchors()[path] ?: 0
+
+    fun saveLibraryScroll(path: String, index: Int) {
+        val map = scrollAnchors()
+        map[path] = index.coerceAtLeast(0)
+        if (map.size > 300) {
+            val trimmed = map.entries.sortedByDescending { it.value }.take(300)
+            map.clear()
+            trimmed.forEach { (k, v) -> map[k] = v }
+        }
+        val obj = org.json.JSONObject()
+        map.forEach { (k, v) -> obj.put(k, v) }
+        prefs.edit().putString("library_scroll", obj.toString()).apply()
+    }
 }
