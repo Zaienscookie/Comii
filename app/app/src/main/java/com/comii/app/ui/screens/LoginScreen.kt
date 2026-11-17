@@ -1,5 +1,11 @@
 package com.comii.app.ui.screens
 
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -67,127 +73,199 @@ fun LoginScreen(state: AppState) {
         com.comii.app.data.AuthTokenProvider.accessToken = accessToken.trim()
     }
 
-    Column(
+    Box(
         Modifier
             .fillMaxSize()
             .background(
                 androidx.compose.ui.graphics.Brush.verticalGradient(
-                    listOf(palette.background, palette.elevated, palette.background)
+                    listOf(palette.background, palette.elevated.copy(alpha = 0.7f), palette.background)
                 )
             )
             .statusBarsPadding()
-            .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.Center,
+            .imePadding(),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            "Comii",
-            color = palette.textPrimary,
-            fontSize = 46.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = (-1).sp,
-        )
-        Text(
-            "登录媒体库",
-            color = palette.textSecondary,
-            fontSize = 15.sp,
-            modifier = androidx.compose.ui.Modifier.padding(top = 2.dp),
-        )
-        Spacer(Modifier.height(26.dp))
-
-        TextField(
-            value = server,
-            onValueChange = { server = it },
-            singleLine = true,
-            label = { Text("服务器地址") },
-            placeholder = { Text("http://100.74.140.98:8001") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        TextField(
-            value = accessToken,
-            onValueChange = { accessToken = it },
-            singleLine = true,
-            label = { Text("服务器访问令牌") },
-            placeholder = { Text("comii_access_...") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "这是服务器白名单 Token；局域网或 neko 没有开启时留空即可。",
-            color = palette.textTertiary,
-            fontSize = 11.sp,
-        )
-
-        Spacer(Modifier.height(20.dp))
-        TextField(
-            value = username,
-            onValueChange = { username = it },
-            singleLine = true,
-            label = { Text("用户名") },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(8.dp))
-        TextField(
-            value = password,
-            onValueChange = { password = it },
-            singleLine = true,
-            label = { Text("密码") },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Spacer(Modifier.height(18.dp))
-        if (busy) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                CircularProgressIndicator(
-                    color = palette.accent,
-                    modifier = Modifier.width(22.dp).height(22.dp),
-                )
-            }
-        } else {
-            PrimaryButton(
-                text = "登录",
-                onClick = {
-                    if (server.isBlank()) {
-                        error = "请填写服务器地址"
-                    } else if (username.isBlank() || password.isBlank()) {
-                        error = "请填写用户名和密码"
-                    } else {
-                        saveAccess()
-                        state.repository.settings.savedUsername = username
-                        state.repository.settings.savedPassword = password
-                        run { state.loginWithPassword(server, username, password) }
-                    }
-                },
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 22.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "Comii",
+                color = palette.textPrimary,
+                fontSize = 44.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (-1.4).sp,
             )
-        }
-        error?.let {
-            Spacer(Modifier.height(10.dp))
-            Text(it, color = palette.danger, fontSize = 12.sp)
-        }
-        Spacer(Modifier.height(14.dp))
-        TextButton(
-            onClick = {
-                if (server.isBlank() || username.isBlank() || password.isBlank()) {
-                    error = "先填写服务器、用户名和密码"
-                } else {
-                    saveAccess()
-                    run {
-                        state.repository.authSetup(server, username, password)
-                        state.repository.settings.savedUsername = username
-                        state.repository.settings.savedPassword = password
-                        state.loginWithPassword(server, username, password)
+            Text(
+                "登录媒体库",
+                color = palette.textSecondary,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 4.dp, bottom = 22.dp),
+            )
+
+            androidx.compose.material3.Surface(
+                color = palette.card,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+                shadowElevation = 0.dp,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(horizontal = 18.dp, vertical = 20.dp)) {
+                    LoginField(
+                        label = "服务器地址",
+                        value = server,
+                        onValueChange = { server = it },
+                        placeholder = "https://api.example.com",
+                        palette = palette,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    LoginField(
+                        label = "服务器访问令牌",
+                        value = accessToken,
+                        onValueChange = { accessToken = it },
+                        placeholder = "留空表示该服务器未开启令牌",
+                        palette = palette,
+                        secret = true,
+                        visible = showToken,
+                        onToggleVisible = { showToken = !showToken },
+                    )
+                    Text(
+                        "所有人共用同一个令牌，由服务器管理员提供。",
+                        color = palette.textTertiary,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(start = 4.dp, top = 6.dp),
+                    )
+
+                    Spacer(Modifier.height(18.dp))
+                    LoginField(
+                        label = "用户名",
+                        value = username,
+                        onValueChange = { username = it },
+                        placeholder = "admin",
+                        palette = palette,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    LoginField(
+                        label = "密码",
+                        value = password,
+                        onValueChange = { password = it },
+                        placeholder = "••••••••",
+                        palette = palette,
+                        secret = true,
+                        visible = showPassword,
+                        onToggleVisible = { showPassword = !showPassword },
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+                    if (busy) {
+                        Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = palette.accent, modifier = Modifier.size(22.dp))
+                        }
+                    } else {
+                        PrimaryButton(
+                            text = "登录",
+                            onClick = {
+                                if (server.isBlank()) {
+                                    error = "请填写服务器地址"
+                                } else if (username.isBlank() || password.isBlank()) {
+                                    error = "请填写用户名和密码"
+                                } else {
+                                    saveAccess()
+                                    state.repository.settings.savedUsername = username
+                                    state.repository.settings.savedPassword = password
+                                    run { state.loginWithPassword(server, username, password) }
+                                }
+                            },
+                        )
+                    }
+                    error?.let {
+                        Text(
+                            it,
+                            color = palette.danger,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 4.dp, top = 10.dp),
+                        )
                     }
                 }
-            },
-        ) {
-            Text("首次使用？创建 Owner 账号", color = palette.accent, fontSize = 12.sp)
+            }
+
+            Spacer(Modifier.height(14.dp))
+            TextButton(
+                onClick = {
+                    if (server.isBlank() || username.isBlank() || password.isBlank()) {
+                        error = "先填写服务器、用户名和密码"
+                    } else {
+                        saveAccess()
+                        run {
+                            state.repository.authSetup(server, username, password)
+                            state.repository.settings.savedUsername = username
+                            state.repository.settings.savedPassword = password
+                            state.loginWithPassword(server, username, password)
+                        }
+                    }
+                },
+            ) {
+                Text("首次使用？创建 Owner 账号", color = palette.accent, fontSize = 13.sp)
+            }
+            Text(
+                "登录成功后才进入 App",
+                color = palette.textTertiary,
+                fontSize = 10.sp,
+            )
         }
-        Spacer(Modifier.height(18.dp))
+    }
+}
+
+@Composable
+private fun LoginField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    palette: com.comii.app.ui.theme.ComiiPalette,
+    secret: Boolean = false,
+    visible: Boolean = false,
+    onToggleVisible: (() -> Unit)? = null,
+) {
+    Column(Modifier.fillMaxWidth()) {
         Text(
-            "账号登录成功后才进入 App。旧版 3.0.7 需要更新。",
-            color = palette.textTertiary,
-            fontSize = 10.sp,
+            label,
+            color = palette.textSecondary,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        )
+        androidx.compose.material3.TextField(
+            value = value,
+            onValueChange = onValueChange,
+            singleLine = true,
+            placeholder = { Text(placeholder, color = palette.textTertiary, fontSize = 14.sp) },
+            visualTransformation = if (secret && !visible) PasswordVisualTransformation()
+            else androidx.compose.ui.text.input.VisualTransformation.None,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+            colors = androidx.compose.material3.TextFieldDefaults.colors(
+                focusedContainerColor = palette.elevated,
+                unfocusedContainerColor = palette.elevated,
+                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                focusedTextColor = palette.textPrimary,
+                unfocusedTextColor = palette.textPrimary,
+                cursorColor = palette.accent,
+            ),
+            trailingIcon = if (onToggleVisible != null) {
+                {
+                    androidx.compose.material3.IconButton(onClick = onToggleVisible) {
+                        Icon(
+                            imageVector = if (visible) androidx.compose.material.icons.Icons.Rounded.Visibility
+                            else androidx.compose.material.icons.Icons.Rounded.VisibilityOff,
+                            contentDescription = if (visible) "隐藏" else "显示",
+                            tint = palette.textTertiary,
+                        )
+                    }
+                }
+            } else null,
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }

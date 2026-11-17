@@ -31,7 +31,17 @@ tbody tr.active{background:#0a84ff1a}
 .caps{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
 .caps label{display:flex;align-items:center;gap:6px;font-size:12px;background:#202024;border:1px solid #2c2c31;padding:7px 10px;border-radius:10px;color:#c7c7cc;cursor:pointer}
 .caps label:hover{border-color:#0a84ff}
-.caps input{width:auto;margin:0}
+.caps input{width:auto;margin:0;accent-color:#0a84ff}
+.caps label.sel{background:#0a84ff1a;border-color:#0a84ff;color:#fff;transform:translateY(-1px)}
+.caps label{transition:background .16s ease,border-color .16s ease,transform .16s ease,color .16s ease}
+tbody tr{transition:background .16s ease}
+.panel{animation:panelIn .22s ease both}
+@keyframes panelIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.mini{transition:transform .12s ease,background .16s ease}
+.mini:active{transform:scale(.94)}
+#users td{transition:color .16s ease}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(10px);opacity:0;background:#0a84ff;color:#fff;padding:10px 16px;border-radius:12px;font-size:13px;transition:opacity .2s ease,transform .2s ease;pointer-events:none;z-index:99}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .msg{font-size:12px;color:#30d158;margin-left:6px}
 .msg.err{color:#ff453a}
 a{color:#0a84ff}
@@ -100,6 +110,15 @@ let users = [];
 let me = null;
 let selectedId = null;
 
+function toast(text) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 1600);
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
@@ -131,7 +150,7 @@ async function load() {
       <td>${u.id}</td>
       <td>${escapeHtml(u.username)}${isMe(u) ? ' <span class="role-pill">我</span>' : ''}</td>
       <td><span class="role-pill ${u.role}">${ROLE_LABEL[u.role] || u.role}</span></td>
-      <td><button class="mini ${u.enabled ? 'ghost' : 'danger'}" onclick="event.stopPropagation();toggleEnabled(${u.id}, ${u.enabled ? 'false' : 'true'})">${u.enabled ? '启用' : '禁用'}</button></td>
+      <td><button class="mini ${u.enabled ? 'ghost' : 'danger'}" data-state="${u.enabled ? 'on' : 'off'}" onclick="event.stopPropagation();toggleEnabled(${u.id}, ${u.enabled ? 'false' : 'true'})">${u.enabled ? '启用' : '禁用'}</button></td>
       <td onclick="event.stopPropagation()">
         ${locked
           ? `<span class="sub" style="margin:0">${isMe(u) ? '不能改自己' : '保留 Owner'}</span>`
@@ -159,10 +178,10 @@ function renderPerms() {
   }
   const g = grantOf(user) || {};
   panel.innerHTML = `
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #2c2c31">
+    <div class="panel" style="margin-top:14px;padding-top:12px;border-top:1px solid #2c2c31">
       <div class="sub" style="margin-bottom:6px">「${escapeHtml(user.username)}」的权限（仅 Custom 可勾选）</div>
       <div class="caps" id="capsBox">
-        ${CAPS.map(([k, label]) => `<label><input type="checkbox" data-cap="${k}"${g[k] ? ' checked' : ''}>${label}</label>`).join('')}
+        ${CAPS.map(([k, label]) => `<label class="${g[k] ? 'sel' : ''}"><input type="checkbox" data-cap="${k}"${g[k] ? ' checked' : ''} onchange="this.closest('label').classList.toggle('sel', this.checked)">${label}</label>`).join('')}
       </div>
       <button onclick="savePerms(${user.id})">保存权限</button>
       <button class="ghost" onclick="document.querySelectorAll('#capsBox input').forEach(i=>i.checked=false)">清空</button>
@@ -175,10 +194,10 @@ async function savePerms(id) {
   document.querySelectorAll('#capsBox input').forEach(i => { item[i.dataset.cap] = i.checked; });
   try {
     await api('/api/v1/admin/users/' + id + '/grants', { method: 'PUT', body: JSON.stringify({ items: [item] }) });
-    document.getElementById('permMsg').textContent = '已保存';
+    toast('权限已保存');
     await load();
   } catch (e) {
-    document.getElementById('permMsg').textContent = '保存失败：' + e.message;
+    toast('保存失败：' + e.message);
     document.getElementById('permMsg').className = 'msg err';
   }
 }
@@ -230,5 +249,6 @@ async function loadAudit() {
   loadAudit();
 })();
 </script>
+<div class="toast" id="toast"></div>
 </body>
 </html>
