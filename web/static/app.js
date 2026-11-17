@@ -272,6 +272,7 @@ function render() {
   }
   renderMedia();
   syncEditBar();
+  restoreScrollAnchor();
 }
 
 // 「全部」相册：整库图片 + 视频缩略图平铺，滚到底自动加载下一页
@@ -386,7 +387,7 @@ function renderFolderCard(item, i) {
       lpd = true;
       if (navigator.vibrate) navigator.vibrate(30);
       if (editMode) toggleSelect(item);
-      else openMoveSheet(item);
+      else favoriteFolder(item);
     }, 500);
   });
   card.addEventListener("pointerup", () => clearTimeout(lp));
@@ -1681,6 +1682,8 @@ let photoItems = [];
 let photosMasonry = false;
 try { photosMasonry = localStorage.getItem("comii_photos_masonry") === "1"; } catch (_) {}
 let photoTotal = 0;
+let folderGalleryView = false;
+let restoredScrollPath = null;
 let photoLoading = false;
 
 function setView(mode) {
@@ -1710,6 +1713,64 @@ function setView(mode) {
     panel.classList.remove("view-enter");
     void panel.offsetWidth;
     panel.classList.add("view-enter");
+  }
+}
+
+function scrollKey(path) { return "comii_scroll:" + (path || ""); }
+
+function restoreScrollAnchor() {
+  if (viewMode !== "albums" || query) return;
+  const key = scrollKey(currentPath);
+  if (restoredScrollPath === key) return;
+  const saved = sessionStorage.getItem(key);
+  restoredScrollPath = key;
+  if (saved) {
+    requestAnimationFrame(() => window.scrollTo({ top: Number(saved) || 0 }));
+  }
+}
+
+async function favoriteFolder(item) {
+  const path = item.path || item.name;
+  if (!confirm(`把「${item.name}」整个加入收藏夹？`)) return;
+  try {
+    const res = await KomiConfig.fetch("/api/v1/favorites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, collection: "默认" }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || ("HTTP " + res.status));
+    if (window.showToast) showToast("已加入收藏夹");
+    else alert("已加入收藏夹");
+  } catch (e) {
+    alert("收藏失败：" + e.message);
+  }
+}
+
+async function renderFolderGallery() {
+  grid.classList.add("gallery-grid");
+  grid.innerHTML = "";
+  heroSub.textContent = "加载全部图片…";
+  try {
+    const res = await KomiConfig.fetch(`/api/v1/gallery?kind=all&limit=500&offset=0&path=${encodeURIComponent(currentPath)}`);
+    const data = await res.json();
+    const items = data.items || [];
+    heroSub.textContent = `共 ${items.length} 张`;
+    items.forEach((item) => {
+      const tile = document.createElement("div");
+      tile.className = "media-tile";
+      const dir = String(item.series_path || "").split("/").map(encodeURIComponent).join("/");
+      const name = encodeURIComponent(item.name);
+      const thumb = item.kind === "video" ? `/api/video_thumb/${dir}/${name}` : `/api/thumb/${dir}/${name}`;
+      tile.innerHTML = `<img src="${thumb}" loading="lazy" alt="">${item.kind === "video" ? '<span class="media-play">▶</span>' : ""}`;
+      tile.addEventListener("click", () => {
+        const base = KomiConfig.serverBase();
+        if (item.kind === "video") location.href = base + `/video.html?s=${encodeURIComponent(item.series_path)}`;
+        else location.href = base + `/reader.html?s=${encodeURIComponent(item.series_path)}&p=${item.index}`;
+      });
+      grid.appendChild(tile);
+    });
+  } catch (e) {
+    heroSub.textContent = "加载失败";
   }
 }
 
@@ -1756,7 +1817,14 @@ function renderPhotos() {
   });
 }
 
+let anchorTimer = null;
 window.addEventListener("scroll", () => {
+  if (viewMode === "albums" && !query && !folderGalleryView) {
+    clearTimeout(anchorTimer);
+    anchorTimer = setTimeout(() => {
+      try { sessionStorage.setItem(scrollKey(currentPath), String(window.scrollY)); } catch (_) {}
+    }, 200);
+  }
   if (viewMode !== "photos" || photoLoading) return;
   if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 700) {
     loadPhotos(false);
@@ -1812,7 +1880,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     history.back();
   });
-  document.getElementById("galleryToggle")?.addEventListener("click", () => {
+  document.getElementById("galleryToggle")?.addEventListener("click", (ev) => {
+    if (viewMode === "albums" && currentPath) {
+      folderGalleryView = !folderGalleryView;
+      ev.currentTarget.textContent = folderGalleryView ? "普通模式" : "画廊模式";
+      if (folderGalleryView) renderFolderGallery();
+      else { grid.classList.remove("gallery-grid"); loadLibrary(); }
+      return;
+    }
     photosMasonry = !photosMasonry;
     try { localStorage.setItem("comii_photos_masonry", photosMasonry ? "1" : "0"); } catch (_) {}
     const btn = document.getElementById("galleryToggle");
