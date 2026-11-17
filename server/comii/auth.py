@@ -289,25 +289,27 @@ def bootstrap() -> dict[str, str]:
 
     ensure_schema()
     result: dict[str, str] = {"created": "0"}
-    token = settings.access_token
-    if not token:
+    # 只有“完全没有令牌（既没有文件哈希也没有环境变量）”时才生成，
+    # 否则每次重启都会换令牌，App/Web 永久对不上。
+    if not getattr(settings, "token_hash", ""):
         token = _secrets.token_urlsafe(24)
-        settings.access_token = token
+        settings.set_token(token)
         result["token_generated"] = "1"
+        result["token"] = token
     if enabled() and count_users() == 0:
         username = settings.owner_user or "admin"
         password = settings.owner_password or _secrets.token_urlsafe(9)
-        setup_owner(username, password, must_change=True)
+        try:
+            setup_owner(username, password, must_change=True)
+            result.update({"created": "1", "username": username, "password": password})
+        except Exception as exc:  # 并发/已存在等都不该让服务起不来
+            result["owner_error"] = str(exc)[:120]
         settings.owner_password = ""
-        result.update({"created": "1", "username": username, "password": password})
     if result.get("token_generated") or result.get("created") == "1":
-        run_catching = getattr(settings, "write_security_config", None)
-        if callable(run_catching):
-            try:
-                settings.write_security_config()
-            except OSError:
-                pass
-    result["token"] = settings.access_token
+        try:
+            settings.write_security_config()
+        except OSError as exc:
+            result["config_error"] = f"配置写入失败：{exc}"
     return result
 
 
