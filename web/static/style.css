@@ -1228,3 +1228,52 @@ body.view-photos .photo-tools { display: flex; gap: 8px; }
   /* 顶部导航在桌面端更紧凑 */
   .nav { background: color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter: saturate(180%) blur(18px); }
 }
+
+/* ---------- 顶部视图切换 ---------- */
+.view-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 4px auto 14px;
+  border-radius: 12px;
+  background: var(--seg, rgba(255,255,255,.06));
+  border: 1px solid var(--border);
+}
+.view-tab {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 22px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background .18s var(--ease), color .18s var(--ease), transform .12s var(--ease);
+}
+.view-tab:hover { color: var(--text); }
+.view-tab:active { transform: scale(.97); }
+.view-tab.active {
+  background: var(--card, #242428);
+  color: var(--text);
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+
+/* ---------- 输入框可编辑（防止父级 pointer-events 影响） ---------- */
+.sheet input, .sheet textarea, .sheet select,
+.text-input, #serverInput, #search {
+  pointer-events: auto !important;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+.sheet input:focus, .text-input:focus {
+  outline: none;
+  border-color: var(--accent, #0a84ff);
+  box-shadow: 0 0 0 3px rgba(10,132,255,.18);
+}
+
+@media (min-width: 900px) {
+  .bottom-nav { display: none !important; }
+  .view-tabs { margin: 6px auto 20px; }
+  .view-tab { padding: 9px 28px; font-size: 14.5px; }
+}
