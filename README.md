@@ -36,6 +36,7 @@ Comii 直接用真实的文件夹结构管理漫画与视频——服务器上�
 - **下载到本地**：单个系列或整个文件夹下载到手机
 - **权限**：Owner / Admin / Viewer / Custom 四种角色，Custom 逐项勾选权限；两层验证（服务器令牌 + 登录会话）
 - **AI 模块**：人格、会话（本地存储，服务端人格接口已就绪）
+- **登录与安全**：卡片式登录页、令牌/密码可显隐；令牌只存哈希、首次登录强制改密并轮换令牌；提示条深浅色自适应
 - **外观**：Apple 风格扁平 UI，浅色 / 深色 / 跟随系统
 
 ---
@@ -55,10 +56,10 @@ docker compose up -d --build
 docker compose logs comii | grep -E "Owner|令牌"
 ```
 
-日志会打印首次创建的 Owner 与自动生成的令牌：(生成密钥均为示例, 不代表真实生产环境)
+日志会打印首次创建的 Owner 与自动生成的令牌：
 
 ```
-已自动创建 Owner：用户名=admin 密码=Abcd@0000 （请尽快修改；配置见 /data/server.conf）
+已自动创建 Owner：用户名=admin 密码=Abcd@0000（请尽快修改；配置见 /data/server.conf）
 已自动生成服务器访问令牌：Hs6E3KbwYfx5nInSoma1MVUuCx1FBZVy（已写入 /data/server.conf）
 ```
 
@@ -157,17 +158,16 @@ journalctl -u comii -n 30 | grep -E "Owner|令牌"
 
 ```json
 {
-  "access_token": "服务器访问令牌，App 和 WebUI 都要填",
+  "access_token_hash": "令牌的 SHA-256，服务端只存哈希，不存明文",
   "auth_enabled": true,
-  "owner_user": "admin",
-  "owner_password": "首次创建时使用，已有账号后忽略"
+  "owner_user": "admin"
 }
 ```
 
-- **优先级**：环境变量 > `server.conf` > 默认值
+- **不再保存明文**：令牌只存哈希，密码只存 PBKDF2 哈希，`owner_password` 在首次创建后即清空
+- **优先级**：环境变量 > `server.conf` > 默认值（`COMII_ACCESS_TOKEN` 仅用于首次注入，启动时自动转成哈希）
 - 修改后重启服务 / 容器生效
-- 首次启动若没有 `access_token`，服务端会生成并写回此文件
-- 建议权限设为 `600`（里面有令牌）
+- 建议权限设为 `600`
 
 ### 首次启动做了什么
 
@@ -176,8 +176,9 @@ journalctl -u comii -n 30 | grep -E "Owner|令牌"
 1. 建表（`users` / `sessions` / `grants` / `tokens` / `audit`）
 2. `users` 表为空且 `auth_enabled=true` → **创建 Owner**
    - 用户名取 `owner_user`（默认 `admin`），密码取 `owner_password`，为空则随机生成
-3. 没有 `access_token` → **随机生成**
-4. 结果写入 `server.conf`，并在日志打印一次
+3. 没有令牌 → **随机生成**
+4. 账号密码与令牌**只在日志打印一次**，随后只把令牌哈希写入 `server.conf`
+5. 新 Owner 带 `must_change=1`：**首次登录必须改密**
 
 已有账号时不会重复创建，也不会覆盖密码。
 
@@ -198,6 +199,24 @@ journalctl -u comii -n 30 | grep -E "Owner|令牌"
 - 「状态」按钮：点一下封禁（同时踢下线），再点一下恢复
 - 自己的角色不能改、不能封禁自己、不能把最后一个 Owner 降级
 - 登录页的「服务器访问令牌」是所有人共用的那一个
+
+### 首次登录与令牌轮换
+
+新部署的实例第一次登录后会强制进入 `/setup.html`：
+
+1. 重设**用户名 + 密码**
+2. 生成**新的服务器令牌**（只显示一次，可一键复制）
+3. 旧令牌立即失效，所有旧会话被踢下线
+
+```bash
+# 忘记令牌时：删除哈希并重启，会重新生成并打印
+python3 - <<'PY'
+import json,pathlib
+p=pathlib.Path("data/server.conf"); d=json.loads(p.read_text())
+d.pop("access_token_hash",None); p.write_text(json.dumps(d,indent=2))
+PY
+docker compose restart comii && docker compose logs comii | grep 令牌
+```
 
 ### 两层验证
 
@@ -271,7 +290,9 @@ docker compose up -d
 | 新建文件夹提示“只读” | 库目录 `:ro` 挂载 | 去掉 `:ro` 后 `docker compose up -d` |
 | 端口被占用 | 8000 / 8001 冲突 | 改 `ports` 左值 |
 | 登录页空白 | 静态资源缓存 | Ctrl+F5 强刷 |
-| 忘记 Owner 密码 | — | 删 `data/users.db` 重启，按 `owner_password` 重建（媒体不受影响） |
+| 忘记 Owner 密码 | — | 删 `data/users.db` 重启会重建 Owner 并打印一次（媒体不受影响） |
+| 忘记服务器令牌 | 只存哈希，无法反查 | 删 `server.conf` 里的 `access_token_hash` 后重启，日志会打印新令牌 |
+| 登录后被带到 `/setup.html` | 首次登录必须改密 | 按页面设置新账号、密码与新令牌即可 |
 | 管理页提示“仅 Owner” | 当前账号不是 Owner | 用 Owner 登录，或改 `users` 表的 `role` |
 
 ---
@@ -342,7 +363,8 @@ COMII_LIBRARY=./library COMII_DATA=./.comii python run.py
 
 ## 安全检查清单
 
-- [ ] `server.conf` 权限 `600`
+- [ ] `server.conf` 权限 `600`（其中只有令牌哈希，没有明文）
+- [ ] 首次登录后确认已完成 `/setup.html` 的改密与令牌轮换
 - [ ] 公网只暴露 8001（或仅经隧道），8000 尽量内网
 - [ ] 定期轮换令牌：改 `server.conf` → 重启 → App 与登录页同步
 - [ ] 不要把含账号 / 令牌的文档提交到公开仓库
