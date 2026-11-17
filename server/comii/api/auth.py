@@ -79,6 +79,18 @@ def me(request: Request) -> dict:
     return auth.session_payload(user)
 
 
+@router.post("/auth/rotate")
+def rotate_credentials(payload: dict, request: Request) -> dict:
+    """首次登录后强制重设账号密码，并轮换服务器令牌（明文只返回一次）。"""
+    user = auth.require_user(request)
+    updated, token = auth.rotate_credentials(
+        int(user["id"]),
+        str(payload.get("username") or ""),
+        str(payload.get("password") or ""),
+    )
+    return {"status": "ok", "user": updated, "token": token}
+
+
 # ---------------------------------------------------------------- admin users
 def _owner(request: Request) -> dict:
     return auth.require_owner(request)

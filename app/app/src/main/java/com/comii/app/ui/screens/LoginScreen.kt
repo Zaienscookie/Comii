@@ -70,7 +70,15 @@ fun LoginScreen(state: AppState) {
 
     fun saveAccess() {
         state.repository.settings.accessToken = accessToken.trim()
+        state.repository.settings.saveServerToken(server, accessToken)
         com.comii.app.data.AuthTokenProvider.accessToken = accessToken.trim()
+    }
+
+    androidx.compose.runtime.LaunchedEffect(server) {
+        if (accessToken.isBlank()) {
+            val saved = state.repository.settings.tokenForServer(server)
+            if (saved.isNotBlank()) accessToken = saved
+        }
     }
 
     Box(
@@ -130,12 +138,6 @@ fun LoginScreen(state: AppState) {
                         secret = true,
                         visible = showToken,
                         onToggleVisible = { showToken = !showToken },
-                    )
-                    Text(
-                        "所有人共用同一个令牌，由服务器管理员提供。",
-                        color = palette.textTertiary,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(start = 4.dp, top = 6.dp),
                     )
 
                     Spacer(Modifier.height(18.dp))

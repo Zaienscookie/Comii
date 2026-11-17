@@ -133,15 +133,15 @@ async def access_gate(request: Request, call_next):
     if forwarded:
         request.scope["client"] = (forwarded, 0)
     """Shared server whitelist token for the 8001 data API."""
-    token = settings.access_token
+    token_hash = settings.token_hash
     path = request.url.path
-    if token and path.startswith("/api/") and not (
+    if token_hash and path.startswith("/api/") and not (
         path == "/api/v1/ping"
         or path.startswith("/api/v1/app/update")
         or path == "/api/v1/auth/status"
     ):
         supplied = request.headers.get("x-comii-token", "") or request.cookies.get("comii_access", "")
-        if not supplied or not secrets.compare_digest(token, supplied):
+        if not supplied or not settings.check_token(supplied):
             return JSONResponse(status_code=401, content={"detail": "无效的服务器访问令牌"})
     response = await call_next(request)
     # 敏感媒体：只允许私有缓存（浏览器/App 本地），绝不允许 CDN/代理共享缓存
@@ -265,6 +265,13 @@ def _add_web_pages(app: FastAPI) -> None:
         if page.is_file():
             return HTMLResponse(page.read_text(encoding="utf-8"))
         return HTMLResponse("<h3>login.html missing</h3>", status_code=404)
+
+    @app.get("/setup.html", include_in_schema=False, response_model=None)
+    def setup_page():
+        page = STATIC_ROOT / "setup.html"
+        if page.is_file():
+            return HTMLResponse(page.read_text(encoding="utf-8"))
+        return HTMLResponse("<h3>setup.html missing</h3>", status_code=404)
 
     @app.get("/admin.html", include_in_schema=False, response_model=None)
     def admin_page():

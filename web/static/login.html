@@ -6,25 +6,49 @@
 <title>Comii · 登录</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
-body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg,#0b0b0d);color:var(--text,#fff);font-family:system-ui,sans-serif}
-.login{width:min(92vw,380px);padding:28px;border-radius:22px;background:var(--card,#17171a);box-shadow:0 20px 60px #0008}
-h1{margin:0 0 6px;font-size:30px}
-p.sub{color:#8e8e93;font-size:13px;margin:0 0 22px}
-.login input{width:100%;box-sizing:border-box;padding:13px 14px;margin:8px 0;border:0;border-radius:12px;background:#242428;color:#fff;font-size:15px}
-.field{position:relative;margin:8px 0}
-.field input{margin:0;padding-right:46px}
-.eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#8e8e93;font-size:16px;line-height:1;cursor:pointer;padding:0;border-radius:10px}
-.eye:hover{color:#fff}
-.login button[type=submit]{width:100%;padding:13px;margin-top:12px;border:0;border-radius:12px;background:#0a84ff;color:#fff;font-size:16px;font-weight:600}
-.error{color:#ff453a;font-size:13px;min-height:18px;margin-top:8px}
-.hint{color:#8e8e93;font-size:12px;margin-top:14px}
+*{box-sizing:border-box}
+body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(1200px 800px at 50% -10%,#15161c 0%,#0b0b0d 55%,#07070a 100%);color:var(--text,#fff);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;overflow:hidden}
+body::before{content:"";position:fixed;inset:-30%;background:radial-gradient(600px 400px at 30% 20%,#0a84ff22,transparent 60%),radial-gradient(500px 400px at 75% 70%,#5e5ce622,transparent 60%);animation:drift 18s ease-in-out infinite alternate;pointer-events:none}
+@keyframes drift{from{transform:translate3d(-2%,-1%,0) scale(1)}to{transform:translate3d(2%,2%,0) scale(1.06)}}
+.login{position:relative;width:min(92vw,392px);padding:30px;border-radius:24px;background:rgba(23,23,26,.92);box-shadow:0 30px 80px #000a,inset 0 1px 0 #ffffff10;backdrop-filter:blur(18px);animation:cardIn .55s cubic-bezier(.2,.8,.2,1) both}
+@keyframes cardIn{from{opacity:0;transform:translateY(22px) scale(.97)}to{opacity:1;transform:none}}
+h1{margin:0 0 6px;font-size:32px;letter-spacing:-1px;animation:fadeUp .5s .05s both}
+p.sub{color:#8e8e93;font-size:13px;margin:0 0 22px;animation:fadeUp .5s .1s both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.field{position:relative;margin:10px 0;animation:fadeUp .5s both}
+.field:nth-of-type(1){animation-delay:.14s}
+.field:nth-of-type(2){animation-delay:.18s}
+.field:nth-of-type(3){animation-delay:.22s}
+.field:nth-of-type(4){animation-delay:.26s}
+.login input{width:100%;padding:13px 46px 13px 14px;border:1px solid #2c2c31;border-radius:13px;background:#1d1d21;color:#fff;font-size:15px;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease,transform .18s ease}
+.login input::placeholder{color:#6e6e73}
+.login input:focus{outline:none;border-color:#0a84ff;background:#202027;box-shadow:0 0 0 4px #0a84ff22}
+.eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#8e8e93;font-size:15px;cursor:pointer;padding:0;border-radius:9px;transition:color .18s ease,background .18s ease,transform .25s cubic-bezier(.2,.8,.2,1)}
+.eye:hover{color:#fff;background:#ffffff0d}
+.eye.on{color:#0a84ff;transform:translateY(-50%) rotate(180deg)}
+#submit{width:100%;padding:14px;margin-top:16px;border:0;border-radius:13px;background:linear-gradient(180deg,#0a84ff,#0a6fdd);color:#fff;font-size:16px;font-weight:600;cursor:pointer;box-shadow:0 10px 24px #0a84ff33;transition:transform .12s ease,box-shadow .2s ease,filter .2s ease;position:relative;overflow:hidden}
+#submit:hover{filter:brightness(1.06);box-shadow:0 14px 30px #0a84ff44}
+#submit:active{transform:scale(.975)}
+#submit.loading{color:transparent;pointer-events:none}
+#submit.loading::after{content:"";position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid #ffffff88;border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#submit.done{background:linear-gradient(180deg,#30d158,#1fae44);box-shadow:0 12px 28px #30d15844}
+.error{color:#ff453a;font-size:13px;min-height:18px;margin-top:10px;transition:opacity .2s ease}
+.error.shake{animation:shake .4s cubic-bezier(.36,.07,.19,.97)}
+@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-6px)}40%,60%{transform:translateX(6px)}}
+.hint{color:#8e8e93;font-size:12px;margin-top:12px;line-height:1.6;animation:fadeUp .5s .3s both}
+a{color:#0a84ff;text-decoration:none}
+.remember{display:flex;gap:8px;align-items:center;color:#8e8e93;font-size:13px;margin-top:12px}
+.remember input{width:auto;margin:0;accent-color:#0a84ff}
 </style>
 </head>
 <body>
 <form class="login" id="form">
   <h1>Comii<span style="color:#0a84ff">.</span></h1>
   <p class="sub" id="sub">登录后访问媒体库</p>
-  <input id="username" placeholder="用户名" autocomplete="username" autofocus>
+  <div class="field">
+    <input id="username" placeholder="用户名" autocomplete="username" autofocus>
+  </div>
   <div class="field">
     <input id="password" type="password" placeholder="密码" autocomplete="current-password">
     <button type="button" class="eye" data-for="password" aria-label="显示/隐藏密码">👁</button>
@@ -37,34 +61,48 @@ p.sub{color:#8e8e93;font-size:13px;margin:0 0 22px}
     <input id="accessToken" type="password" placeholder="服务器访问令牌（可选）" autocomplete="off">
     <button type="button" class="eye" data-for="accessToken" aria-label="显示/隐藏令牌">👁</button>
   </div>
-  <label style="display:flex;gap:8px;align-items:center;color:#8e8e93;font-size:13px"><input id="remember" type="checkbox" checked style="width:auto;margin:0"> 记住登录</label>
+  <label class="remember"><input id="remember" type="checkbox" checked> 记住用户名</label>
   <button id="submit" type="submit">登录</button>
   <div class="error" id="error"></div>
   <div class="hint" id="hint"></div>
 </form>
 <script>
 const form = document.getElementById('form');
-const error = document.getElementById('error');
+const errorEl = document.getElementById('error');
 const hint = document.getElementById('hint');
+const submit = document.getElementById('submit');
 let initialized = true;
 const next = new URLSearchParams(location.search).get('next') || '/';
-const savedAccess = localStorage.getItem('comii_access_token') || '';
-document.getElementById('accessToken').value = savedAccess;
+const TOKEN_KEY = 'comii_token';
+const accessInput = document.getElementById('accessToken');
+accessInput.value = sessionStorage.getItem(TOKEN_KEY) || '';
 function saveAccessCookie(value) {
-  if (value) {
-    document.cookie = 'comii_access=' + encodeURIComponent(value) + '; path=/; max-age=31536000; SameSite=Lax';
-  } else {
-    document.cookie = 'comii_access=; path=/; max-age=0; SameSite=Lax';
-  }
+  document.cookie = value
+    ? 'comii_access=' + encodeURIComponent(value) + '; path=/; max-age=31536000; SameSite=Lax'
+    : 'comii_access=; path=/; max-age=0; SameSite=Lax';
 }
-saveAccessCookie(savedAccess);
+saveAccessCookie(accessInput.value);
 const originalFetch = window.fetch;
 window.fetch = (input, init = {}) => {
-  const access = document.getElementById('accessToken')?.value?.trim() || localStorage.getItem('comii_access_token') || '';
+  const token = accessInput.value.trim() || sessionStorage.getItem(TOKEN_KEY) || '';
   const headers = new Headers(init.headers || {});
-  if (access) headers.set('X-Comii-Token', access);
+  if (token) headers.set('X-Comii-Token', token);
   return originalFetch(input, {...init, headers});
 };
+document.querySelectorAll('.eye').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const el = document.getElementById(btn.dataset.for);
+    if (!el) return;
+    el.type = el.type === 'password' ? 'text' : 'password';
+    btn.classList.toggle('on', el.type === 'text');
+  });
+});
+function showError(text) {
+  errorEl.textContent = text;
+  errorEl.classList.remove('shake');
+  void errorEl.offsetWidth;
+  errorEl.classList.add('shake');
+}
 async function boot(){
   try {
     const status = await fetch('/api/v1/auth/status', {credentials:'same-origin'}).then(r=>r.json());
@@ -72,69 +110,55 @@ async function boot(){
     if (!initialized) {
       document.getElementById('sub').textContent = '首次使用，创建 Owner 账号';
       document.getElementById('confirmWrap').style.display = 'block';
-      document.getElementById('submit').textContent = '创建并登录';
-      hint.textContent = '创建后可在 WebUI 管理用户和目录权限';
+      submit.textContent = '创建并登录';
+      hint.innerHTML = '创建后请立刻在「安全设置」里重设账号并保存新令牌。';
     }
   } catch(e) { hint.textContent = '无法连接服务器'; }
 }
 boot();
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  error.textContent = '';
+  errorEl.textContent = '';
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
   const password2 = document.getElementById('password2').value;
-  if (!username || !password) { error.textContent = '请输入用户名和密码'; return; }
-  if (!initialized && password !== password2) { error.textContent = '两次密码不一致'; return; }
-  const access = document.getElementById('accessToken').value.trim();
-  localStorage.setItem('comii_access_token', access);
-  saveAccessCookie(access);
+  if (!username || !password) { showError('请输入用户名和密码'); return; }
+  if (!initialized && password !== password2) { showError('两次密码不一致'); return; }
+  const token = accessInput.value.trim();
+  if (token) sessionStorage.setItem(TOKEN_KEY, token);
+  saveAccessCookie(token);
+  submit.classList.add('loading');
   const endpoint = initialized ? '/api/v1/auth/login' : '/api/v1/auth/setup';
   const body = {username, password, remember: document.getElementById('remember').checked};
-  const response = await fetch(endpoint, {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    credentials: 'same-origin', body: JSON.stringify(body)
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(()=>({}));
-    error.textContent = data.detail || '登录失败';
-    return;
-  }
-  location.href = next;
-});
-</script>
-
-<script>
-(function () {
-  const KEYU = "comii_login_user", KEYP = "comii_login_pass";
-  document.querySelectorAll(".eye").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const input = document.getElementById(btn.dataset.for);
-      if (!input) return;
-      input.type = input.type === "password" ? "text" : "password";
-      btn.style.color = input.type === "password" ? "" : "#0a84ff";
-    });
-  });
-  const remember = document.getElementById("remember");
-  const user = document.getElementById("username");
-  const pass = document.getElementById("password");
   try {
-    const su = localStorage.getItem(KEYU), sp = localStorage.getItem(KEYP);
-    if (su && user && !user.value) user.value = su;
-    if (sp && pass && !pass.value) pass.value = sp;
-  } catch (_) {}
-  document.getElementById("form")?.addEventListener("submit", () => {
-    try {
-      if (remember && remember.checked) {
-        localStorage.setItem(KEYU, user?.value || "");
-        localStorage.setItem(KEYP, pass?.value || "");
-      } else {
-        localStorage.removeItem(KEYU);
-        localStorage.removeItem(KEYP);
-      }
-    } catch (_) {}
-  });
-})();
+    const response = await fetch(endpoint, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin', body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(()=>({}));
+      submit.classList.remove('loading');
+      showError(data.detail || '登录失败');
+      return;
+    }
+    const data = await response.json().catch(()=>({}));
+    submit.classList.remove('loading');
+    submit.classList.add('done');
+    submit.textContent = '登录成功';
+    try { localStorage.setItem('comii_login_user', username); } catch (_) {}
+    const me = data.user || {};
+    const target = me.must_change ? '/setup.html' : next;
+    setTimeout(() => { location.href = target; }, 320);
+  } catch (e) {
+    submit.classList.remove('loading');
+    showError('网络错误：' + e.message);
+  }
+});
+try {
+  const saved = localStorage.getItem('comii_login_user');
+  const user = document.getElementById('username');
+  if (saved && user && !user.value) user.value = saved;
+} catch (_) {}
 </script>
 </body>
 </html>

@@ -234,7 +234,32 @@ class SettingsStore(context: Context) {
     fun lastReadAt(path: String): Long = prefs.getLong("read_at_$path", 0L)
 
     fun markRead(path: String) = prefs.edit().putLong("read_at_$path", System.currentTimeMillis()).apply()
+
+    /** 每个服务器地址对应一个令牌，切换服务器时自动带出来。 */
+    private fun serverTokens(): MutableMap<String, String> {
+        val raw = prefs.getString("server_tokens", "").orEmpty()
+        val map = mutableMapOf<String, String>()
+        runCatching {
+            val obj = org.json.JSONObject(raw)
+            obj.keys().forEach { key -> map[key] = obj.optString(key, "") }
+        }
+        return map
+    }
+
+    fun tokenForServer(server: String): String {
+        val key = server.trim()
+        if (key.isEmpty()) return ""
+        return serverTokens()[key].orEmpty()
+    }
+
+    fun saveServerToken(server: String, token: String) {
+        val key = server.trim()
+        if (key.isEmpty()) return
+        val map = serverTokens()
+        map[key] = token.trim()
+        val obj = org.json.JSONObject()
+        map.forEach { (k, v) -> obj.put(k, v) }
+        prefs.edit().putString("server_tokens", obj.toString()).apply()
+        addServerHistory(key)
+    }
 }
-
-
-

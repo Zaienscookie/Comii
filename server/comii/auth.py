@@ -40,6 +40,12 @@ def _connect() -> sqlite3.Connection:
     return connection
 
 
+def _migrate(db) -> None:
+    cols = {row["name"] for row in db.execute("PRAGMA table_info(users)")}
+    if "must_change" not in cols:
+        db.execute("ALTER TABLE users ADD COLUMN must_change INTEGER NOT NULL DEFAULT 0")
+
+
 def ensure_schema() -> None:
     with _connect() as db:
         db.executescript(
@@ -50,6 +56,7 @@ def ensure_schema() -> None:
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'viewer',
                 enabled INTEGER NOT NULL DEFAULT 1,
+                must_change INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL,
                 last_login_at REAL
             );
@@ -98,6 +105,7 @@ def ensure_schema() -> None:
             );
             """
         )
+        _migrate(db)
 
 
 def _hash_password(password: str) -> str:
@@ -129,6 +137,7 @@ def _row_user(row: sqlite3.Row) -> dict[str, Any]:
         "username": row["username"],
         "role": row["role"],
         "enabled": bool(row["enabled"]),
+        "must_change": bool(row["must_change"]) if "must_change" in row.keys() else False,
         "created_at": row["created_at"],
         "last_login_at": row["last_login_at"],
     }
@@ -152,7 +161,7 @@ def count_users() -> int:
         return int(db.execute("SELECT COUNT(*) FROM users").fetchone()[0])
 
 
-def setup_owner(username: str, password: str) -> dict[str, Any]:
+def setup_owner(username: str, password: str, must_change: bool = False) -> dict[str, Any]:
     ensure_schema()
     if count_users() > 0:
         raise HTTPException(status_code=409, detail="已经初始化过了")
@@ -162,8 +171,8 @@ def setup_owner(username: str, password: str) -> dict[str, Any]:
     now = time.time()
     with _connect() as db:
         cursor = db.execute(
-            "INSERT INTO users(username,password_hash,role,enabled,created_at) VALUES(?,?,?,?,?)",
-            (username, _hash_password(password), "owner", 1, now),
+            "INSERT INTO users(username,password_hash,role,enabled,must_change,created_at) VALUES(?,?,?,?,?,?)",
+            (username, _hash_password(password), "owner", 1, 1 if must_change else 0, now),
         )
         user_id = int(cursor.lastrowid)
         row = db.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
@@ -288,8 +297,8 @@ def bootstrap() -> dict[str, str]:
     if enabled() and count_users() == 0:
         username = settings.owner_user or "admin"
         password = settings.owner_password or _secrets.token_urlsafe(9)
-        setup_owner(username, password)
-        settings.owner_password = password
+        setup_owner(username, password, must_change=True)
+        settings.owner_password = ""
         result.update({"created": "1", "username": username, "password": password})
     if result.get("token_generated") or result.get("created") == "1":
         run_catching = getattr(settings, "write_security_config", None)
@@ -300,6 +309,32 @@ def bootstrap() -> dict[str, str]:
                 pass
     result["token"] = settings.access_token
     return result
+
+
+def rotate_credentials(user_id: int, username: str, password: str) -> tuple[dict[str, Any], str]:
+    """重设用户名/密码并轮换服务器令牌，返回 (用户, 明文新令牌)。"""
+    username = username.strip()
+    if not username or len(password) < 6:
+        raise HTTPException(status_code=400, detail="用户名不能为空，密码至少 6 位")
+    now = time.time()
+    with _connect() as db:
+        exists = db.execute("SELECT id FROM users WHERE username=? AND id<>?", (username, user_id)).fetchone()
+        if exists:
+            raise HTTPException(status_code=409, detail="用户名已被占用")
+        db.execute(
+            "UPDATE users SET username=?, password_hash=?, must_change=0 WHERE id=?",
+            (username, _hash_password(password), user_id),
+        )
+        db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+    token = secrets.token_urlsafe(24)
+    settings.set_token(token)
+    try:
+        settings.write_security_config()
+    except OSError:
+        pass
+    user = user_by_id(user_id) or {}
+    audit(user_id, username, "rotate_credentials", "/api/v1/auth/rotate", 200)
+    return user, token
 
 
 def require_user(request: Request) -> dict[str, Any]:

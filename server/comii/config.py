@@ -7,6 +7,7 @@ systemd unit without code changes.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -53,11 +54,12 @@ class Settings:
         # 默认路径：<数据目录>/server.conf，可用 COMII_CONFIG 覆盖
         self.config_file = _env_path("COMII_CONFIG", self.data_root / "server.conf")
         file_cfg = self._load_security_config(self.config_file)
-        # 环境变量优先级更高，便于临时覆盖；不设置时以配置文件为准
-        self.access_token = (
-            os.environ.get("COMII_ACCESS_TOKEN", "").strip()
-            or str(file_cfg.get("access_token", "")).strip()
-        )
+        # 令牌只存哈希；环境变量可用于首次注入（会自动转成哈希）
+        env_token = os.environ.get("COMII_ACCESS_TOKEN", "").strip()
+        self.token_hash = str(file_cfg.get("access_token_hash", "") or "").strip()
+        if env_token:
+            self.token_hash = hashlib.sha256(env_token.encode("utf-8")).hexdigest()
+        self.access_token = env_token  # 仅启动时用于打印一次，不落盘
         env_auth = os.environ.get("COMII_AUTH_ENABLED")
         if env_auth is not None:
             self.auth_enabled = env_auth.strip().lower() not in {"0", "false", "no", "off"}
@@ -88,14 +90,24 @@ class Settings:
             return {}
         return data if isinstance(data, dict) else {}
 
+    def set_token(self, token: str) -> None:
+        self.token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        self.access_token = ""
+
+    def check_token(self, supplied: str) -> bool:
+        import hmac
+        if not self.token_hash:
+            return True
+        digest = hashlib.sha256(supplied.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(self.token_hash, digest)
+
     def write_security_config(self) -> None:
         """把当前令牌/登录开关写回配置文件，方便命令行或后台修改。"""
         self.data_root.mkdir(parents=True, exist_ok=True)
         payload = {
-            "access_token": self.access_token,
+            "access_token_hash": self.token_hash,
             "auth_enabled": self.auth_enabled,
             "owner_user": self.owner_user,
-            "owner_password": self.owner_password,
         }
         self.config_file.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

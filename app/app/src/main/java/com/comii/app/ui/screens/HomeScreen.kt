@@ -89,7 +89,17 @@ fun HomeScreen(state: AppState, nav: NavHostController) {
 
     Scaffold(
         containerColor = palette.background,
-        snackbarHost = { SnackbarHost(snackbar) },
+        snackbarHost = {
+            SnackbarHost(snackbar) { data ->
+                androidx.compose.material3.Snackbar(
+                    snackbarData = data,
+                    containerColor = palette.elevated,
+                    contentColor = palette.textPrimary,
+                    actionColor = palette.accent,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                )
+            }
+        },
         bottomBar = {
             ComiiTabBar(selected = tab, onSelect = { tab = it }, aiUnread = aiUnread)
         },
