@@ -1278,3 +1278,14 @@ body.view-photos .photo-tools { display: flex; gap: 8px; }
   .view-tabs { margin: 6px auto 20px; }
   .view-tab { padding: 9px 28px; font-size: 14.5px; }
 }
+
+/* ---------- 视图切换入场动画 ---------- */
+.view-enter { animation: viewIn .3s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes viewIn {
+  from { opacity: 0; transform: translateY(10px) scale(.995); }
+  to   { opacity: 1; transform: none; }
+}
+/* 搜索框在桌面端始终显示 */
+@media (min-width: 900px) {
+  .search-wrap { display: flex !important; }
+}

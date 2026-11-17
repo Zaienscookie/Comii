@@ -1694,6 +1694,9 @@ function setView(mode) {
   if (bc) bc.classList.toggle("hidden", mode === "photos");
   const nf = document.getElementById("newFolderBtn");
   if (nf) nf.style.display = mode === "photos" ? "none" : "";
+  // 搜索框在两个视图都要常驻（之前会被搜索按钮的 hidden 类带没了）
+  document.querySelector(".search-wrap")?.classList.remove("hidden");
+  const panel = mode === "photos" ? mediaGrid : grid;
   if (mode === "photos") {
     grid.hidden = true;
     mediaGrid.hidden = false;
@@ -1701,6 +1704,12 @@ function setView(mode) {
   } else {
     grid.hidden = false;
     loadLibrary();
+  }
+  // 切换时给内容区一个入场动画
+  if (panel) {
+    panel.classList.remove("view-enter");
+    void panel.offsetWidth;
+    panel.classList.add("view-enter");
   }
 }
 
