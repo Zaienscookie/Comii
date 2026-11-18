@@ -332,9 +332,9 @@ def favorite_status(request: Request, path: str = "", name: str = "") -> dict:
             if entry.is_dir() and not entry.name.startswith("."):
                 collections.append(entry.name)
     favorited = False
-    if path and name:
+    if path:
         try:
-            source = library.resolve_file(path, name)
+            source = library.resolve_file(path, name) if name else library.resolve_directory(path)
             source_real = os.path.realpath(source)
             for collection in collections:
                 for entry in (favorite_root / collection).iterdir():
