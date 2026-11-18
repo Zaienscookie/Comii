@@ -1230,7 +1230,8 @@ body.view-photos .photo-tools { display: flex; gap: 8px; }
 }
 
 /* ---------- 顶部视图切换 ---------- */
-.view-tabs-wrap { display: flex; justify-content: center; margin: 2px 0 14px; }
+.view-tabs-wrap { display: flex; justify-content: center; margin: 2px 0 14px; position: relative; z-index: 3; pointer-events: auto; }
+.view-tabs { position: relative; z-index: 3; pointer-events: auto; }
 .view-tabs {
   display: inline-flex;
   gap: 4px;
@@ -1289,3 +1290,9 @@ body.view-photos .photo-tools { display: flex; gap: 8px; }
 @media (min-width: 900px) {
   .search-wrap { display: flex !important; }
 }
+
+/* nav 容器不拦截点击，只有内部按钮可点（避免点内容时落到右上角工具栏） */
+.nav { pointer-events: none; }
+.nav-inner { pointer-events: none; }
+.nav-inner > * { pointer-events: auto; }
+.nav-right, .nav-right * { pointer-events: auto; }
