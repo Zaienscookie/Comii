@@ -95,7 +95,6 @@ save.addEventListener('click', async () => {
     window.__newToken = data.token;
     try {
       sessionStorage.setItem('comii_token', data.token);
-      localStorage.setItem('comii_access_token', data.token);
     } catch (_) {}
     document.cookie = 'comii_access=' + encodeURIComponent(data.token) + '; path=/; max-age=31536000; SameSite=Lax';
     // 旧 cookie 可能还带着上一枚令牌，先删再写一次，避免“刚改完又被踢回登录”

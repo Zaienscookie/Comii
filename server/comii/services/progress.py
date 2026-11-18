@@ -50,8 +50,7 @@ def get_many(user_id: int | None = None) -> dict[str, ReadingProgress]:
         raw = _load()
     if user_id is not None:
         prefix = f"u{user_id}|"
-        mine = {k[len(prefix):]: v for k, v in raw.items() if k.startswith(prefix)}
-        raw = mine or {k: v for k, v in raw.items() if "|" not in k}
+        raw = {k[len(prefix):]: v for k, v in raw.items() if k.startswith(prefix)}
     return {
         path: ReadingProgress(
             page=int(value.get("page", 0)),

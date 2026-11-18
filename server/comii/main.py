@@ -127,6 +127,11 @@ async def access_log(request: Request, call_next):
 
 
 
+def _is_local_client(request: Request) -> bool:
+    host = request.client.host if request.client else ""
+    return host in ("127.0.0.1", "::1", "localhost")
+
+
 async def access_gate(request: Request, call_next):
     # 反代/隧道场景：把真实来源写进 scope，审计与限流都能用
     forwarded = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
@@ -134,10 +139,12 @@ async def access_gate(request: Request, call_next):
         request.scope["client"] = (forwarded, 0)
     """Shared server whitelist token for the 8001 data API."""
     token_hash = settings.token_hash
+    if not token_hash and not _is_local_client(request):
+        return JSONResponse(status_code=403, content={"detail": "服务器未配置访问令牌，已拒绝外部请求"})
     path = request.url.path
     if token_hash and path.startswith("/api/") and not (
         path == "/api/v1/ping"
-        or path.startswith("/api/v1/app/update")
+        or False
         or path == "/api/v1/auth/status"
     ):
         supplied = request.headers.get("x-comii-token", "") or request.cookies.get("comii_access", "")
@@ -157,6 +164,8 @@ async def access_gate(request: Request, call_next):
 async def auth_gate(request: Request, call_next):
     path = request.url.path
     if not auth.enabled():
+        if not _is_local_client(request):
+            return JSONResponse(status_code=403, content={"detail": "服务器未开启登录验证，已拒绝外部请求"})
         request.state.user = auth.LOCAL_OWNER
         return await call_next(request)
     if auth.public_path(path):
@@ -235,9 +244,9 @@ def create_api_app() -> FastAPI:
         title="Comii Data API",
         version=settings.version,
         lifespan=lifespan,
-        docs_url=f"{settings.api_prefix}/docs",
+        docs_url=None,
         redoc_url=None,
-        openapi_url=f"{settings.api_prefix}/openapi.json",
+        openapi_url=None,
     )
     _add_middleware(api)
     api.middleware("http")(access_gate)

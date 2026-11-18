@@ -1960,7 +1960,7 @@ document.addEventListener("DOMContentLoaded", () => {
         method: "POST",
         credentials: "same-origin",
         headers: (() => {
-          const token = localStorage.getItem("comii_access_token") || "";
+          const token = localStorage.getItem("comii_access_token") || sessionStorage.getItem("comii_token") || "";
           return token ? { "X-Comii-Token": token } : {};
         })(),
       });
@@ -1972,7 +1972,7 @@ document.addEventListener("DOMContentLoaded", () => {
   fetch("/api/v1/auth/me", {
     credentials: "same-origin",
     headers: (() => {
-      const token = localStorage.getItem("comii_access_token") || "";
+      const token = localStorage.getItem("comii_access_token") || sessionStorage.getItem("comii_token") || "";
       return token ? { "X-Comii-Token": token } : {};
     })(),
   })

@@ -91,7 +91,7 @@ def ping() -> PingResponse:
         version=settings.version,
         library="",
         server_time=time.time(),
-        features=FEATURES,
+        features=[],
     )
 
 

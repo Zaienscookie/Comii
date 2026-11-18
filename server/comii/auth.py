@@ -544,6 +544,4 @@ def public_path(path: str) -> bool:
             "/api/v1/auth/setup",
             "/api/v1/auth/login",
         )
-    if path.startswith("/api/v1/app/update"):
-        return True
     return False

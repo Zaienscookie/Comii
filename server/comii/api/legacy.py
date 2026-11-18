@@ -305,6 +305,7 @@ def image(request: Request, series: str, filename: str) -> Response:
 
 @router.get("/thumb/{series:path}/{filename}")
 def thumb(request: Request, series: str, filename: str) -> Response:
+    auth.require_path(request, series, "view")
     source = library.resolve_file(series, filename)
     thumbnail = thumbs.image_thumbnail(source, series, filename)
     if thumbnail is not None:
@@ -322,7 +323,8 @@ def video(request: Request, series: str, filename: str) -> Response:
 
 
 @router.get("/video_thumb/{series:path}/{filename}")
-def video_thumb(series: str, filename: str) -> Response:
+def video_thumb(request: Request, series: str, filename: str) -> Response:
+    auth.require_path(request, series, "view")
     source = library.resolve_file(series, filename)
     thumbnail = thumbs.video_thumbnail(source, series, filename)
     if thumbnail is not None:
@@ -422,7 +424,8 @@ def trash_restore(series: str, purge: int = 0) -> dict:
 
 
 @router.get("/trash/sweep")
-def trash_sweep() -> dict:
+def trash_sweep(request: Request) -> dict:
+    auth.require_role(request, "owner", "admin")
     removed = trash.sweep()
     return {"status": "ok", "removed": removed}
 

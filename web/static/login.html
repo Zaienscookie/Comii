@@ -129,7 +129,6 @@ form.addEventListener('submit', async (event) => {
   const token = sanitizeToken(accessInput.value);
   if (token) {
     sessionStorage.setItem(TOKEN_KEY, token);
-    try { localStorage.setItem('comii_access_token', token); } catch (_) {}
   }
   saveAccessCookie(token);
   submit.classList.add('loading');
@@ -145,7 +144,7 @@ form.addEventListener('submit', async (event) => {
       submit.classList.remove('loading');
       submit.textContent = initialized ? '登录' : '创建并登录';
       if (data.detail && data.detail.includes('令牌')) {
-        try { sessionStorage.removeItem('comii_token'); localStorage.removeItem('comii_access_token'); } catch (_) {}
+        try { sessionStorage.removeItem('comii_token'); sessionStorage.removeItem('comii_token'); } catch (_) {}
         saveAccessCookie('');
         accessInput.value = '';
       }
