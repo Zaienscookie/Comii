@@ -10,6 +10,31 @@ from ..config import settings
 router = APIRouter(prefix=settings.api_prefix, tags=["auth"])
 
 
+_LOGIN_FAILS: dict[tuple[str, str], list[float]] = {}
+_LOGIN_WINDOW = 300.0
+_LOGIN_LIMIT = 5
+
+
+def _login_throttle(ip: str, username: str) -> None:
+    import time as _t
+    now = _t.time()
+    key = (ip, username.lower())
+    recent = [t for t in _LOGIN_FAILS.get(key, []) if now - t < _LOGIN_WINDOW]
+    _LOGIN_FAILS[key] = recent
+    if len(recent) >= _LOGIN_LIMIT:
+        raise HTTPException(status_code=429, detail="尝试过于频繁，请 5 分钟后再试")
+
+
+def _login_failed(ip: str, username: str) -> None:
+    import time as _t
+    key = (ip, username.lower())
+    _LOGIN_FAILS.setdefault(key, []).append(_t.time())
+
+
+def _login_ok(ip: str, username: str) -> None:
+    _LOGIN_FAILS.pop((ip, username.lower()), None)
+
+
 def _cookie(response: Response, request: Request, token: str, remember: bool) -> None:
     response.set_cookie(
         auth.COOKIE_NAME,
@@ -43,13 +68,18 @@ def login(payload: dict, request: Request, response: Response) -> dict:
     username = str(payload.get("username") or "")
     password = str(payload.get("password") or "")
     remember = bool(payload.get("remember", True))
+    client_ip = request.client.host if request.client else "-"
+    _login_throttle(client_ip, username)
     user = auth.find_user(username)
     if user is None or not user["enabled"]:
+        _login_failed(client_ip, username)
         auth.audit(None, "login_failed", "/auth/login", 401, request.client.host if request.client else "", request.headers.get("user-agent", ""), username)
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     if not auth._verify_password(password, _password_hash(int(user["id"]))):
+        _login_failed(client_ip, username)
         auth.audit(user, "login_failed", "/auth/login", 401, request.client.host if request.client else "", request.headers.get("user-agent", ""), username)
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    _login_ok(client_ip, username)
     auth.audit(user, "login", "/auth/login", 200, request.client.host if request.client else "", request.headers.get("user-agent", ""))
     token, expires = auth.create_session(int(user["id"]), remember, request.headers.get("user-agent", ""))
     _cookie(response, request, token, remember)

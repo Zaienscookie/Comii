@@ -8,6 +8,8 @@ side — it is passed with each request and only used for the upstream call.
 from __future__ import annotations
 
 import json
+import ipaddress
+import socket
 import urllib.error
 import urllib.request
 from typing import Iterator
@@ -37,6 +39,23 @@ class AiChatRequest(BaseModel):
     messages: list[AiMessage]
     temperature: float = 0.8
     stream: bool = True
+
+
+def _assert_public_host(base_url: str) -> None:
+    """拒绝内网 / 回环 / 链路本地 / 云元数据地址，防止 SSRF。"""
+    from urllib.parse import urlparse
+    host = urlparse(base_url or "").hostname or ""
+    if not host:
+        raise HTTPException(status_code=400, detail="baseUrl 不合法")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        raise HTTPException(status_code=400, detail="无法解析 baseUrl")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            raise HTTPException(status_code=400, detail="不允许访问内网/回环地址")
 
 
 def _endpoint(base: str) -> str:
@@ -91,6 +110,7 @@ def _error_detail(raw: bytes, code: int) -> str:
 
 @router.post("/chat", response_model=None)
 def ai_chat(payload: AiChatRequest):
+    _assert_public_host(payload.baseUrl)
     if not payload.model.strip():
         raise HTTPException(status_code=400, detail="model 不能为空")
     if not payload.messages:

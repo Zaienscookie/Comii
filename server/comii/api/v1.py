@@ -483,8 +483,10 @@ def media_delete(request: Request, payload: MediaDeleteRequest) -> ActionResult:
 
 @router.get("/media/video")
 def media_video(request: Request, path: str, name: str) -> Response:
-    # 保留 viewer 观看能力：流式播放只需 view；整段下载走 download 接口
+    # 保留 viewer 观看：带 Range 的分片流式只需 view；不带 Range 的整段下载要 download
     auth.require_path(request, path, "view")
+    if not request.headers.get("range"):
+        auth.require_path(request, path, "download")
     source = library.resolve_file(path, name)
     return media.file_response(source, request)
 

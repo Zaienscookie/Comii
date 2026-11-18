@@ -285,6 +285,9 @@ def thumb(request: Request, series: str, filename: str) -> Response:
 
 @router.get("/video/{series:path}/{filename}")
 def video(request: Request, series: str, filename: str) -> Response:
+    auth.require_path(request, series, "view")
+    if not request.headers.get("range"):
+        auth.require_path(request, series, "download")
     source = library.resolve_file(series, filename)
     return media.file_response(source, request)
 
