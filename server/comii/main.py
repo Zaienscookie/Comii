@@ -262,6 +262,7 @@ def create_api_app() -> FastAPI:
     def root() -> JSONResponse:
         return JSONResponse(service_info().model_dump())
 
+    _install_security(api)
     return api
 
 
@@ -342,6 +343,7 @@ def create_web_app() -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok", "service": "web"}
 
+    _install_security(web)
     return web
 
 

@@ -483,7 +483,8 @@ def media_delete(request: Request, payload: MediaDeleteRequest) -> ActionResult:
 
 @router.get("/media/video")
 def media_video(request: Request, path: str, name: str) -> Response:
-    auth.require_path(request, path, "download")
+    # 保留 viewer 观看能力：流式播放只需 view；整段下载走 download 接口
+    auth.require_path(request, path, "view")
     source = library.resolve_file(path, name)
     return media.file_response(source, request)
 
