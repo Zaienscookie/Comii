@@ -477,12 +477,14 @@ async def import_pdf(
 
 
 @router.get("/pdf/info")
-def pdf_info(path: str):
+def pdf_info(request: Request, path: str):
+    auth.require_path(request, path, "view")
     return pdfs.info(path)
 
 
 @router.get("/pdf/page")
-def pdf_page(path: str, page: int = 0, w: int = 1440):
+def pdf_page(request: Request, path: str, page: int = 0, w: int = 1440):
+    auth.require_path(request, path, "view")
     from fastapi import Response
     return Response(content=pdfs.page_bytes(path, page, w), media_type="image/png")
 
