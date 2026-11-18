@@ -681,21 +681,24 @@ async def import_pdf(
 
 # --------------------------------------------------------------- progress
 @router.get("/progress", response_model=dict[str, ReadingProgress])
-def progress_all() -> dict[str, ReadingProgress]:
-    return progress.get_many()
+def progress_all(request: Request) -> dict[str, ReadingProgress]:
+    user = auth.require_user(request)
+    return progress.get_many(int(user["id"]))
 
 
 @router.get("/progress/one", response_model=ReadingProgress)
-def progress_one(path: str) -> ReadingProgress:
-    item = progress.get(path)
+def progress_one(request: Request, path: str) -> ReadingProgress:
+    user = auth.require_user(request)
+    item = progress.get(path, int(user["id"]))
     if item is None:
         raise HTTPException(status_code=404, detail="暂无阅读记录")
     return item
 
 
 @router.put("/progress", response_model=ReadingProgress)
-def progress_update(payload: ProgressUpdate) -> ReadingProgress:
-    return progress.update(payload.path, payload.page, payload.total)
+def progress_update(request: Request, payload: ProgressUpdate) -> ReadingProgress:
+    user = auth.require_user(request)
+    return progress.update(payload.path, payload.page, payload.total, int(user["id"]))
 
 
 @router.post("/album_cover", response_model=ActionResult)

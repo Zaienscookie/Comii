@@ -28,9 +28,14 @@ def _save(data: dict[str, dict]) -> None:
     os.replace(temporary, settings.progress_file)
 
 
-def get(path: str) -> ReadingProgress | None:
+def _key(user_id: int | None, path: str) -> str:
+    return f"u{user_id}|{path}" if user_id is not None else path
+
+
+def get(path: str, user_id: int | None = None) -> ReadingProgress | None:
     with _lock:
-        item = _load().get(path)
+        data = _load()
+        item = data.get(_key(user_id, path)) or (data.get(path) if user_id is not None else None)
     if not item:
         return None
     return ReadingProgress(
@@ -40,9 +45,13 @@ def get(path: str) -> ReadingProgress | None:
     )
 
 
-def get_many() -> dict[str, ReadingProgress]:
+def get_many(user_id: int | None = None) -> dict[str, ReadingProgress]:
     with _lock:
         raw = _load()
+    if user_id is not None:
+        prefix = f"u{user_id}|"
+        mine = {k[len(prefix):]: v for k, v in raw.items() if k.startswith(prefix)}
+        raw = mine or {k: v for k, v in raw.items() if "|" not in k}
     return {
         path: ReadingProgress(
             page=int(value.get("page", 0)),
@@ -53,7 +62,7 @@ def get_many() -> dict[str, ReadingProgress]:
     }
 
 
-def update(path: str, page: int, total: int = 0) -> ReadingProgress:
+def update(path: str, page: int, total: int = 0, user_id: int | None = None) -> ReadingProgress:
     from . import library
 
     normalized = library.normalize_path(path)
@@ -65,6 +74,6 @@ def update(path: str, page: int, total: int = 0) -> ReadingProgress:
     total = max(0, int(total))
     with _lock:
         data = _load()
-        data[normalized] = {"page": page, "total": total, "updated_at": time.time()}
+        data[_key(user_id, normalized)] = {"page": page, "total": total, "updated_at": time.time()}
         _save(data)
     return ReadingProgress(page=page, total=total, updated_at=time.time())

@@ -149,14 +149,39 @@ def legacy_index() -> HTMLResponse:
 
 
 # ------------------------------------------------------------------ data
+def _filter_tree(nodes, keep):
+    result = []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        children = node.get("children") or []
+        if children:
+            node = dict(node)
+            node["children"] = _filter_tree(children, keep)
+        if keep(node) or node.get("children"):
+            result.append(node)
+    return result
+
+
 @router.get("/tree")
-def tree() -> dict:
-    return {"tree": _build_tree(library.library_root())}
+def tree(request: Request) -> dict:
+    nodes = _build_tree(library.library_root())
+    user = auth.require_user(request)
+    if user["role"] == "custom":
+        def keep(node):
+            path = node.get("path", "") if isinstance(node, dict) else ""
+            return auth.can_see_path(user, path)
+        nodes = _filter_tree(nodes, keep)
+    return {"tree": nodes}
 
 
 @router.get("/gallery")
-def gallery(kind: str = "all", limit: int = 300, offset: int = 0) -> dict:
+def gallery(request: Request, kind: str = "all", limit: int = 300, offset: int = 0) -> dict:
     rows, total = library.list_gallery(kind=kind, limit=limit, offset=offset)
+    user = auth.require_user(request)
+    if user["role"] == "custom":
+        rows = [r for r in rows if auth.can_see_path(user, r["series_path"])]
+        total = len(rows)
     items = []
     for row in rows:
         if row["kind"] == "image":
@@ -184,7 +209,8 @@ def cover(payload: dict) -> dict:
 
 
 @router.get("/series/{series:path}")
-def series(series: str) -> dict:
+def series(request: Request, series: str) -> dict:
+    auth.require_path(request, series, "view")
     detail = library.series_detail(series)
     return {"name": detail.name, "images": detail.images, "videos": detail.videos}
 
@@ -196,10 +222,13 @@ def settings_info(request: Request) -> dict:
 
 
 @router.get("/search")
-def search(q: str = "") -> dict:
+def search(request: Request, q: str = "") -> dict:
     """Recursive search over folder names, series names and media file names."""
     items: list[dict] = []
+    user = auth.require_user(request)
     for node in library.search(q):
+        if user["role"] == "custom" and not auth.can_see_path(user, node.path):
+            continue
         if node.kind.value == "folder":
             items.append(
                 {
@@ -461,9 +490,12 @@ def legacy_tags() -> dict:
 
 
 @router.get("/tagged")
-def legacy_tagged(tag: str = "") -> dict:
+def legacy_tagged(request: Request, tag: str = "") -> dict:
     items = []
+    user = auth.require_user(request)
     for path in tags.series_paths(tag):
+        if user["role"] == "custom" and not auth.can_see_path(user, path):
+            continue
         node = library.node_for_path(path)
         if node is not None:
             items.append(
