@@ -1,6 +1,8 @@
 package com.comii.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -67,6 +69,7 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
     val palette = ComiiTheme.palette
     val scope = rememberCoroutineScope()
     var items by remember { mutableStateOf<List<GalleryItem>>(emptyList()) }
+    var albums by remember { mutableStateOf<List<com.comii.app.data.LibraryNode>>(emptyList()) }
     var collections by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedCollection by remember { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<String?>(null) }
@@ -86,6 +89,9 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
         items = runCatching {
             state.repository.gallery(limit = 500, offset = 0, path = route, sort = "recent")
         }.getOrNull()?.items.orEmpty()
+        albums = runCatching {
+            state.repository.browse(route).items.filter { it.isAlbum || it.isFolder }
+        }.getOrDefault(emptyList())
         loading = false
     }
 
@@ -128,7 +134,36 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
                     CircularProgressIndicator(color = palette.accent)
                 }
                 items.isEmpty() -> EmptyState(Icons.Rounded.Star, "这里还没有收藏", "在图片右上角点星标收藏，或先新建一个收藏夹")
-                else -> LazyVerticalGrid(
+                else -> Column {
+                    if (albums.isNotEmpty()) {
+                        androidx.compose.foundation.lazy.LazyRow(
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            items(albums.size) { index ->
+                                val album = albums[index]
+                                Column(
+                                    Modifier.width(96.dp).clickable { nav.navigate(Routes.series(album.path)) },
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Box(
+                                        Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp)).background(palette.card),
+                                    ) {
+                                        coil.compose.AsyncImage(
+                                            model = state.repository.mediaUrl(album.cover),
+                                            contentDescription = album.name,
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
+                                    Text(album.name, fontSize = 11.sp, color = palette.textSecondary, maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 4.dp))
+                                }
+                            }
+                        }
+                    }
+                    LazyVerticalGrid(
                     columns = GridCells.Fixed(4),
                     contentPadding = PaddingValues(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -168,6 +203,7 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
                                     Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(16.dp))
                                 }
                             }
+                }
                         }
                     }
                 }

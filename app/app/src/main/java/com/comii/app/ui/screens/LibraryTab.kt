@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -155,6 +156,10 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
     var askDeleteMedia by remember { mutableStateOf(false) }
     var tagTargets by remember { mutableStateOf<List<String>>(emptyList()) }
     var tagMediaTargets by remember { mutableStateOf<List<String>>(emptyList()) }
+    var favExists by remember { mutableStateOf(false) }
+    var favCollections by remember { mutableStateOf<List<String>>(emptyList()) }
+    var favPickerFor by remember { mutableStateOf<LibraryNode?>(null) }
+    var favCollection by remember { mutableStateOf("默认") }
     val gridState = rememberLazyGridState()
     suspend fun reload() {
         loading = true
@@ -675,6 +680,51 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
         }
     }
 
+    favPickerFor?.let { target ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { favPickerFor = null },
+            title = { Text("收藏到收藏夹") },
+            text = {
+                Column {
+                    Text(target.name, fontSize = 12.sp, color = palette.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(10.dp))
+                    if (favCollections.isNotEmpty()) {
+                        Text("已有收藏夹", fontSize = 11.sp, color = palette.textTertiary)
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            favCollections.forEach { name ->
+                                TextButton(onClick = { favCollection = name }) {
+                                    Text(name, color = if (favCollection == name) palette.accent else palette.textSecondary, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                    androidx.compose.material3.OutlinedTextField(
+                        value = favCollection,
+                        onValueChange = { favCollection = it },
+                        label = { Text("收藏夹名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    val path = target.path
+                    val collection = favCollection.ifBlank { "默认" }
+                    favPickerFor = null
+                    scope.launch {
+                        runCatching { state.repository.addFavorite(path, "", collection) }
+                            .onSuccess { state.showToast("已收藏到「$collection」") }
+                            .onFailure { state.showToast("收藏失败：${it.message}") }
+                    }
+                }) { Text("收藏") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { favPickerFor = null }) { Text("取消") }
+            },
+        )
+    }
+
     if (tagTargets.isNotEmpty() || tagMediaTargets.isNotEmpty()) {
         TagBatchDialog(
             state = state,
@@ -691,6 +741,13 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                 refreshKey++
             },
         )
+    }
+
+    LaunchedEffect(sheetItem?.path) {
+        val node = sheetItem ?: return@LaunchedEffect
+        val status = runCatching { state.repository.favoriteStatus(node.path, "") }.getOrNull()
+        favExists = status?.first == true
+        favCollections = runCatching { state.repository.browse("收藏夹").items.map { it.name } }.getOrDefault(emptyList())
     }
 
     sheetItem?.let { node ->
@@ -738,12 +795,20 @@ fun LibraryTab(state: AppState, nav: NavHostController) {
                                     .onFailure { state.showToast("操作失败：${it.message}") }
                             }
                         }
-                        SheetAction("收藏到收藏夹") {
-                            sheetItem = null
-                            scope.launch {
-                                runCatching { state.repository.addFavorite(node.path) }
-                                    .onSuccess { state.showToast("已收藏到收藏夹") }
-                                    .onFailure { state.showToast("收藏失败：${it.message}") }
+                        if (favExists) {
+                            SheetAction("取消收藏") {
+                                sheetItem = null
+                                scope.launch {
+                                    runCatching { state.repository.removeFavorite(node.path) }
+                                        .onSuccess { state.showToast("已取消收藏") }
+                                        .onFailure { state.showToast("取消失败：${it.message}") }
+                                }
+                            }
+                        } else {
+                            SheetAction("收藏到收藏夹…") {
+                                favCollection = favCollections.firstOrNull() ?: "默认"
+                                favPickerFor = node
+                                sheetItem = null
                             }
                         }
                     }
