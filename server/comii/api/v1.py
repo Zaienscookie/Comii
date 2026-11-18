@@ -89,7 +89,7 @@ def ping() -> PingResponse:
     return PingResponse(
         app=settings.app_name,
         version=settings.version,
-        library=str(settings.library_root),
+        library="",
         server_time=time.time(),
         features=FEATURES,
     )
@@ -349,7 +349,8 @@ def favorite_status(request: Request, path: str = "", name: str = "") -> dict:
 
 
 @router.get("/stats", response_model=StatsResponse)
-def stats() -> StatsResponse:
+def stats(request: Request) -> StatsResponse:
+    auth.require_role(request, "owner", "admin")
     series_count, folder_count, images, videos, total_bytes = library.library_stats()
     return StatsResponse(
         series_count=series_count,
@@ -455,14 +456,20 @@ def media_view(request: Request, path: str, name: str, w: int = 1080) -> Respons
     auth.require_path(request, path, "view")
     source = library.resolve_file(path, name)
     if source.suffix.lower() == ".svg":
-        return FileResponse(source, media_type="image/svg+xml")
+        return FileResponse(
+            source,
+            media_type="image/svg+xml",
+            headers={"Content-Disposition": "attachment", "X-Content-Type-Options": "nosniff"},
+        )
     resized = images.resized_image(source, path, name, w)
     if resized is not None:
         return FileResponse(
             resized,
             media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=604800"},
+            headers={"Cache-Control": "private, max-age=604800"},
         )
+    # 没有生成缩放图时绝不直接回退原文件：原图属于 download 权限
+    auth.require_path(request, path, "download")
     return media.file_response(source, request)
 
 
@@ -476,7 +483,7 @@ def media_delete(request: Request, payload: MediaDeleteRequest) -> ActionResult:
 
 @router.get("/media/video")
 def media_video(request: Request, path: str, name: str) -> Response:
-    auth.require_path(request, path, "view")
+    auth.require_path(request, path, "download")
     source = library.resolve_file(path, name)
     return media.file_response(source, request)
 
@@ -829,7 +836,8 @@ def app_update_download() -> FileResponse:
 
 # ------------------------------------------------------------------ logs
 @router.get("/logs")
-def logs(lines: int = 100) -> dict:
+def logs(request: Request, lines: int = 100) -> dict:
+    auth.require_role(request, "owner", "admin")
     log_file = settings.log_root / "comii.log"
     if not log_file.is_file():
         return {"logs": []}

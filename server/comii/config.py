@@ -76,7 +76,7 @@ class Settings:
         )
         self.trash_ttl_seconds = _env_int("COMII_TRASH_TTL_DAYS", 3) * 24 * 3600
         self.max_upload_mb = _env_int("COMII_MAX_UPLOAD_MB", 512)
-        self.allowed_origins = os.environ.get("COMII_CORS_ORIGINS", "*").split(",")
+        self.allowed_origins = [o.strip() for o in os.environ.get("COMII_CORS_ORIGINS", "").split(",") if o.strip()]
 
     @staticmethod
     def _load_security_config(path: Path) -> dict:

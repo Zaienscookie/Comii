@@ -18,6 +18,7 @@ from starlette.background import BackgroundTask
 
 from ..config import settings
 from ..models import NodeKind
+from .. import auth
 from ..services import pdfs, archive, importers, library, manage, media, media_trash, tags, thumbs, trash
 
 router = APIRouter(prefix="/api", tags=["legacy-web"])
@@ -189,7 +190,8 @@ def series(series: str) -> dict:
 
 
 @router.get("/settings")
-def settings_info() -> dict:
+def settings_info(request: Request) -> dict:
+    auth.require_role(request, "owner", "admin")
     return {"library": str(settings.library_root)}
 
 
@@ -244,7 +246,8 @@ def ping() -> dict:
 
 
 @router.get("/logs")
-def logs(lines: int = 100) -> dict:
+def logs(request: Request, lines: int = 100) -> dict:
+    auth.require_role(request, "owner", "admin")
     log_file = settings.log_root / "comii.log"
     if not log_file.is_file():
         return {"logs": []}
@@ -259,9 +262,15 @@ def logs(lines: int = 100) -> dict:
 # ------------------------------------------------------------------ media
 @router.get("/img/{series:path}/{filename}")
 def image(request: Request, series: str, filename: str) -> Response:
+    # 原图属于 download 权限，view 只能走 v1 的缩放图
+    auth.require_path(request, series, "download")
     source = library.resolve_file(series, filename)
     if source.suffix.lower() == ".svg":
-        return FileResponse(source, media_type="image/svg+xml")
+        return FileResponse(
+            source,
+            media_type="image/svg+xml",
+            headers={"Content-Disposition": "attachment", "X-Content-Type-Options": "nosniff"},
+        )
     return media.file_response(source, request)
 
 
@@ -477,7 +486,8 @@ async def legacy_media_delete(payload: dict) -> dict:
 
 
 @router.get("/export")
-def export(target: str, include_video: bool = False) -> FileResponse:
+def export(request: Request, target: str, include_video: bool = False) -> FileResponse:
+    auth.require_path(request, target.strip("/"), "download")
     handle, filename = archive.build_export(target, include_video=include_video)
     return FileResponse(
         handle,
@@ -489,7 +499,8 @@ def export(target: str, include_video: bool = False) -> FileResponse:
 
 # ------------------------------------------------------------------ scan
 @router.get("/scan")
-def scan(port: int = 8000, timeout: float = 0.12) -> dict:
+def scan(request: Request, port: int = 8000, timeout: float = 0.12) -> dict:
+    auth.require_role(request, "owner", "admin")
     if not 1 <= port <= 65535:
         raise HTTPException(status_code=400, detail="端口不合法")
     try:

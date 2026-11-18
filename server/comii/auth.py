@@ -339,6 +339,17 @@ def rotate_credentials(user_id: int, username: str, password: str) -> tuple[dict
     return user, token
 
 
+def require_role(request: Request, *roles: str) -> dict[str, Any]:
+    user = require_user(request)
+    if user.get("role") not in roles:
+        raise HTTPException(status_code=403, detail="没有权限")
+    return user
+
+
+def require_owner(request: Request) -> dict[str, Any]:
+    return require_role(request, "owner")
+
+
 def require_user(request: Request) -> dict[str, Any]:
     if not enabled():
         return dict(LOCAL_OWNER)

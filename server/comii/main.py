@@ -210,6 +210,26 @@ def service_info() -> ServiceInfo:
 # --------------------------------------------------------------------------
 # Data API (native app)
 # --------------------------------------------------------------------------
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "geolocation=(), camera=(), microphone=()",
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'self'",
+}
+
+
+def _install_security(app: FastAPI) -> None:
+    @app.middleware("http")
+    async def _sec_headers(request, call_next):
+        response = await call_next(request)
+        for key, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(key, value)
+        if request.url.scheme == "https":
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        return response
+
+
 def create_api_app() -> FastAPI:
     api = FastAPI(
         title="Comii Data API",
