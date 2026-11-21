@@ -1024,8 +1024,8 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
 /* ---------- 编辑模式底部操作栏 ---------- */
 .edit-bar {
   position: fixed;
-  left: 0; right: 0; top: 0; bottom: auto;
-  z-index: 70;
+  left: 0; right: 0; top: var(--nav-h, 64px); bottom: auto;
+  z-index: 120;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1035,7 +1035,7 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   padding-top: calc(10px + env(safe-area-inset-top));
-  transform: translateY(-110%);
+  transform: translateY(-140%);
   transition: transform .3s var(--ease);
 }
 .edit-bar.show { transform: translateY(0); }

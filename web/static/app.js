@@ -838,6 +838,8 @@ function syncEditBar() {
   if (moveBtn) moveBtn.disabled = count === 0;
   if (delBtn) delBtn.disabled = count === 0;
   if (renameBtn) renameBtn.disabled = count !== 1;
+  const nav = document.querySelector(".nav");
+  bar.style.top = ((nav && nav.offsetHeight) || 64) + "px";
   bar.classList.toggle("show", editMode);
 }
 
