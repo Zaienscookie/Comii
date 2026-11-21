@@ -21,7 +21,7 @@ const sheetOverlay = document.getElementById("sheetOverlay");
 
 // ---------- Settings state ----------
 function readBool(k, d) { return (localStorage.getItem(k) ?? String(d ? "1" : "0")) === "1"; }
-let mode = localStorage.getItem("komi-mode") || "vert";
+let mode = localStorage.getItem("komi-mode") || "horiz";
 let effect = localStorage.getItem("komi-effect") || "none";
 let tapTurn = readBool("komi-tap", true);
 let showProgress = readBool("komi-progress", true);
@@ -47,8 +47,15 @@ function setMode(m) {
   mode = m;
   localStorage.setItem("komi-mode", m);
   canvas.dataset.mode = m;
-  if (m === "vert") { vscroll.classList.remove("hidden"); hscroll.classList.add("hidden"); }
-  else { vscroll.classList.add("hidden"); hscroll.classList.remove("hidden"); }
+  if (m === "horiz") {
+    vscroll.classList.add("hidden");
+    hscroll.classList.remove("hidden");
+  } else {
+    // vert = 上下分页；flat = 连续平铺
+    vscroll.classList.remove("hidden");
+    hscroll.classList.add("hidden");
+  }
+  canvas.dataset.mode = m;
   hscroll.classList.toggle("fade", effect === "fade");
   updateBar();
 }

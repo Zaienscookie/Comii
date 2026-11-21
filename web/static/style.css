@@ -1312,3 +1312,21 @@ body.view-photos .photo-tools { display: flex; gap: 8px; }
 @media (min-width: 900px) {
   .sheet:not(.show) { pointer-events: none !important; }
 }
+
+/* ---------- 阅读器：平铺（连续竖向，无分页高度） ---------- */
+.reader-canvas[data-mode="flat"] .reader-vscroll {
+  scroll-snap-type: none;
+}
+.reader-canvas[data-mode="flat"] .reader-vscroll .reader-page {
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: block;
+}
+.reader-canvas[data-mode="flat"] .reader-vscroll .reader-page img {
+  width: 100%;
+  max-height: none !important;
+  height: auto;
+  display: block;
+}
