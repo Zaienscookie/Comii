@@ -16,5 +16,6 @@ services:
       COMII_AUTH_ENABLED: "1"
       COMII_MAX_UPLOAD_MB: "2048"
     volumes:
-      - ./library:/library:ro   # 你的媒体目录，改成实际路径；要上传/删除就去掉 :ro
+      - ./library:/library:ro   # 媒体目录；要上传/删除/收藏请见下方说明
+      - ./data/收藏夹:/library/收藏夹   # 收藏夹单独挂可写目录：媒体库只读也能收藏
       - ./data:/data            # 账号、缩略图、回收站、更新包都在这里

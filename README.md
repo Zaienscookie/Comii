@@ -46,7 +46,13 @@ Comii 直接用真实的文件夹结构管理漫画与视频——服务器上�
 ```bash
 git clone https://github.com/Zaienscookie/Comii.git
 cd Comii
+```
 
+> 收藏夹已由 compose 预先挂好可写目录（`./data/收藏夹:/library/收藏夹`），
+> 首次 `docker compose up -d --build` 会自动创建，**媒体库可以继续只读 `:ro`**，不用手工建目录。
+> 想上传/删除时再去掉 `./library:/library:ro` 的 `:ro`。
+
+```bash
 mkdir -p data
 # 编辑 docker-compose.yml，把 ./library 换成你的媒体目录
 #   只读挂载： - /vol1/1000/media:/library:ro
