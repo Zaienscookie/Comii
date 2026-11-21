@@ -292,4 +292,34 @@ class SettingsStore(context: Context) {
         map.forEach { (k, v) -> obj.put(k, v) }
         prefs.edit().putString("library_scroll", obj.toString()).apply()
     }
+
+    private fun serverAccounts(): MutableMap<String, org.json.JSONObject> {
+        val raw = prefs.getString("server_accounts", "").orEmpty()
+        val map = mutableMapOf<String, org.json.JSONObject>()
+        runCatching {
+            val obj = org.json.JSONObject(raw)
+            obj.keys().forEach { key -> map[key] = obj.optJSONObject(key) ?: org.json.JSONObject() }
+        }
+        return map
+    }
+
+    fun accountForServer(server: String): Pair<String, String>? {
+        val key = server.trim()
+        if (key.isEmpty()) return null
+        val item = serverAccounts()[key] ?: return null
+        val user = item.optString("user", "")
+        val pass = item.optString("pass", "")
+        return if (user.isEmpty() && pass.isEmpty()) null else user to pass
+    }
+
+    fun saveServerAccount(server: String, user: String, pass: String) {
+        val key = server.trim()
+        if (key.isEmpty()) return
+        val map = serverAccounts()
+        map[key] = org.json.JSONObject().put("user", user.trim()).put("pass", pass)
+        val obj = org.json.JSONObject()
+        map.forEach { (k, v) -> obj.put(k, v) }
+        prefs.edit().putString("server_accounts", obj.toString()).apply()
+        addServerHistory(key)
+    }
 }

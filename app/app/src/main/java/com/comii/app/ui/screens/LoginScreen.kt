@@ -71,13 +71,19 @@ fun LoginScreen(state: AppState) {
     fun saveAccess() {
         state.repository.settings.accessToken = accessToken.trim()
         state.repository.settings.saveServerToken(server, accessToken)
+        state.repository.settings.saveServerAccount(server, username, password)
         com.comii.app.data.AuthTokenProvider.accessToken = accessToken.trim()
     }
 
     androidx.compose.runtime.LaunchedEffect(server) {
+        val settings = state.repository.settings
         if (accessToken.isBlank()) {
-            val saved = state.repository.settings.tokenForServer(server)
+            val saved = settings.tokenForServer(server)
             if (saved.isNotBlank()) accessToken = saved
+        }
+        settings.accountForServer(server)?.let { (savedUser, savedPass) ->
+            if (username.isBlank()) username = savedUser
+            if (password.isBlank()) password = savedPass
         }
     }
 

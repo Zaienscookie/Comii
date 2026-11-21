@@ -1577,10 +1577,17 @@ private suspend fun shareMedia(
         runCatching {
             val url = if (entry.isVideo) api.videoUrl(path, entry.name) else api.imageUrl(path, entry.name)
             val target = java.io.File(directory, entry.name)
-            com.comii.app.data.Http.client.newCall(
-                okhttp3.Request.Builder().url(url).get().build()
-            ).execute().use { response ->
+            val request = okhttp3.Request.Builder().url(url).get().apply {
+                com.comii.app.data.AuthTokenProvider.accessToken.takeIf { it.isNotBlank() }
+                    ?.let { header("X-Comii-Token", it) }
+                com.comii.app.data.AuthTokenProvider.token.takeIf { it.isNotBlank() }
+                    ?.let { header("Authorization", "Bearer $it") }
+            }.build()
+            com.comii.app.data.Http.client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@use null
+                val type = response.header("Content-Type").orEmpty()
+                val wanted = if (entry.isVideo) "video/" else "image/"
+                if (!type.startsWith(wanted) && !type.startsWith("application/octet-stream")) return@use null
                 response.body?.byteStream()?.use { input ->
                     target.outputStream().use { output -> input.copyTo(output) }
                 }

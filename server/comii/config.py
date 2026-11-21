@@ -39,6 +39,7 @@ class Settings:
         self.library_root = _env_path("COMII_LIBRARY", PROJECT_ROOT / "library")
         self.data_root = _env_path("COMII_DATA", PROJECT_ROOT / ".comii")
         self.thumb_root = self.data_root / "thumbs"
+        self.favorites_root = self.library_root / "收藏夹"
         self.cache_root = self.data_root / "cache"
         self.tags_file = self.data_root / "tags.json"
         self.trash_root = self.data_root / "trash"
@@ -124,6 +125,10 @@ class Settings:
             self.update_root,
         ):
             directory.mkdir(parents=True, exist_ok=True)
+        try:
+            self.favorites_root.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
 
 
 settings = Settings()
