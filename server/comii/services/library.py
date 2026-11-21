@@ -67,10 +67,17 @@ def library_root() -> Path:
 
 
 def _ensure_inside(target: Path, root: Path) -> Path:
+    """允许媒体库，以及收藏夹（可能软链到 data/收藏夹，在库外）。"""
     resolved = target.resolve()
-    if resolved != root and root not in resolved.parents:
-        raise HTTPException(status_code=400, detail="路径不合法")
-    return resolved
+    if resolved == root or root in resolved.parents:
+        return resolved
+    try:
+        favorites = settings.favorites_root.resolve()
+    except Exception:
+        favorites = None
+    if favorites is not None and (resolved == favorites or favorites in resolved.parents):
+        return resolved
+    raise HTTPException(status_code=400, detail="路径不合法")
 
 
 def resolve_directory(raw: str) -> Path:
