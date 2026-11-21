@@ -856,7 +856,7 @@ function bindFolderSheet() {
   const kindBox = document.getElementById("folderKind");
   if (!sheet || !btn) return;
 
-  let selKind = "manga"; // 只有漫画 / 视频两种
+  let selKind = ""; // 与 App「新建相册」一致：默认不写类型
   // 类型选择
   if (kindBox) {
     kindBox.querySelectorAll(".type-opt").forEach(opt => {
@@ -871,10 +871,10 @@ function bindFolderSheet() {
   btn.addEventListener("click", () => {
     parent.value = currentPath;
     name.value = "";
-    selKind = "manga";
+    selKind = "";
     if (kindBox) {
       kindBox.querySelectorAll(".type-opt").forEach(o => o.classList.remove("active"));
-      const first = kindBox.querySelector('[data-kind="manga"]');
+      const first = kindBox.querySelector('[data-kind=""]');
       if (first) first.classList.add("active");
     }
     sheet.classList.add("show");

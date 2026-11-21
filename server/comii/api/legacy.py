@@ -334,12 +334,20 @@ def video_thumb(request: Request, series: str, filename: str) -> Response:
 
 # ---------------------------------------------------------------- folders
 @router.post("/folder")
-def create_folder(payload: dict) -> dict:
-    created = manage.create_folder(
-        str(payload.get("parent", "")),
-        str(payload.get("name", "")),
-        str(payload.get("kind", "")),
-    )
+def create_folder(request: Request, payload: dict) -> dict:
+    parent = str(payload.get("parent", ""))
+    auth.require_path(request, parent, "create")
+    try:
+        created = manage.create_folder(
+            parent,
+            str(payload.get("name", "")),
+            str(payload.get("kind", "")),
+        )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"无法创建目录（媒体库只读或权限不足）：{exc.strerror or exc}",
+        ) from exc
     return {"status": "ok", "path": created}
 
 
