@@ -48,8 +48,9 @@ git clone https://github.com/Zaienscookie/Comii.git
 cd Comii
 ```
 
-> 收藏夹会在首次启动时自动创建在媒体库下，**前提是媒体库挂载可写**（不要带 `:ro`）。
-> 只读挂载下无法建目录，收藏/上传/删除都会失败。
+> 收藏夹不需要你手工建：`deploy/start.sh` 会创建 `data/收藏夹` 并在媒体库里放一个软链接
+> `library/收藏夹 -> ../data/收藏夹`。因此 **媒体库可以保持 :ro 只读**，收藏功能照样可用。
+> 上传/删除原图仍需要媒体库可写。
 
 ```bash
 mkdir -p data
