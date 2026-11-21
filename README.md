@@ -48,9 +48,9 @@ git clone https://github.com/Zaienscookie/Comii.git
 cd Comii
 ```
 
-> 收藏夹不需要你手工建：`deploy/start.sh` 会创建 `data/收藏夹` 并在媒体库里放一个软链接
-> `library/收藏夹 -> ../data/收藏夹`。因此 **媒体库可以保持 :ro 只读**，收藏功能照样可用。
-> 上传/删除原图仍需要媒体库可写。
+> 收藏夹不用手工建：`./deploy/start.sh` 会创建 `data/收藏夹`，并在你的媒体目录里放软链接
+> `收藏夹 -> /data/收藏夹`。**媒体目录可以一直是 :ro 只读**，收藏照样可写。
+> 媒体目录不在 `./library` 时用：`COMII_MEDIA_DIR=/你的/路径 ./deploy/start.sh`
 
 ```bash
 mkdir -p data
