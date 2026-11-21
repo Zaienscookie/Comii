@@ -1024,17 +1024,18 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
 /* ---------- 编辑模式底部操作栏 ---------- */
 .edit-bar {
   position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: 60;
+  left: 0; right: 0; top: 0; bottom: auto;
+  z-index: 70;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  padding: 10px 16px;
   background: var(--bg);
-  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  transform: translateY(110%);
+  padding-top: calc(10px + env(safe-area-inset-top));
+  transform: translateY(-110%);
   transition: transform .3s var(--ease);
 }
 .edit-bar.show { transform: translateY(0); }
@@ -1330,3 +1331,16 @@ body.view-photos .photo-tools { display: flex; gap: 8px; }
   height: auto;
   display: block;
 }
+
+/* 顶栏文字按钮（编辑） */
+.nav-text-btn {
+  border: 0;
+  background: transparent;
+  color: var(--accent, #0a84ff);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.nav-text-btn:hover { background: rgba(10,132,255,.12); }

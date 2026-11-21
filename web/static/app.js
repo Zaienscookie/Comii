@@ -250,7 +250,13 @@ function render() {
   refreshBackBtn();
   document.body.classList.remove("gallery-mode");
   grid.classList.remove("gallery-grid");
-  const items = query ? (searchResults || []) : (tagResults || libraryData.series);
+  const items = (query ? (searchResults || []) : (tagResults || libraryData.series)).slice();
+  items.sort((a, b) => {
+    const fa = a.name === "收藏夹" ? 0 : 1;
+    const fb = b.name === "收藏夹" ? 0 : 1;
+    if (fa !== fb) return fa - fb;
+    return String(a.name).localeCompare(String(b.name), "zh");
+  });
   grid.innerHTML = "";
   empty.classList.toggle("hidden", items.length > 0 || mediaItems.length > 0);
 
@@ -1847,6 +1853,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const wrap = document.querySelector(".search-wrap");
     wrap?.classList.remove("hidden");
     document.getElementById("search")?.focus();
+  });
+  document.getElementById("editToggleNav")?.addEventListener("click", () => {
+    document.getElementById("editToggle")?.click();
   });
   document.getElementById("addToggle")?.addEventListener("click", () => {
     document.getElementById("newFolderBtn")?.click();
