@@ -77,6 +77,9 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
     var showCreate by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     var unfavTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var selecting by remember { mutableStateOf(false) }
+    var selection by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var showBulkConfirm by remember { mutableStateOf(false) }
     var reloadToken by remember { mutableStateOf(0) }
 
     suspend fun reloadCollections() {
@@ -182,13 +185,19 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
                                 .pointerInput(item.series_path, item.name) {
                                     detectTapGestures(
                                         onTap = {
-                                            if (item.kind == "video") {
+                                            val key = "${item.series_path}/${item.name}"
+                                            if (selecting) {
+                                                selection = if (key in selection) selection - key else selection + key
+                                            } else if (item.kind == "video") {
                                                 nav.navigate(Routes.player(item.series_path, item.name))
                                             } else {
                                                 nav.navigate(Routes.reader(item.series_path, item.index, name = item.name))
                                             }
                                         },
-                                        onLongPress = { unfavTarget = item.series_path to item.name },
+                                        onLongPress = {
+                                            selecting = true
+                                            selection = selection + "${item.series_path}/${item.name}"
+                                        },
                                     )
                                 },
                         ) {
@@ -198,6 +207,9 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
                             )
+                            if (selecting && "${item.series_path}/${item.name}" in selection) {
+                                Box(Modifier.matchParentSize().background(Color(0x55FF453A)))
+                            }
                             if (item.kind == "video") {
                                 Box(
                                     Modifier.align(Alignment.Center).size(26.dp)
@@ -214,6 +226,27 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
                 }
             }
         }
+    }
+
+    if (showBulkConfirm) {
+        AlertDialog(
+            onDismissRequest = { showBulkConfirm = false },
+            title = { Text("移出收藏夹") },
+            text = { Text("把选中的 ${selection.size} 项从收藏夹移除？原图不会被删除。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val targets = items.filter { "${it.series_path}/${it.name}" in selection }
+                    showBulkConfirm = false
+                    scope.launch {
+                        targets.forEach { runCatching { state.repository.removeFavorite(it.series_path, it.name) } }
+                        selection = emptySet()
+                        selecting = false
+                        reloadToken++
+                    }
+                }) { Text("移出", color = Color(0xFFFF453A)) }
+            },
+            dismissButton = { TextButton(onClick = { showBulkConfirm = false }) { Text("取消") } },
+        )
     }
 
     unfavTarget?.let { (path, name) ->
