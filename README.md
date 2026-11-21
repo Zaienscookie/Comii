@@ -48,9 +48,8 @@ git clone https://github.com/Zaienscookie/Comii.git
 cd Comii
 ```
 
-> 收藏夹已由 compose 预先挂好可写目录（`./data/收藏夹:/library/收藏夹`），
-> 首次 `docker compose up -d --build` 会自动创建，**媒体库可以继续只读 `:ro`**，不用手工建目录。
-> 想上传/删除时再去掉 `./library:/library:ro` 的 `:ro`。
+> 收藏夹会在首次启动时自动创建在媒体库下，**前提是媒体库挂载可写**（不要带 `:ro`）。
+> 只读挂载下无法建目录，收藏/上传/删除都会失败。
 
 ```bash
 mkdir -p data
