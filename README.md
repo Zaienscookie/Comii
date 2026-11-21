@@ -48,9 +48,11 @@ git clone https://github.com/Zaienscookie/Comii.git
 cd Comii
 ```
 
-> 收藏夹不用手工建：`./deploy/start.sh` 会创建 `data/收藏夹`，并在你的媒体目录里放软链接
-> `收藏夹 -> /data/收藏夹`。**媒体目录可以一直是 :ro 只读**，收藏照样可写。
-> 媒体目录不在 `./library` 时用：`COMII_MEDIA_DIR=/你的/路径 ./deploy/start.sh`
+> 收藏夹不用手工建：compose 里的 `prepare` 服务会在启动时创建 `data/收藏夹`，
+> 并在媒体目录里放软链接 `收藏夹 -> /data/收藏夹`。**媒体目录可以一直是 :ro 只读**，收藏照样可写。
+>
+> 修改媒体目录最省事的方式：把 `.env.example` 复制成 `.env`，改一行
+> `COMII_MEDIA_DIR=/你的/路径`，然后 `docker compose up -d --build`。
 
 ```bash
 mkdir -p data
