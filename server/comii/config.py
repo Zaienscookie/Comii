@@ -127,8 +127,12 @@ class Settings:
             directory.mkdir(parents=True, exist_ok=True)
         try:
             self.favorites_root.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            pass
+        except OSError as exc:
+            # 媒体库只读（compose 里 ./library:/library:ro）时收藏夹无法创建
+            import logging
+            logging.getLogger("comii").warning(
+                "收藏夹创建失败（媒体库只读？请去掉挂载的 :ro）：%s", exc
+            )
 
 
 settings = Settings()
