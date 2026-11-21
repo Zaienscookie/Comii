@@ -34,5 +34,5 @@ services:
       COMII_AUTH_ENABLED: "1"
       COMII_MAX_UPLOAD_MB: "2048"
     volumes:
-      - ${COMII_MEDIA_DIR:-./library}:/library:ro   # 媒体目录只读；收藏夹由 prepare 软链到 /data/收藏夹
+      - ${COMII_MEDIA_DIR:-./library}:/library:ro   # 媒体目录只读；收藏夹由 prepare 软链到 /data/收藏夹, 去掉 :ro 表示文件夹可读写, 这样就能上传资源和创建文件夹了
       - ./data:/data                                # 账号、缩略图、回收站、更新包
