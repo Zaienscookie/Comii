@@ -1296,3 +1296,19 @@ body.view-photos .photo-tools { display: flex; gap: 8px; }
 .nav-inner { pointer-events: none; }
 .nav-inner > * { pointer-events: auto; }
 .nav-right, .nav-right * { pointer-events: auto; }
+
+/* 未打开的抽屉/弹层一律不可点：避免透明层拦截点击，导致“点到看不见的按钮”
+   （之前桌面端把 .sheet 改成居中淡出但没关 pointer-events，会误触“退出登录/导入内容”） */
+.sheet:not(.show),
+.sheet-overlay:not(.show) {
+  pointer-events: none !important;
+  visibility: hidden;
+}
+.sheet.show,
+.sheet-overlay.show {
+  visibility: visible;
+  pointer-events: auto;
+}
+@media (min-width: 900px) {
+  .sheet:not(.show) { pointer-events: none !important; }
+}
