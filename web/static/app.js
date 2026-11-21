@@ -280,6 +280,7 @@ function render() {
   renderMedia();
   syncEditBar();
   restoreScrollAnchor();
+  appendFolderGallery(currentPath);
 }
 
 // 「全部」相册：整库图片 + 视频缩略图平铺，滚到底自动加载下一页
@@ -1736,6 +1737,34 @@ function restoreScrollAnchor() {
   if (saved) {
     requestAnimationFrame(() => window.scrollTo({ top: Number(saved) || 0 }));
   }
+}
+
+async function appendFolderGallery(path) {
+  if (!path || query) return;
+  try {
+    const res = await fetch(`/api/v1/gallery?kind=all&limit=500&offset=0&path=${encodeURIComponent(path)}`, { credentials: "same-origin" });
+    if (!res.ok) return;
+    const data = await res.json();
+    const items = data.items || [];
+    if (!items.length) return;
+    const wrap = document.createElement("div");
+    wrap.className = "folder-gallery-tiles";
+    items.forEach((item) => {
+      const dir = String(item.series_path || "").split("/").map(encodeURIComponent).join("/");
+      const name = encodeURIComponent(item.name);
+      const thumb = item.kind === "video" ? `/api/video_thumb/${dir}/${name}` : `/api/thumb/${dir}/${name}`;
+      const tile = document.createElement("div");
+      tile.className = "media-tile folder-tile";
+      tile.innerHTML = `<img src="${thumb}" loading="lazy" alt="">${item.kind === "video" ? '<span class="media-play">▶</span>' : ""}`;
+      tile.addEventListener("click", () => {
+        const baseUrl = KomiConfig.serverBase();
+        if (item.kind === "video") location.href = baseUrl + `/video.html?s=${encodeURIComponent(item.series_path)}`;
+        else location.href = baseUrl + `/reader.html?s=${encodeURIComponent(item.series_path)}&p=${item.index}`;
+      });
+      wrap.appendChild(tile);
+    });
+    grid.appendChild(wrap);
+  } catch (_) {}
 }
 
 async function favoriteFolder(item) {
