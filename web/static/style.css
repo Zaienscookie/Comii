@@ -1023,9 +1023,11 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
 
 /* ---------- 编辑模式底部操作栏 ---------- */
 .edit-bar {
-  position: fixed;
-  left: 0; right: 0; top: var(--nav-h, 64px); bottom: auto;
-  z-index: 120;
+  position: sticky;
+  top: 0;
+  left: 0; right: 0;
+  z-index: 90;
+  display: none;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1034,11 +1036,9 @@ body.editing .card:hover .card-actions { pointer-events: none; opacity: 0; }
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding-top: calc(10px + env(safe-area-inset-top));
-  transform: translateY(-140%);
-  transition: transform .3s var(--ease);
+  padding-top: 10px;
 }
-.edit-bar.show { transform: translateY(0); }
+.edit-bar.show { display: flex; }
 .edit-count {
   flex: 1;
   font-size: 14px;
