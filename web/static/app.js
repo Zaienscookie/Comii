@@ -856,27 +856,9 @@ function bindFolderSheet() {
   const kindBox = document.getElementById("folderKind");
   if (!sheet || !btn) return;
 
-  let selKind = ""; // 与 App「新建相册」一致：默认不写类型
-  // 类型选择
-  if (kindBox) {
-    kindBox.querySelectorAll(".type-opt").forEach(opt => {
-      opt.addEventListener("click", () => {
-        kindBox.querySelectorAll(".type-opt").forEach(o => o.classList.remove("active"));
-        opt.classList.add("active");
-        selKind = opt.dataset.kind || "manga";
-      });
-    });
-  }
-
   btn.addEventListener("click", () => {
     parent.value = currentPath;
     name.value = "";
-    selKind = "";
-    if (kindBox) {
-      kindBox.querySelectorAll(".type-opt").forEach(o => o.classList.remove("active"));
-      const first = kindBox.querySelector('[data-kind=""]');
-      if (first) first.classList.add("active");
-    }
     sheet.classList.add("show");
     overlay.classList.add("show");
     setTimeout(() => name.focus(), 100);
@@ -889,7 +871,7 @@ function bindFolderSheet() {
       const res = await KomiConfig.fetch("/api/folder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: n, parent: parent.value.trim(), kind: selKind })
+        body: JSON.stringify({ name: n, parent: parent.value.trim(), kind: "" })
       });
       if (res.ok) {
         toast("文件夹已创建");
