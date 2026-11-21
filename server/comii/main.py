@@ -144,7 +144,7 @@ async def access_gate(request: Request, call_next):
     path = request.url.path
     if token_hash and path.startswith("/api/") and not (
         path == "/api/v1/ping"
-        or False
+        or path.startswith("/api/v1/app/update")
         or path == "/api/v1/auth/status"
     ):
         supplied = request.headers.get("x-comii-token", "") or request.cookies.get("comii_access", "")
