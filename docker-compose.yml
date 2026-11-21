@@ -1,9 +1,27 @@
 services:
+  # 一次性准备：在媒体目录里建好「收藏夹」软链（指向容器内 /data/收藏夹）
+  # 媒体库本身可以只读；收藏夹落在可写的 ./data 下
+  prepare:
+    build: .
+    image: comii:latest
+    container_name: comii-prepare
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mkdir -p /data/收藏夹 &&
+        [ -e "/media/收藏夹" ] || ln -sfn /data/收藏夹 "/media/收藏夹"
+    volumes:
+      - ./data:/data
+      - ${COMII_MEDIA_DIR:-./library}:/media
+
   comii:
     build: .
     image: comii:latest
     container_name: comii
     restart: unless-stopped
+    depends_on:
+      prepare:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"   # WebUI
       - "8001:8001"   # App / API
@@ -16,5 +34,5 @@ services:
       COMII_AUTH_ENABLED: "1"
       COMII_MAX_UPLOAD_MB: "2048"
     volumes:
-      - ./library:/library:ro     # 媒体目录只读；收藏夹由 deploy/start.sh 软链到 data/收藏夹
-      - ./data:/data            # 账号、缩略图、回收站、更新包都在这里
+      - ${COMII_MEDIA_DIR:-./library}:/library:ro   # 媒体目录只读；收藏夹由 prepare 软链到 /data/收藏夹
+      - ./data:/data                                # 账号、缩略图、回收站、更新包
