@@ -22,8 +22,9 @@ function initTheme() {
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
     if (t === "auto") applyTheme("auto");
   });
-  if (themeToggle) {
-    themeToggle.addEventListener("click", () => {
+  const toggleBtn = document.getElementById("themeToggle");
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
       const cur = root.dataset.theme;
       t = cur === "dark" ? "light" : "dark";
       localStorage.setItem(THEME_KEY, t);

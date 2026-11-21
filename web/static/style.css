@@ -1336,7 +1336,7 @@ body.view-photos .photo-tools { display: flex; gap: 8px; }
 .nav-text-btn {
   border: 0;
   background: transparent;
-  color: var(--accent, #0a84ff);
+  color: var(--text);
   font-size: 14px;
   font-weight: 600;
   padding: 6px 8px;
