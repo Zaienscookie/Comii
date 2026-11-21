@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -84,7 +84,7 @@ fun FolderGalleryScreen(state: AppState, path: String, nav: NavHostController) {
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    items(items, key = { "${it.series_path}/${it.name}" }) { item ->
+                    itemsIndexed(items, key = { index, item -> "$index:${item.series_path}/${item.name}" }) { _, item ->
                         Box(
                             Modifier
                                 .fillMaxWidth()

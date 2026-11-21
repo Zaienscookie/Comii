@@ -76,6 +76,8 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
     var loading by remember { mutableStateOf(true) }
     var showCreate by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
+    var unfavTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var reloadToken by remember { mutableStateOf(0) }
 
     suspend fun reloadCollections() {
         collections = runCatching {
@@ -95,7 +97,7 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
         loading = false
     }
 
-    LaunchedEffect(state.serverGeneration, selectedCollection) {
+    LaunchedEffect(state.serverGeneration, selectedCollection, reloadToken) {
         reloadCollections()
         reloadItems()
     }
@@ -178,13 +180,16 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
                                 .clip(RoundedCornerShape(4.dp))
                                 .background(palette.card)
                                 .pointerInput(item.series_path, item.name) {
-                                    detectTapGestures {
-                                        if (item.kind == "video") {
-                                            nav.navigate(Routes.player(item.series_path, item.name))
-                                        } else {
-                                            nav.navigate(Routes.reader(item.series_path, item.index, name = item.name))
-                                        }
-                                    }
+                                    detectTapGestures(
+                                        onTap = {
+                                            if (item.kind == "video") {
+                                                nav.navigate(Routes.player(item.series_path, item.name))
+                                            } else {
+                                                nav.navigate(Routes.reader(item.series_path, item.index, name = item.name))
+                                            }
+                                        },
+                                        onLongPress = { unfavTarget = item.series_path to item.name },
+                                    )
                                 },
                         ) {
                             AsyncImage(
@@ -209,6 +214,27 @@ fun FavoritesFlatScreen(state: AppState, nav: NavHostController, onBack: () -> U
                 }
             }
         }
+    }
+
+    unfavTarget?.let { (path, name) ->
+        AlertDialog(
+            onDismissRequest = { unfavTarget = null },
+            title = { Text("取消收藏") },
+            text = { Text("把这张图片从收藏夹中移除？原图不会被删除。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val target = unfavTarget
+                    unfavTarget = null
+                    if (target != null) {
+                        scope.launch {
+                            runCatching { state.repository.removeFavorite(target.first, target.second) }
+                            reloadToken++
+                        }
+                    }
+                }) { Text("取消收藏", color = Color(0xFFFF453A)) }
+            },
+            dismissButton = { TextButton(onClick = { unfavTarget = null }) { Text("返回") } },
+        )
     }
 
     if (showCreate) {

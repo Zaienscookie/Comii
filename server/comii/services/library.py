@@ -652,9 +652,7 @@ def list_gallery(
         series_iter.insert(0, (base, normalized))
 
     for directory, rel in series_iter:
-        # 收藏夹只是原图的软链接，不参与「全部」照片流，避免重复和位置错乱
-        if not normalized.startswith("收藏夹") and (rel == "收藏夹" or rel.startswith("收藏夹/")):
-            continue
+        # 收藏夹也参与照片流（用户希望收藏的图能在「照片」里看到）；重复项按 name+mtime 去重
         images, videos = list_media(directory)
         series_name = directory.name
         if wanted in ("all", "image"):
@@ -696,6 +694,15 @@ def list_gallery(
     total = len(rows)
     start = max(0, offset)
     end = start + max(1, min(limit, 500))
+    deduped, seen_keys = [], set()
+    for row in rows:
+        key = (row["name"], row["mtime"])
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        deduped.append(row)
+    rows = deduped
+
     return rows[start:end], total
 
 
