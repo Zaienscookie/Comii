@@ -839,7 +839,9 @@ function syncEditBar() {
   if (moveBtn) moveBtn.disabled = count === 0;
   if (delBtn) delBtn.disabled = count === 0;
   if (renameBtn) renameBtn.disabled = count !== 1;
-  bar.classList.toggle("show", editMode);
+  bar.classList.toggle("show", editMode && count > 0);
+  const navEdit = document.getElementById("editToggleNav");
+  if (navEdit) navEdit.textContent = editMode ? "完成" : "编辑";
 }
 
 // ---------- Create folder ----------
